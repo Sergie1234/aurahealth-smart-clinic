@@ -253,6 +253,12 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     localStorage.setItem('aura_audit_logs', JSON.stringify(auditLogs));
   }, [auditLogs]);
 
+  // Force all sessions and initial page loads to start unconditionally on the homepage
+  useEffect(() => {
+    setActiveTabState('home');
+    setNavigatingTargetTitle('Smart Clinic Homepage');
+  }, []);
+
   // Switch role helper
   const switchRole = (role: UserRole) => {
     setActiveRole(role);
