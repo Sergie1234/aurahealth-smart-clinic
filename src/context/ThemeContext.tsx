@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -11,31 +11,65 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'aura_theme';
+const STORAGE_KEY = 'smartclinic_theme';
+
+function applyDomTheme(mode: ThemeMode) {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  if (mode === 'dark') {
+    root.classList.add('dark');
+  } else {
+    root.classList.remove('dark');
+  }
+  root.style.colorScheme = mode;
+  try {
+    localStorage.setItem(STORAGE_KEY, mode);
+  } catch {
+    /* ignore */
+  }
+}
 
 function getInitialTheme(): ThemeMode {
   if (typeof window === 'undefined') return 'light';
-  const saved = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
-  if (saved === 'light' || saved === 'dark') return saved;
-  if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) return 'dark';
-  return 'light';
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
+    if (saved === 'light' || saved === 'dark') {
+      applyDomTheme(saved);
+      return saved;
+    }
+    const legacy = localStorage.getItem('aura_theme') as ThemeMode | null;
+    if (legacy === 'light' || legacy === 'dark') {
+      applyDomTheme(legacy);
+      return legacy;
+    }
+  } catch {
+    /* ignore */
+  }
+  const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  const mode: ThemeMode = prefersDark ? 'dark' : 'light';
+  applyDomTheme(mode);
+  return mode;
 }
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<ThemeMode>(getInitialTheme);
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    localStorage.setItem(STORAGE_KEY, theme);
+    applyDomTheme(theme);
   }, [theme]);
 
-  const setTheme = (mode: ThemeMode) => setThemeState(mode);
-  const toggleTheme = () => setThemeState((t) => (t === 'dark' ? 'light' : 'dark'));
+  const setTheme = useCallback((mode: ThemeMode) => {
+    setThemeState(mode);
+    applyDomTheme(mode);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setThemeState((t) => {
+      const next: ThemeMode = t === 'dark' ? 'light' : 'dark';
+      applyDomTheme(next);
+      return next;
+    });
+  }, []);
 
   return (
     <ThemeContext.Provider value={{ theme, isDark: theme === 'dark', toggleTheme, setTheme }}>
