@@ -20,11 +20,12 @@ export const AIDisclaimerBanner: React.FC<Props> = ({ className = '', compact = 
     <div className={`p-3 bg-amber-50/90 border border-amber-200 rounded-lg text-amber-900 text-xs flex items-start gap-2.5 ${className}`}>
       <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
       <div className="space-y-0.5">
-        <p className="font-semibold text-amber-800">
-          Clinical Decision Support Notice
-        </p>
+        <p className="font-semibold text-amber-800">Clinical Decision Support Notice</p>
         <p className="text-amber-700 leading-relaxed">
           AI-generated insights, notes, interactions, and interpretations are strictly advisory tools intended to support, not replace, the independent professional judgment and diagnostic responsibility of authorized healthcare professionals.
+        </p>
+        <p className="text-amber-600/90 text-[10px] font-medium pt-0.5">
+          Protected under Philippine Health Data Security & Encryption Standards (RA 10173 · DOH-PHIE).
         </p>
       </div>
     </div>
