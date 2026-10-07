@@ -50,6 +50,19 @@ export interface MedicationSafetyResponse {
   clinicalRecommendations: string[];
 }
 
+export interface PredictiveRiskResponse {
+  patientTrajectorySynopsis: string;
+  stratifiedRisks: {
+    category: string;
+    riskScore: number;
+    riskLevel: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+    clinicalRationale: string;
+    projected30DayOutlook: string;
+  }[];
+  preventativeInterventionPlan: string[];
+  recommendedSurveillanceSchedule: string;
+}
+
 export const aiService = {
   // 1. Generate Structured Clinical Consultation (SOAP)
   async generateClinicalNotes(payload: {
@@ -128,6 +141,21 @@ export const aiService = {
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error('Failed to send message to AI assistant');
+    return res.json();
+  },
+
+  // 6. Generate Longitudinal Predictive Risk & Trajectory Assessment
+  async generatePredictiveRiskAssessment(payload: {
+    patient: any;
+    vitals?: any;
+    riskProfile?: any;
+  }): Promise<{ data: PredictiveRiskResponse; disclaimer: string }> {
+    const res = await fetch('/api/ai/predictive-risk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Failed to generate predictive risk assessment');
     return res.json();
   },
 };

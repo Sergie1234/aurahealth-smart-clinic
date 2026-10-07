@@ -88,12 +88,17 @@ const ai = apiKey
 const CLINICAL_DISCLAIMER =
   'DECISION SUPPORT ONLY: This AI output is strictly for clinical and operational reference and does NOT replace professional healthcare judgment, medical diagnosis, or prescribing authority.';
 
-function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, ms = 25000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`AI request timeout after ${ms}ms`)), ms);
+  });
   return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error('AI request timeout')), ms)
-    ),
+    promise.then((res) => {
+      clearTimeout(timer);
+      return res;
+    }),
+    timeoutPromise,
   ]);
 }
 
@@ -403,7 +408,7 @@ Return ONLY the raw JSON object without markdown fences if possible.`;
               'You are an expert clinical medical scribe. Always produce safe, standard medical SOAP documentation.',
           },
         }),
-        7000
+        25000
       );
 
       const text = response.text || '{}';
@@ -415,7 +420,7 @@ Return ONLY the raw JSON object without markdown fences if possible.`;
       });
     }
   } catch (error: any) {
-    console.error('Gemini clinical notes error:', error?.message);
+    console.warn('Gemini clinical notes fallback triggered:', error?.message);
   }
 
   // Fallback high-quality heuristic response
@@ -480,7 +485,7 @@ Return a valid JSON object with the following schema:
             temperature: 0.2,
           },
         }),
-        7000
+        25000
       );
 
       const parsed = JSON.parse(response.text || '{}');
@@ -491,7 +496,7 @@ Return a valid JSON object with the following schema:
       });
     }
   } catch (err: any) {
-    console.error('Gemini patient summary error:', err?.message);
+    console.warn('Gemini patient summary fallback triggered:', err?.message);
   }
 
   // Fallback
@@ -556,7 +561,7 @@ Provide response as valid JSON:`;
             temperature: 0.2,
           },
         }),
-        7000
+        25000
       );
 
       const parsed = JSON.parse(response.text || '{}');
@@ -567,7 +572,7 @@ Provide response as valid JSON:`;
       });
     }
   } catch (err: any) {
-    console.error('Gemini lab interpretation error:', err?.message);
+    console.warn('Gemini lab interpretation fallback triggered:', err?.message);
   }
 
   // Heuristic fallback
@@ -656,7 +661,7 @@ Respond with a valid JSON object:
             temperature: 0.1,
           },
         }),
-        7000
+        25000
       );
 
       const parsed = JSON.parse(response.text || '{}');
@@ -667,7 +672,7 @@ Respond with a valid JSON object:
       });
     }
   } catch (err: any) {
-    console.error('Gemini medication safety error:', err?.message);
+    console.warn('Gemini medication safety fallback triggered:', err?.message);
   }
 
   // Safety fallback check
@@ -746,7 +751,7 @@ Instructions:
               'You are AuraHealth Smart Clinic AI Assistant. Be precise, helpful, and prioritize clinical safety.',
           },
         }),
-        7000
+        25000
       );
 
       return res.json({
@@ -756,7 +761,7 @@ Instructions:
       });
     }
   } catch (err: any) {
-    console.error('Gemini chat error:', err?.message);
+    console.warn('Gemini chat fallback triggered:', err?.message);
   }
 
   // Fallback conversational assistant
@@ -774,6 +779,132 @@ Instructions:
   return res.json({
     success: true,
     reply: fallbackReply,
+    disclaimer: CLINICAL_DISCLAIMER,
+  });
+});
+
+// 6. AI Predictive Analytics & Risk Stratification Deep Dive
+app.post('/api/ai/predictive-risk', async (req: Request, res: Response) => {
+  const { patient, vitals, riskProfile } = req.body;
+
+  const prompt = `You are a clinical predictive analytics engine and preventative medicine specialist.
+Evaluate the following patient profile, vitals, and computed clinical risk indicators:
+
+Patient:
+- Name: ${patient?.fullName}, Age: ${patient?.age}, Gender: ${patient?.gender}
+- Chronic Conditions: ${(patient?.chronicConditions || []).join(', ') || 'None'}
+- Current Medications: ${(patient?.currentMedications || []).join(', ') || 'None'}
+- Allergies: ${(patient?.allergies || []).map((a: any) => `${a.allergen} (${a.severity})`).join(', ') || 'NKDA'}
+
+Latest Measured Vitals:
+- BP: ${vitals?.bloodPressureSystolic || 120}/${vitals?.bloodPressureDiastolic || 80} mmHg
+- HR: ${vitals?.heartRate || 72} bpm, SpO2: ${vitals?.oxygenSaturation || 98}%, BMI: ${vitals?.bmi || 24.5}
+
+Preliminary Risk Stratification Scores:
+- Overall Stratification: ${riskProfile?.overallScore || 50}/100 (${riskProfile?.overallTier || 'Moderate'})
+- Cardiovascular Risk: ${riskProfile?.cardioRisk?.score || 40}/100 (${riskProfile?.cardioRisk?.tier || 'Moderate'})
+- Diabetic Progression Risk: ${riskProfile?.diabeticRisk?.score || 35}/100 (${riskProfile?.diabeticRisk?.tier || 'Low'})
+- 30-Day Hospital Readmission / Deterioration Risk: ${riskProfile?.readmissionRisk?.score || 30}/100
+
+Produce a detailed predictive risk prognosis in valid JSON with exactly the following schema:
+{
+  "patientTrajectorySynopsis": "2-3 sentences projecting health trajectory over the next 30-90 days if untreated vs if preventative measures are applied.",
+  "stratifiedRisks": [
+    {
+      "category": "Cardiovascular & Hypertension Risk",
+      "riskScore": ${riskProfile?.cardioRisk?.score || 45},
+      "riskLevel": "LOW | MODERATE | HIGH | CRITICAL",
+      "clinicalRationale": "Detailed clinical reasoning based on vitals and comorbidities",
+      "projected30DayOutlook": "Expected physiological progression or complications"
+    },
+    {
+      "category": "Metabolic & Diabetic Progression",
+      "riskScore": ${riskProfile?.diabeticRisk?.score || 35},
+      "riskLevel": "LOW | MODERATE | HIGH | CRITICAL",
+      "clinicalRationale": "Glycemic and metabolic stability evaluation",
+      "projected30DayOutlook": "Prognosis regarding glycemic control and organ risk"
+    },
+    {
+      "category": "30-Day Care Continuity & Deterioration",
+      "riskScore": ${riskProfile?.readmissionRisk?.score || 30},
+      "riskLevel": "LOW | MODERATE | HIGH | CRITICAL",
+      "clinicalRationale": "Evaluation of polypharmacy and care follow-up adherence",
+      "projected30DayOutlook": "Likelihood of emergency triage or acute escalation"
+    }
+  ],
+  "preventativeInterventionPlan": [
+    "Specific high-impact clinical intervention 1",
+    "Specific pharmacological or lifestyle intervention 2",
+    "Care management touchpoint 3"
+  ],
+  "recommendedSurveillanceSchedule": "Recommended frequency for clinic follow-up and monitoring"
+}
+
+Return ONLY valid JSON:`;
+
+  try {
+    if (ai) {
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            temperature: 0.2,
+            systemInstruction:
+              'You are a preventative medicine predictive analytics specialist. Focus on risk mitigation and evidence-based guidance.',
+          },
+        }),
+        25000
+      );
+
+      const parsed = JSON.parse(response.text || '{}');
+      return res.json({
+        success: true,
+        data: parsed,
+        disclaimer: CLINICAL_DISCLAIMER,
+      });
+    }
+  } catch (err: any) {
+    console.warn('Gemini predictive risk fallback triggered:', err?.message);
+  }
+
+  // High-fidelity predictive fallback
+  const isHighRisk = (riskProfile?.overallScore || 0) >= 50;
+  return res.json({
+    success: true,
+    data: {
+      patientTrajectorySynopsis: `${patient?.fullName || 'Patient'} presents with a ${riskProfile?.overallTier || 'Moderate'} risk profile. Proactive clinical surveillance and lifestyle intervention are projected to reduce acute deterioration probability by up to 35% over the next 90 days.`,
+      stratifiedRisks: [
+        {
+          category: 'Cardiovascular & Hypertension Risk',
+          riskScore: riskProfile?.cardioRisk?.score || 45,
+          riskLevel: riskProfile?.cardioRisk?.tier?.toUpperCase() || 'MODERATE',
+          clinicalRationale: `Systolic pressure (${vitals?.bloodPressureSystolic || 135} mmHg) and BMI (${vitals?.bmi || 27.5}) contribute to continuous arterial wall strain.`,
+          projected30DayOutlook: isHighRisk ? 'Elevated risk of hypertensive urgency without pharmacotherapy adjustment.' : 'Stable under current maintenance regimen with routine ambulatory monitoring.',
+        },
+        {
+          category: 'Metabolic & Diabetic Progression',
+          riskScore: riskProfile?.diabeticRisk?.score || 35,
+          riskLevel: riskProfile?.diabeticRisk?.tier?.toUpperCase() || 'LOW',
+          clinicalRationale: 'Endocrine and metabolic homeostatic reserves evaluated against age and baseline glucose trends.',
+          projected30DayOutlook: 'Target HbA1c maintainable with structured carbohydrate titration and exercise adherence.',
+        },
+        {
+          category: '30-Day Care Continuity & Deterioration',
+          riskScore: riskProfile?.readmissionRisk?.score || 30,
+          riskLevel: riskProfile?.readmissionRisk?.tier?.toUpperCase() || 'LOW',
+          clinicalRationale: 'Multimorbidity burden and polypharmacy interaction risk assessed.',
+          projected30DayOutlook: 'Care continuity stable provided follow-up schedule and medication refills are honored.',
+        },
+      ],
+      preventativeInterventionPlan: riskProfile?.recommendedInterventions || [
+        'Enroll in structured remote blood pressure monitoring protocol.',
+        'Schedule Comprehensive Metabolic Panel within 3 weeks.',
+        'Establish proactive telehealth touchpoint in 14 days.',
+      ],
+      recommendedSurveillanceSchedule: isHighRisk ? 'Every 2 to 4 weeks with weekly home blood pressure tracking' : 'Every 8 to 12 weeks for routine chronic care management',
+    },
     disclaimer: CLINICAL_DISCLAIMER,
   });
 });

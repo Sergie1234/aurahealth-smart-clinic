@@ -12,6 +12,7 @@ import {
   PackageCheck,
   Receipt,
   BarChart3,
+  TrendingUp,
   Sparkles,
   ShieldAlert,
   Settings,
@@ -103,6 +104,12 @@ export const Sidebar: React.FC = () => {
       label: 'Reports & Analytics',
       icon: BarChart3,
       roles: ['admin', 'doctor'],
+    },
+    {
+      id: 'predictive-analytics',
+      label: 'Predictive Analytics',
+      icon: TrendingUp,
+      roles: ['admin', 'doctor', 'nurse'],
     },
     {
       id: 'ai-assistant',

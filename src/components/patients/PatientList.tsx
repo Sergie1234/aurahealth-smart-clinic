@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { Patient } from '../../types/clinic';
+import { calculatePatientRiskStratification } from '../../utils/predictiveAnalytics';
 import {
   Search,
   Filter,
@@ -146,6 +147,13 @@ export const PatientList: React.FC<Props> = ({
               ) : (
                 filteredPatients.map((pat) => {
                   const latestVitals = pat.vitalsHistory[0];
+                  const riskProfile = calculatePatientRiskStratification(pat);
+                  const riskBadgeClass = {
+                    Critical: 'bg-rose-100 text-rose-800 border-rose-200',
+                    High: 'bg-amber-100 text-amber-800 border-amber-200',
+                    Moderate: 'bg-blue-100 text-blue-800 border-blue-200',
+                    Low: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+                  }[riskProfile.overallTier];
 
                   return (
                     <tr
@@ -165,7 +173,15 @@ export const PatientList: React.FC<Props> = ({
                             >
                               {pat.fullName}
                             </button>
-                            <span className="text-[11px] font-mono text-slate-400 block">{pat.mrn}</span>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[11px] font-mono text-slate-400">{pat.mrn}</span>
+                              <span
+                                className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full border ${riskBadgeClass}`}
+                                title={`Cardio: ${riskProfile.cardioRisk.score}% | Diabetic: ${riskProfile.diabeticRisk.score}%`}
+                              >
+                                {riskProfile.overallTier} Risk ({riskProfile.overallScore}%)
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </td>

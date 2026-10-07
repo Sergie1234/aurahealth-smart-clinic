@@ -28,6 +28,7 @@ import { LabReportModal } from './components/laboratory/LabReportModal';
 import { InventoryList } from './components/pharmacy/InventoryList';
 import { BillingList } from './components/billing/BillingList';
 import { ReportsAnalytics } from './components/reports/ReportsAnalytics';
+import { PredictiveAnalyticsDashboard } from './components/analytics/PredictiveAnalyticsDashboard';
 import { AIAssistantHub } from './components/ai/AIAssistantHub';
 import { AuditLogsView } from './components/audit/AuditLogsView';
 import { PatientPortalDashboard } from './components/patient_portal/PatientPortalDashboard';
@@ -186,6 +187,9 @@ const ClinicAppContent: React.FC = () => {
 
           {/* Reports & Analytics Tab */}
           {activeTab === 'reports' && <ReportsAnalytics />}
+
+          {/* Predictive Analytics & Risk Stratification Tab */}
+          {activeTab === 'predictive-analytics' && <PredictiveAnalyticsDashboard />}
 
           {/* Dedicated AI Clinical & Admin Assistant Chat */}
           {activeTab === 'ai-assistant' && <AIAssistantHub />}

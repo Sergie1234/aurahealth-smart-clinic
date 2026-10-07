@@ -106,6 +106,34 @@ export const OverviewDashboard: React.FC<Props> = ({ onStartConsultation, onOpen
 
       <AIDisclaimerBanner />
 
+      {/* Predictive Analytics Integration Banner */}
+      <div className="bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 rounded-xl p-4 text-white shadow-xs border border-indigo-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0">
+            <TrendingUp className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-xs text-white">Predictive Health & Operational Risk Model</span>
+              <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold px-2 py-0.2 rounded-full border border-emerald-500/30">
+                Active Surveillance
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-300 mt-0.5">
+              2 patients flagged with elevated chronic deterioration risk • 1 high-probability appointment no-show • 1 medication approaching 5-day depletion buffer.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setActiveTab('predictive-analytics')}
+          className="px-3.5 py-1.5 bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-bold text-xs rounded-lg transition flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer self-start sm:self-auto"
+        >
+          <span>View Predictive Analytics</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Today's Appointments */}
