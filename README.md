@@ -185,7 +185,7 @@ AuraHealth is fully optimized for **Vercel** serverless hosting:
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/aurahealth-smart-clinic.git
+   git clone https://github.com/Sergie1234/aurahealth-smart-clinic.git
    cd aurahealth-smart-clinic
    ```
 
@@ -242,4 +242,3 @@ This system was directed and project managed by:
 ## 9. License
 
 This project is licensed under the Apache-2.0 License. See the [LICENSE](LICENSE) file for details.
-
