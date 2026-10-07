@@ -16,3 +16,17 @@ body {
 html.dark body {
   @apply bg-slate-950 text-slate-100;
 }
+
+/* Native select / option contrast — readable in both themes */
+select {
+  color: inherit;
+  background-color: inherit;
+}
+html.dark select option {
+  background-color: #1e293b; /* slate-800 */
+  color: #f1f5f9; /* slate-100 */
+}
+html:not(.dark) select option {
+  background-color: #ffffff;
+  color: #0f172a; /* slate-900 */
+}
