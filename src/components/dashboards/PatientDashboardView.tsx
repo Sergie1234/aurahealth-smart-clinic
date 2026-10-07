@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import {
   Calendar,
@@ -6,17 +6,14 @@ import {
   FlaskConical,
   Receipt,
   QrCode,
-  Clock,
   Printer,
   ChevronRight,
-  Shield,
   Heart,
   Activity,
   AlertTriangle,
-  User,
-  CheckCircle2
 } from 'lucide-react';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
+import { formatPeso } from '../../utils/currency';
 
 interface Props {
   onOpenBookAppointment?: () => void;
@@ -33,11 +30,11 @@ export const PatientDashboardView: React.FC<Props> = ({
 }) => {
   const { patients, appointments, prescriptions, labOrders, invoices } = useClinic();
 
-  // Active patient (Eleanor Vance or primary patient)
+  // Active patient (primary portal patient)
   const patient = patients[0] || {
     id: 'pat-1',
     mrn: 'MRN-2026-081',
-    fullName: 'Eleanor Vance',
+    fullName: 'Elena Vargas',
     dateOfBirth: '1978-04-12',
     gender: 'Female',
     bloodType: 'A+',
@@ -52,7 +49,6 @@ export const PatientDashboardView: React.FC<Props> = ({
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto text-xs font-sans pb-12">
-      {/* 1. Header Banner */}
       <div className="bg-gradient-to-r from-teal-900 via-teal-800 to-slate-900 rounded-3xl p-6 sm:p-7 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-5 border border-teal-700/40">
         <div className="flex items-center gap-4">
           <SmartClinicLogo className="w-14 h-14" glow={true} />
@@ -65,7 +61,7 @@ export const PatientDashboardView: React.FC<Props> = ({
               Welcome, {patient.fullName}
             </h1>
             <p className="text-teal-100 text-xs mt-0.5">
-              MRN: <span className="font-mono font-bold text-white">{patient.mrn}</span> • Blood Group: <span className="font-bold text-white">{patient.bloodType}</span> • Primary Physician: Dr. Sarah Lin, MD
+              MRN: <span className="font-mono font-bold text-white">{patient.mrn}</span> • Blood Group: <span className="font-bold text-white">{patient.bloodType}</span> • Primary Physician: Dr. Maria Cristina Reyes, MD
             </p>
           </div>
         </div>
@@ -93,36 +89,35 @@ export const PatientDashboardView: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* 2. Vital Health Summary Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
             <span>Latest Blood Pressure</span>
             <Heart className="w-4 h-4 text-rose-500" />
           </div>
-          <p className="text-lg font-black text-slate-900 font-mono">138/86 mmHg</p>
+          <p className="text-lg font-black text-slate-900 dark:text-slate-100 font-mono">138/86 mmHg</p>
           <span className="text-[10px] text-amber-600 font-semibold">Stage 1 Pre-HTN</span>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
             <span>Heart Rate</span>
             <Activity className="w-4 h-4 text-emerald-500" />
           </div>
-          <p className="text-lg font-black text-slate-900 font-mono">74 bpm</p>
+          <p className="text-lg font-black text-slate-900 dark:text-slate-100 font-mono">74 bpm</p>
           <span className="text-[10px] text-emerald-600 font-semibold">Normal Resting Range</span>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
             <span>Oxygen Saturation</span>
             <Activity className="w-4 h-4 text-cyan-500" />
           </div>
-          <p className="text-lg font-black text-slate-900 font-mono">98% SpO2</p>
+          <p className="text-lg font-black text-slate-900 dark:text-slate-100 font-mono">98% SpO2</p>
           <span className="text-[10px] text-emerald-600 font-semibold">Optimal Oxygenation</span>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
             <span>Documented Allergies</span>
             <AlertTriangle className="w-4 h-4 text-rose-500" />
@@ -132,16 +127,13 @@ export const PatientDashboardView: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* 3. Main Portal Sections */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Upcoming Appointments & Active Prescriptions */}
         <div className="lg:col-span-7 space-y-6">
-          {/* Upcoming Appointments */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-teal-600" />
-                <h3 className="font-bold text-sm text-slate-900">My Scheduled Visits</h3>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">My Scheduled Visits</h3>
               </div>
               <span className="text-[11px] font-semibold text-teal-700">
                 {patientAppointments.length} Booked
@@ -155,11 +147,11 @@ export const PatientDashboardView: React.FC<Props> = ({
                 patientAppointments.map((apt) => (
                   <div
                     key={apt.id}
-                    className="p-3.5 rounded-xl border border-slate-200/90 bg-slate-50/60 flex items-center justify-between gap-3"
+                    className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-between gap-3"
                   >
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900">{apt.doctorName}</span>
+                        <span className="font-bold text-slate-900 dark:text-slate-100">{apt.doctorName}</span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
                           {apt.status}
                         </span>
@@ -168,7 +160,7 @@ export const PatientDashboardView: React.FC<Props> = ({
                         {apt.date} at {apt.time} • {apt.reason}
                       </p>
                     </div>
-                    <span className="text-xs font-mono text-slate-600 font-bold bg-white px-2.5 py-1 rounded border border-slate-200">
+                    <span className="text-xs font-mono text-slate-600 font-bold bg-white dark:bg-slate-900 px-2.5 py-1 rounded border border-slate-200 dark:border-slate-700">
                       #{apt.queueNumber || 'Q-10'}
                     </span>
                   </div>
@@ -177,12 +169,11 @@ export const PatientDashboardView: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Active Prescriptions */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <Pill className="w-4 h-4 text-teal-600" />
-                <h3 className="font-bold text-sm text-slate-900">Active e-Prescriptions</h3>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Active e-Prescriptions</h3>
               </div>
               <span className="text-[11px] font-semibold text-teal-700">
                 {patientPrescriptions.length} Records
@@ -193,10 +184,10 @@ export const PatientDashboardView: React.FC<Props> = ({
               {patientPrescriptions.slice(0, 3).map((rx) => (
                 <div
                   key={rx.id}
-                  className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 flex items-center justify-between gap-3"
+                  className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-between gap-3"
                 >
                   <div>
-                    <h4 className="font-bold text-slate-900">{rx.items[0]?.medicationName}</h4>
+                    <h4 className="font-bold text-slate-900 dark:text-slate-100">{rx.items[0]?.medicationName}</h4>
                     <p className="text-slate-500 text-[11px] mt-0.5">
                       {rx.items[0]?.dosage} • {rx.items[0]?.frequency} • {rx.items[0]?.instructions}
                     </p>
@@ -207,7 +198,7 @@ export const PatientDashboardView: React.FC<Props> = ({
                   {onOpenPrescription && (
                     <button
                       onClick={() => onOpenPrescription(rx)}
-                      className="px-2.5 py-1.5 bg-white border border-slate-200 hover:border-teal-400 rounded-lg text-slate-700 font-semibold flex items-center gap-1 cursor-pointer shrink-0"
+                      className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-teal-400 rounded-lg text-slate-700 dark:text-slate-200 font-semibold flex items-center gap-1 cursor-pointer shrink-0"
                     >
                       <Printer className="w-3.5 h-3.5 text-teal-600" />
                       <span>Print Rx</span>
@@ -219,14 +210,12 @@ export const PatientDashboardView: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Right Column: Lab Diagnostics & Billing Receipts */}
         <div className="lg:col-span-5 space-y-6">
-          {/* Diagnostic Lab Tests */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <FlaskConical className="w-4 h-4 text-teal-600" />
-                <h3 className="font-bold text-sm text-slate-900">Diagnostic Laboratory Results</h3>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Diagnostic Laboratory Results</h3>
               </div>
             </div>
 
@@ -234,10 +223,10 @@ export const PatientDashboardView: React.FC<Props> = ({
               {patientLabs.map((lab) => (
                 <div
                   key={lab.id}
-                  className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 flex items-center justify-between gap-2"
+                  className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-between gap-2"
                 >
                   <div>
-                    <h4 className="font-bold text-slate-900">{lab.testName}</h4>
+                    <h4 className="font-bold text-slate-900 dark:text-slate-100">{lab.testName}</h4>
                     <p className="text-slate-500 text-[11px] mt-0.5">
                       Ordered: {new Date(lab.requestedAt).toLocaleDateString()}
                     </p>
@@ -248,7 +237,7 @@ export const PatientDashboardView: React.FC<Props> = ({
                   {onOpenLabReport && (
                     <button
                       onClick={() => onOpenLabReport(lab)}
-                      className="px-2.5 py-1.5 bg-white border border-slate-200 hover:border-teal-400 rounded-lg text-slate-700 font-semibold flex items-center gap-1 cursor-pointer shrink-0"
+                      className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-teal-400 rounded-lg text-slate-700 dark:text-slate-200 font-semibold flex items-center gap-1 cursor-pointer shrink-0"
                     >
                       <ChevronRight className="w-3.5 h-3.5 text-teal-600" />
                       <span>View Report</span>
@@ -259,12 +248,11 @@ export const PatientDashboardView: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Billing & Invoices */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <Receipt className="w-4 h-4 text-teal-600" />
-                <h3 className="font-bold text-sm text-slate-900">Statements & Receipts</h3>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Statements & Receipts</h3>
               </div>
             </div>
 
@@ -272,14 +260,14 @@ export const PatientDashboardView: React.FC<Props> = ({
               {patientInvoices.map((inv) => (
                 <div
                   key={inv.id}
-                  className="p-3 rounded-xl border border-slate-200 bg-slate-50/60 flex items-center justify-between text-[11px]"
+                  className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-between text-[11px]"
                 >
                   <div>
-                    <span className="font-bold text-slate-900">{inv.invoiceNumber}</span>
+                    <span className="font-bold text-slate-900 dark:text-slate-100">{inv.invoiceNumber}</span>
                     <p className="text-slate-500 text-[10px]">{inv.date}</p>
                   </div>
                   <div className="text-right">
-                    <span className="font-bold text-slate-900">${inv.totalAmount.toFixed(2)}</span>
+                    <span className="font-bold text-slate-900 dark:text-slate-100">{formatPeso(inv.totalAmount)}</span>
                     <span className="block text-[10px] font-semibold text-emerald-700">{inv.status}</span>
                   </div>
                 </div>
