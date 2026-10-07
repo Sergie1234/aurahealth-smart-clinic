@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useClinic } from '../../context/ClinicContext';
-import { useTheme } from '../../context/ThemeContext';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import {
-  Search, Bell, Clock, Sparkles, CheckCircle2, AlertTriangle, User, X, Plus, Database, Home, LogIn, LogOut, Sun, Moon
+  Search, Bell, Clock, Sparkles, CheckCircle2, AlertTriangle, User, X, Plus, Database, Home, LogIn, LogOut
 } from 'lucide-react';
 
 interface Props {
@@ -17,7 +16,6 @@ export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatien
     currentUser, activeRole, notifications, markNotificationAsRead, markAllNotificationsAsRead,
     searchQuery, setSearchQuery, patients, appointments, inventory, selectPatient, setActiveTab, logout
   } = useClinic();
-  const { isDark, toggleTheme } = useTheme();
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
@@ -118,17 +116,12 @@ export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatien
                 </button>
               )}
               {onOpenBookAppointment && (
-                <button onClick={onOpenBookAppointment} className="px-3 py-1.5 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition flex items-center gap-1.5 shadow-sm cursor-pointer">
+                <button onClick={onOpenBookAppointment} className="px-3 py-1.5 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-500 rounded-lg transition flex items-center gap-1.5 shadow-sm cursor-pointer">
                   <Clock className="w-3.5 h-3.5" /><span>Book Visit</span>
                 </button>
               )}
             </div>
           )}
-
-          <button onClick={toggleTheme} className="p-1.5 text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg transition flex items-center gap-1 text-xs font-semibold cursor-pointer" title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
-            {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-indigo-600" />}
-            <span className="hidden sm:inline text-[11px]">{isDark ? 'Light' : 'Dark'}</span>
-          </button>
 
           <button onClick={() => setActiveTab('home')} className="p-1.5 text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg transition flex items-center gap-1 text-xs font-semibold cursor-pointer" title="Go to Public Homepage">
             <Home className="w-3.5 h-3.5 text-teal-600" /><span className="hidden sm:inline text-[11px]">Home</span>
@@ -164,7 +157,7 @@ export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatien
                   {notifications.length === 0 ? (
                     <div className="p-6 text-center text-xs text-slate-400">No current notifications</div>
                   ) : notifications.map((notif) => (
-                    <div key={notif.id} onClick={() => markNotificationAsRead(notif.id)} className={`p-3 text-xs transition cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 ${!notif.read ? 'bg-teal-50/30 dark:bg-teal-900/20' : ''}`}>
+                    <div key={notif.id} onClick={() => markNotificationAsRead(notif.id)} className={`p-3 text-xs transition cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 ${!notif.read ? 'bg-teal-50/30 dark:bg-teal-900/20' : ''`}>
                       <p className="font-semibold text-slate-800 dark:text-slate-100">{notif.title}</p>
                       <p className="text-slate-600 dark:text-slate-400 text-[11px] mt-0.5">{notif.message}</p>
                     </div>
