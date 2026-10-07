@@ -84,15 +84,15 @@ const ClinicAppContent: React.FC = () => {
         destinationTitle={navigatingTargetTitle}
       />
 
+      {/* Global Quick Switcher Bar with Public Homepage & Secure Login triggers */}
+      <RoleSwitcher />
+
       {activeTab === 'home' ? (
         <HomePage onOpenBookAppointment={() => setShowBookAppointment(true)} />
       ) : activeTab === 'login' ? (
         <LoginPage />
       ) : (
         <>
-          {/* 1. Fast Role Perspective Switcher Bar */}
-          <RoleSwitcher />
-
           {/* 2. Top Header Navigation */}
           <Header
             onOpenBookAppointment={() => setShowBookAppointment(true)}
