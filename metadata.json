@@ -1,0 +1,6 @@
+{
+  "name": "AuraHealth - Smart Clinic Management & AI Clinical Assistant",
+  "description": "Production-grade smart clinic management web application with role-based access control, appointment scheduling, EMR, e-prescriptions, lab diagnostics, billing, inventory, and Gemini-powered clinical assistance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
