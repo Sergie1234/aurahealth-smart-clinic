@@ -5,10 +5,10 @@
 
 import React, { useState } from 'react';
 import { ClinicProvider, useClinic } from './context/ClinicContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 
-// Views
 import { PatientList } from './components/patients/PatientList';
 import { PatientDetailModal } from './components/patients/PatientDetailModal';
 import { NewPatientModal } from './components/patients/NewPatientModal';
@@ -54,7 +54,6 @@ const ClinicAppContent: React.FC = () => {
     navigatingTargetTitle,
   } = useClinic();
 
-  // Modals state
   const [showNewPatient, setShowNewPatient] = useState(false);
   const [showBookAppointment, setShowBookAppointment] = useState(false);
   const [showNewPrescription, setShowNewPrescription] = useState(false);
@@ -74,14 +73,11 @@ const ClinicAppContent: React.FC = () => {
 
   const handleSelectPatientProfile = (patientId: string) => {
     const pat = patients.find((p) => p.id === patientId);
-    if (pat) {
-      setDetailPatient(pat);
-    }
+    if (pat) setDetailPatient(pat);
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900 font-sans selection:bg-teal-500 selection:text-white">
-      {/* Network-Aware Page Transition Full-Screen Loader */}
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col text-slate-900 dark:text-slate-100 font-sans selection:bg-teal-500 selection:text-white">
       <NetworkAwarePageTransition
         isNavigating={isNavigating}
         destinationTitle={navigatingTargetTitle}
@@ -93,158 +89,130 @@ const ClinicAppContent: React.FC = () => {
         <LoginPage />
       ) : (
         <>
-          {/* Header Navigation */}
           <Header
             onOpenBookAppointment={() => setShowBookAppointment(true)}
             onOpenNewPatient={() => setShowNewPatient(true)}
             onOpenSupabaseModal={() => setShowSupabaseModal(true)}
           />
 
-          {/* Main Body: Sidebar + Dynamic Module Workspace */}
           <div className="flex-1 flex overflow-hidden">
-            {/* Dynamic Role-Filtered Sidebar */}
             <div className="hidden md:block">
               <Sidebar />
             </div>
 
-            {/* Main Workspace Content Area */}
             <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
-          {/* 4 Dedicated Dashboards based on Strict Role Separation */}
-          {activeTab === 'dashboard' && (
-            <>
-              {primaryRole === 'patient' || activeRole === 'patient' ? (
-                <PatientDashboardView
-                  onOpenBookAppointment={() => setShowBookAppointment(true)}
-                  onOpenQR={() => setQrPatient(patients[0])}
-                  onOpenLabReport={(lab) => setLabOrderForReport(lab)}
-                  onOpenPrescription={(rx) => setPrintingRx(rx)}
-                />
-              ) : primaryRole === 'staff' || ['nurse', 'pharmacist', 'receptionist', 'lab_technician'].includes(activeRole) ? (
-                <StaffDashboardView
-                  subRole={staffSubRole || (activeRole as any) || 'nurse'}
-                  onOpenBookAppointment={() => setShowBookAppointment(true)}
+              {activeTab === 'dashboard' && (
+                <>
+                  {primaryRole === 'patient' || activeRole === 'patient' ? (
+                    <PatientDashboardView
+                      onOpenBookAppointment={() => setShowBookAppointment(true)}
+                      onOpenQR={() => setQrPatient(patients[0])}
+                      onOpenLabReport={(lab) => setLabOrderForReport(lab)}
+                      onOpenPrescription={(rx) => setPrintingRx(rx)}
+                    />
+                  ) : primaryRole === 'staff' || ['nurse', 'pharmacist', 'receptionist', 'lab_technician'].includes(activeRole) ? (
+                    <StaffDashboardView
+                      subRole={staffSubRole || (activeRole as any) || 'nurse'}
+                      onOpenBookAppointment={() => setShowBookAppointment(true)}
+                      onOpenNewPatient={() => setShowNewPatient(true)}
+                    />
+                  ) : primaryRole === 'admin' || activeRole === 'admin' ? (
+                    <AdminDashboardView />
+                  ) : (
+                    <DoctorDashboardView
+                      onStartConsultation={handleStartConsultation}
+                      onOpenBookAppointment={() => setShowBookAppointment(true)}
+                    />
+                  )}
+                </>
+              )}
+
+              {activeTab === 'patients' && (
+                <PatientList
+                  onSelectPatient={handleSelectPatientProfile}
                   onOpenNewPatient={() => setShowNewPatient(true)}
-                />
-              ) : primaryRole === 'admin' || activeRole === 'admin' ? (
-                <AdminDashboardView />
-              ) : (
-                <DoctorDashboardView
+                  onOpenQR={(pat) => setQrPatient(pat)}
+                  onOpenAISummary={(pat) => setDetailPatient(pat)}
                   onStartConsultation={handleStartConsultation}
-                  onOpenBookAppointment={() => setShowBookAppointment(true)}
+                  onBookAppointment={(patId) => {
+                    selectPatient(patId);
+                    setShowBookAppointment(true);
+                  }}
                 />
               )}
-            </>
-          )}
 
-          {/* Patients Tab */}
-          {activeTab === 'patients' && (
-            <PatientList
-              onSelectPatient={handleSelectPatientProfile}
-              onOpenNewPatient={() => setShowNewPatient(true)}
-              onOpenQR={(pat) => setQrPatient(pat)}
-              onOpenAISummary={(pat) => setDetailPatient(pat)}
-              onStartConsultation={handleStartConsultation}
-              onBookAppointment={(patId) => {
-                selectPatient(patId);
-                setShowBookAppointment(true);
-              }}
-            />
-          )}
+              {activeTab === 'appointments' && (
+                <AppointmentCalendar
+                  onOpenBookAppointment={() => setShowBookAppointment(true)}
+                  onStartConsultation={handleStartConsultation}
+                />
+              )}
 
-          {/* Appointments Tab */}
-          {activeTab === 'appointments' && (
-            <AppointmentCalendar
-              onOpenBookAppointment={() => setShowBookAppointment(true)}
-              onStartConsultation={handleStartConsultation}
-            />
-          )}
+              {activeTab === 'queue' && (
+                <QueueManager onStartConsultation={handleStartConsultation} />
+              )}
 
-          {/* Queue Tab */}
-          {activeTab === 'queue' && (
-            <QueueManager onStartConsultation={handleStartConsultation} />
-          )}
+              {activeTab === 'consultations' && (
+                <ConsultationWorkspace
+                  initialPatientId={consultPatientId}
+                  onFinish={() => setActiveTab('emr')}
+                />
+              )}
 
-          {/* Consultation Workspace Tab */}
-          {activeTab === 'consultations' && (
-            <ConsultationWorkspace
-              initialPatientId={consultPatientId}
-              onFinish={() => setActiveTab('emr')}
-            />
-          )}
-
-          {/* EMR / Medical Records Tab */}
-          {activeTab === 'emr' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200">
-                <div>
-                  <h1 className="text-base font-bold text-slate-900">Electronic Medical Records (EMR)</h1>
-                  <p className="text-xs text-slate-500">Patient Longitudinal History, Chronological Care & Diagnoses</p>
+              {activeTab === 'emr' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <div>
+                      <h1 className="text-base font-bold text-slate-900 dark:text-slate-100">Electronic Medical Records (EMR)</h1>
+                      <p className="text-xs text-slate-500">Patient Longitudinal History, Chronological Care & Diagnoses</p>
+                    </div>
+                  </div>
+                  <PatientList
+                    onSelectPatient={handleSelectPatientProfile}
+                    onOpenNewPatient={() => setShowNewPatient(true)}
+                    onOpenQR={(pat) => setQrPatient(pat)}
+                    onOpenAISummary={(pat) => setDetailPatient(pat)}
+                    onStartConsultation={handleStartConsultation}
+                    onBookAppointment={(patId) => {
+                      selectPatient(patId);
+                      setShowBookAppointment(true);
+                    }}
+                  />
                 </div>
-              </div>
-              <PatientList
-                onSelectPatient={handleSelectPatientProfile}
-                onOpenNewPatient={() => setShowNewPatient(true)}
-                onOpenQR={(pat) => setQrPatient(pat)}
-                onOpenAISummary={(pat) => setDetailPatient(pat)}
-                onStartConsultation={handleStartConsultation}
-                onBookAppointment={(patId) => {
-                  selectPatient(patId);
-                  setShowBookAppointment(true);
-                }}
-              />
-            </div>
-          )}
+              )}
 
-          {/* Prescriptions Tab */}
-          {activeTab === 'prescriptions' && (
-            <PrescriptionList
-              onOpenNewPrescription={() => setShowNewPrescription(true)}
-              onPrintPrescription={(rx) => setPrintingRx(rx)}
-            />
-          )}
+              {activeTab === 'prescriptions' && (
+                <PrescriptionList
+                  onOpenNewPrescription={() => setShowNewPrescription(true)}
+                  onPrintPrescription={(rx) => setPrintingRx(rx)}
+                />
+              )}
 
-          {/* Laboratory Tab */}
-          {activeTab === 'laboratory' && (
-            <LabOrdersList
-              onOpenEnterResults={(order) => setLabOrderForResults(order)}
-              onOpenReport={(order) => setLabOrderForReport(order)}
-            />
-          )}
+              {activeTab === 'laboratory' && (
+                <LabOrdersList
+                  onOpenEnterResults={(order) => setLabOrderForResults(order)}
+                  onOpenReport={(order) => setLabOrderForReport(order)}
+                />
+              )}
 
-          {/* Pharmacy & Stock Inventory Tab */}
-          {activeTab === 'inventory' && <InventoryList />}
-
-          {/* Billing & Invoices Tab */}
-          {activeTab === 'billing' && <BillingList />}
-
-          {/* Reports & Analytics Tab */}
-          {activeTab === 'reports' && <ReportsAnalytics />}
-
-          {/* Predictive Analytics & Risk Stratification Tab */}
-          {activeTab === 'predictive-analytics' && <PredictiveAnalyticsDashboard />}
-
-          {/* Dedicated AI Clinical & Admin Assistant Chat */}
-          {activeTab === 'ai-assistant' && <AIAssistantHub />}
-
-          {/* Audit Logs Tab */}
-          {activeTab === 'audit-logs' && <AuditLogsView />}
-        </main>
-      </div>
-    </>
-  )}
-
-      {/* Global Interactive Modals */}
-      {showNewPatient && (
-        <NewPatientModal onClose={() => setShowNewPatient(false)} />
+              {activeTab === 'inventory' && <InventoryList />}
+              {activeTab === 'billing' && <BillingList />}
+              {activeTab === 'reports' && <ReportsAnalytics />}
+              {activeTab === 'predictive-analytics' && <PredictiveAnalyticsDashboard />}
+              {activeTab === 'ai-assistant' && <AIAssistantHub />}
+              {activeTab === 'audit-logs' && <AuditLogsView />}
+            </main>
+          </div>
+        </>
       )}
 
+      {showNewPatient && <NewPatientModal onClose={() => setShowNewPatient(false)} />}
       {showBookAppointment && (
         <BookAppointmentModal
           initialPatientId={selectedPatient?.id}
           onClose={() => setShowBookAppointment(false)}
         />
       )}
-
       {detailPatient && (
         <PatientDetailModal
           patient={detailPatient}
@@ -253,50 +221,28 @@ const ClinicAppContent: React.FC = () => {
           onOpenQR={(pat) => setQrPatient(pat)}
         />
       )}
-
-      {qrPatient && (
-        <PatientQRModal
-          patient={qrPatient}
-          onClose={() => setQrPatient(null)}
-        />
-      )}
-
-      {showNewPrescription && (
-        <NewPrescriptionModal onClose={() => setShowNewPrescription(false)} />
-      )}
-
+      {qrPatient && <PatientQRModal patient={qrPatient} onClose={() => setQrPatient(null)} />}
+      {showNewPrescription && <NewPrescriptionModal onClose={() => setShowNewPrescription(false)} />}
       {printingRx && (
-        <PrescriptionPrintModal
-          prescription={printingRx}
-          onClose={() => setPrintingRx(null)}
-        />
+        <PrescriptionPrintModal prescription={printingRx} onClose={() => setPrintingRx(null)} />
       )}
-
       {labOrderForResults && (
-        <EnterLabResultsModal
-          order={labOrderForResults}
-          onClose={() => setLabOrderForResults(null)}
-        />
+        <EnterLabResultsModal order={labOrderForResults} onClose={() => setLabOrderForResults(null)} />
       )}
-
       {labOrderForReport && (
-        <LabReportModal
-          order={labOrderForReport}
-          onClose={() => setLabOrderForReport(null)}
-        />
+        <LabReportModal order={labOrderForReport} onClose={() => setLabOrderForReport(null)} />
       )}
-
-      {showSupabaseModal && (
-        <SupabaseModal onClose={() => setShowSupabaseModal(false)} />
-      )}
+      {showSupabaseModal && <SupabaseModal onClose={() => setShowSupabaseModal(false)} />}
     </div>
   );
 };
 
 export default function App() {
   return (
-    <ClinicProvider>
-      <ClinicAppContent />
-    </ClinicProvider>
+    <ThemeProvider>
+      <ClinicProvider>
+        <ClinicAppContent />
+      </ClinicProvider>
+    </ThemeProvider>
   );
 }
