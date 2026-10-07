@@ -11,7 +11,7 @@ import {
   INITIAL_INVENTORY,
   INITIAL_INVOICES,
   INITIAL_AUDIT_LOGS,
-} from './data/mockData.ts';
+} from './data/mockData';
 
 dotenv.config();
 

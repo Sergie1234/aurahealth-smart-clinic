@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import { app } from './src/serverApp.ts';
+import { app } from './src/serverApp';
 
 dotenv.config();
 
