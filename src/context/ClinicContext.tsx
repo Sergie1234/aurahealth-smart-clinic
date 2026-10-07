@@ -117,9 +117,9 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [users] = useState<User[]>(INITIAL_USERS);
   const [activeRole, setActiveRole] = useState<UserRole>('doctor');
   const [currentUser, setCurrentUser] = useState<User>(INITIAL_USERS[0]);
-  const [activeTab, setActiveTabState] = useState<string>('dashboard');
+  const [activeTab, setActiveTabState] = useState<string>('home');
   const [isNavigating, setIsNavigating] = useState(false);
-  const [navigatingTargetTitle, setNavigatingTargetTitle] = useState('Clinic Dashboard');
+  const [navigatingTargetTitle, setNavigatingTargetTitle] = useState('Smart Clinic Homepage');
 
   const TAB_TITLES: Record<string, string> = {
     home: 'Smart Clinic Homepage',
