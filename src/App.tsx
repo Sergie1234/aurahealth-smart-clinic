@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { ClinicProvider, useClinic } from './context/ClinicContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { ThemeToggle } from './components/common/ThemeToggle';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 
@@ -78,6 +79,7 @@ const ClinicAppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col text-slate-900 dark:text-slate-100 font-sans selection:bg-teal-500 selection:text-white">
+      <ThemeToggle />
       <NetworkAwarePageTransition
         isNavigating={isNavigating}
         destinationTitle={navigatingTargetTitle}
@@ -164,7 +166,7 @@ const ClinicAppContent: React.FC = () => {
                   <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
                     <div>
                       <h1 className="text-base font-bold text-slate-900 dark:text-slate-100">Electronic Medical Records (EMR)</h1>
-                      <p className="text-xs text-slate-500">Patient Longitudinal History, Chronological Care & Diagnoses</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Patient Longitudinal History, Chronological Care & Diagnoses</p>
                     </div>
                   </div>
                   <PatientList
