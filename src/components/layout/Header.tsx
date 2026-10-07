@@ -100,6 +100,28 @@ export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatien
                   ))}
                 </div>
               )}
+              {filteredAppointments.length > 0 && (
+                <div className="p-2">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">Appointments</p>
+                  {filteredAppointments.map((apt) => (
+                    <button key={apt.id} onClick={() => { setActiveTab('appointments'); setShowSearchDropdown(false); setSearchQuery(''); }} className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-teal-50/70 dark:hover:bg-slate-800 text-xs transition">
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">{apt.patientName}</span>
+                      <span className="ml-2 text-slate-500 text-[11px]">{apt.doctorName} · {apt.reason}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {filteredInventory.length > 0 && (
+                <div className="p-2">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">Inventory</p>
+                  {filteredInventory.map((item) => (
+                    <button key={item.id} onClick={() => { setActiveTab('inventory'); setShowSearchDropdown(false); setSearchQuery(''); }} className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-teal-50/70 dark:hover:bg-slate-800 text-xs transition">
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">{item.name}</span>
+                      <span className="ml-2 text-slate-500 text-[11px]">{item.genericName}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               {filteredPatients.length === 0 && filteredAppointments.length === 0 && filteredInventory.length === 0 && (
                 <div className="p-6 text-center text-xs text-slate-500">No matching records found for "{searchQuery}".</div>
               )}
@@ -143,7 +165,7 @@ export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatien
           </button>
 
           <div className="relative" ref={notifRef}>
-            <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg relative transition cursor-pointer" title="Notifications">
+            <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition relative cursor-pointer">
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white rounded-full text-[9px] font-bold flex items-center justify-center">{unreadCount}</span>}
             </button>
@@ -157,7 +179,7 @@ export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatien
                   {notifications.length === 0 ? (
                     <div className="p-6 text-center text-xs text-slate-400">No current notifications</div>
                   ) : notifications.map((notif) => (
-                    <div key={notif.id} onClick={() => markNotificationAsRead(notif.id)} className={`p-3 text-xs transition cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 ${!notif.read ? 'bg-teal-50/30 dark:bg-teal-900/20' : ''`}>
+                    <div key={notif.id} onClick={() => markNotificationAsRead(notif.id)} className={`p-3 text-xs transition cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 ${!notif.read ? 'bg-teal-50/30 dark:bg-teal-900/20' : ''}`}>
                       <p className="font-semibold text-slate-800 dark:text-slate-100">{notif.title}</p>
                       <p className="text-slate-600 dark:text-slate-400 text-[11px] mt-0.5">{notif.message}</p>
                     </div>
