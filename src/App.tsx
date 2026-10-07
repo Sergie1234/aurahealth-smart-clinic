@@ -34,6 +34,8 @@ import { AuditLogsView } from './components/audit/AuditLogsView';
 import { PatientPortalDashboard } from './components/patient_portal/PatientPortalDashboard';
 import { SupabaseModal } from './components/common/SupabaseModal';
 import { NetworkAwarePageTransition } from './components/common/NetworkAwarePageTransition';
+import { HomePage } from './components/home/HomePage';
+import { LoginPage } from './components/auth/LoginPage';
 
 import { Patient, Prescription, LabTestOrder } from './types/clinic';
 
@@ -82,25 +84,31 @@ const ClinicAppContent: React.FC = () => {
         destinationTitle={navigatingTargetTitle}
       />
 
-      {/* 1. Fast Role Perspective Switcher Bar */}
-      <RoleSwitcher />
+      {activeTab === 'home' ? (
+        <HomePage onOpenBookAppointment={() => setShowBookAppointment(true)} />
+      ) : activeTab === 'login' ? (
+        <LoginPage />
+      ) : (
+        <>
+          {/* 1. Fast Role Perspective Switcher Bar */}
+          <RoleSwitcher />
 
-      {/* 2. Top Header Navigation */}
-      <Header
-        onOpenBookAppointment={() => setShowBookAppointment(true)}
-        onOpenNewPatient={() => setShowNewPatient(true)}
-        onOpenSupabaseModal={() => setShowSupabaseModal(true)}
-      />
+          {/* 2. Top Header Navigation */}
+          <Header
+            onOpenBookAppointment={() => setShowBookAppointment(true)}
+            onOpenNewPatient={() => setShowNewPatient(true)}
+            onOpenSupabaseModal={() => setShowSupabaseModal(true)}
+          />
 
-      {/* 3. Main Body: Sidebar + Dynamic Module Workspace */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Dynamic Role-Filtered Sidebar */}
-        <div className="hidden md:block">
-          <Sidebar />
-        </div>
+          {/* 3. Main Body: Sidebar + Dynamic Module Workspace */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Dynamic Role-Filtered Sidebar */}
+            <div className="hidden md:block">
+              <Sidebar />
+            </div>
 
-        {/* Main Workspace Content Area */}
-        <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
+            {/* Main Workspace Content Area */}
+            <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
           {/* Dashboard Tab */}
           {activeTab === 'dashboard' && (
             <>
@@ -214,6 +222,8 @@ const ClinicAppContent: React.FC = () => {
           {activeTab === 'audit-logs' && <AuditLogsView />}
         </main>
       </div>
+    </>
+  )}
 
       {/* Global Interactive Modals */}
       {showNewPatient && (

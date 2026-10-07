@@ -122,6 +122,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [navigatingTargetTitle, setNavigatingTargetTitle] = useState('Clinic Dashboard');
 
   const TAB_TITLES: Record<string, string> = {
+    home: 'Smart Clinic Homepage',
+    login: 'Secure Healthcare Authentication',
     dashboard: 'Clinic Dashboard',
     patients: 'Patient Directory',
     appointments: 'Appointment Calendar',

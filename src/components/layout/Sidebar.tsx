@@ -18,7 +18,9 @@ import {
   ShieldAlert,
   Settings,
   HeartPulse,
-  UserCheck
+  UserCheck,
+  Home,
+  LogIn
 } from 'lucide-react';
 
 interface NavItem {
@@ -123,6 +125,18 @@ export const Sidebar: React.FC = () => {
       label: 'Audit & Compliance',
       icon: ShieldAlert,
       roles: ['admin'],
+    },
+    {
+      id: 'home',
+      label: 'Public Homepage',
+      icon: Home,
+      roles: ['admin', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician', 'patient'],
+    },
+    {
+      id: 'login',
+      label: 'Sign In / Switch Role',
+      icon: LogIn,
+      roles: ['admin', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician', 'patient'],
     },
   ];
 
