@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { StaffSubRole } from '../../context/ClinicContext';
 import {
@@ -9,14 +9,7 @@ import {
   FlaskConical,
   PackageCheck,
   CheckCircle2,
-  Clock,
-  AlertTriangle,
   Layers,
-  ArrowRight,
-  Shield,
-  Search,
-  Sparkles,
-  ClipboardList
 } from 'lucide-react';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
 
@@ -43,9 +36,6 @@ export const StaffDashboardView: React.FC<Props> = ({
     updateLabStatus,
   } = useClinic();
 
-  const [activeTabSub, setActiveTabSub] = useState<'queue' | 'inventory' | 'labs' | 'triage'>('queue');
-
-  // Role metadata
   const roleLabels: Record<StaffSubRole, { title: string; badge: string; color: string; desc: string }> = {
     nurse: {
       title: 'Clinical Nursing & Outpatient Triage',
@@ -75,15 +65,18 @@ export const StaffDashboardView: React.FC<Props> = ({
 
   const currentMeta = roleLabels[subRole] || roleLabels.nurse;
 
-  // Operational metrics
   const waitingPatients = appointments.filter((a) => a.status === 'Checked In' || a.status === 'In Consultation');
   const pendingRx = prescriptions.filter((p) => p.status === 'Active');
   const lowStock = inventory.filter((i) => i.stockQuantity <= i.reorderLevel);
   const pendingLabs = labOrders.filter((l) => l.status === 'Requested' || l.status === 'Processing');
 
+  const cardClass = 'bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1';
+  const panelClass = 'bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-xs space-y-4';
+  const rowClass = 'p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3';
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto text-xs font-sans pb-12">
-      {/* 1. Staff Hero Banner */}
+      {/* Staff Hero Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 rounded-3xl p-6 sm:p-7 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-5 border border-teal-800/40">
         <div className="flex items-center gap-4">
           <SmartClinicLogo className="w-14 h-14" glow={true} />
@@ -126,83 +119,81 @@ export const StaffDashboardView: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* 2. Operational Metrics Cards */}
+      {/* Operational Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
+        <div className={cardClass}>
           <div className="flex items-center justify-between text-slate-500">
             <span>Waiting Room Queue</span>
             <Layers className="w-4 h-4 text-teal-600" />
           </div>
-          <p className="text-xl font-black text-slate-900 font-mono">{waitingPatients.length}</p>
-          <span className="text-[10px] text-teal-700 font-semibold">Active in Clinic</span>
+          <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{waitingPatients.length}</p>
+          <span className="text-[10px] text-teal-700 dark:text-teal-400 font-semibold">Active in Clinic</span>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
+        <div className={cardClass}>
           <div className="flex items-center justify-between text-slate-500">
             <span>Pending Dispensary Rx</span>
             <Pill className="w-4 h-4 text-indigo-600" />
           </div>
-          <p className="text-xl font-black text-slate-900 font-mono">{pendingRx.length}</p>
-          <span className="text-[10px] text-indigo-700 font-semibold">Ready for Dispense</span>
+          <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{pendingRx.length}</p>
+          <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-semibold">Ready for Dispense</span>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
+        <div className={cardClass}>
           <div className="flex items-center justify-between text-slate-500">
             <span>Low Stock Reorders</span>
             <PackageCheck className="w-4 h-4 text-amber-600" />
           </div>
-          <p className="text-xl font-black text-slate-900 font-mono">{lowStock.length}</p>
-          <span className="text-[10px] text-amber-700 font-semibold">Items below threshold</span>
+          <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{lowStock.length}</p>
+          <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold">Items below threshold</span>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
+        <div className={cardClass}>
           <div className="flex items-center justify-between text-slate-500">
             <span>Specimens in Lab</span>
             <FlaskConical className="w-4 h-4 text-cyan-600" />
           </div>
-          <p className="text-xl font-black text-slate-900 font-mono">{pendingLabs.length}</p>
-          <span className="text-[10px] text-cyan-700 font-semibold">Processing Assays</span>
+          <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{pendingLabs.length}</p>
+          <span className="text-[10px] text-cyan-700 dark:text-cyan-400 font-semibold">Processing Assays</span>
         </div>
       </div>
 
-      {/* 3. Sub-Role Specialized Workspace */}
+      {/* Nurse workspace */}
       {subRole === 'nurse' && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className={panelClass}>
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-emerald-600" />
-              <h3 className="font-bold text-sm text-slate-900">Nurse Triage & Pre-Consultation Vitals Desk</h3>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Nurse Triage & Pre-Consultation Vitals Desk</h3>
             </div>
             <span className="text-xs text-slate-500">Continuous Vital Sign Surveillance</span>
           </div>
 
           <div className="space-y-3">
             {patients.map((pat) => (
-              <div
-                key={pat.id}
-                className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-              >
+              <div key={pat.id} className={rowClass}>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900 text-sm">{pat.fullName}</span>
-                    <span className="font-mono text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">{pat.fullName}</span>
+                    <span className="font-mono text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-2 py-0.5 rounded">
                       {pat.mrn}
                     </span>
-                    <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                    <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-800">
                       Blood {pat.bloodType}
                     </span>
                   </div>
                   <p className="text-slate-500 text-[11px] mt-1">
-                    Allergies: <strong className="text-rose-600">{pat.allergies.join(', ') || 'NKDA'}</strong> • Conditions: {pat.chronicConditions.join(', ') || 'None documented'}
+                    Allergies: <strong className="text-rose-600 dark:text-rose-400">{Array.isArray(pat.allergies) && pat.allergies.length ? pat.allergies.map((a: any) => typeof a === 'string' ? a : a.allergen).join(', ') : 'NKDA'}</strong>
+                    {' • Conditions: '}{Array.isArray(pat.chronicConditions) ? pat.chronicConditions.join(', ') || 'None documented' : 'None'}
                   </p>
                 </div>
 
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <span className="font-mono font-bold text-slate-800 text-xs">
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200 text-xs">
                       BP 138/86 • HR 74
                     </span>
-                    <span className="block text-[10px] text-emerald-700 font-semibold">
+                    <span className="block text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">
                       SpO2 98% • Temp 36.8°C
                     </span>
                   </div>
@@ -219,30 +210,28 @@ export const StaffDashboardView: React.FC<Props> = ({
         </div>
       )}
 
+      {/* Pharmacist workspace */}
       {subRole === 'pharmacist' && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className={panelClass}>
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
               <Pill className="w-4 h-4 text-indigo-600" />
-              <h3 className="font-bold text-sm text-slate-900">Pharmacy Prescription Dispense Queue</h3>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Pharmacy Prescription Dispense Queue</h3>
             </div>
             <span className="text-xs text-slate-500">Batch Verification & Barcode Packaging</span>
           </div>
 
           <div className="space-y-3">
             {prescriptions.map((rx) => (
-              <div
-                key={rx.id}
-                className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-              >
+              <div key={rx.id} className={rowClass}>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900">{rx.prescriptionNumber}</span>
-                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                    <span className="font-bold text-slate-900 dark:text-slate-100">{rx.prescriptionNumber}</span>
+                    <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">
                       {rx.status}
                     </span>
                   </div>
-                  <p className="text-slate-700 text-xs font-semibold mt-1">
+                  <p className="text-slate-700 dark:text-slate-300 text-xs font-semibold mt-1">
                     Patient: {rx.patientName} • Doctor: {rx.doctorName}
                   </p>
                   <p className="text-slate-500 text-[11px]">
@@ -253,17 +242,15 @@ export const StaffDashboardView: React.FC<Props> = ({
                 <div className="flex items-center gap-2">
                   {rx.status !== 'Dispensed' ? (
                     <button
-                      onClick={() =>
-                        dispenseMedication(rx.id, rx.items[0]?.id || '')
-                      }
+                      onClick={() => dispenseMedication(rx.id, rx.items[0]?.id || '')}
                       className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition flex items-center gap-1.5 cursor-pointer"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Dispense Medication</span>
                     </button>
                   ) : (
-                    <span className="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span className="px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Dispensed & Verified</span>
                     </span>
                   )}
@@ -274,29 +261,27 @@ export const StaffDashboardView: React.FC<Props> = ({
         </div>
       )}
 
+      {/* Receptionist workspace */}
       {subRole === 'receptionist' && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className={panelClass}>
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-sky-600" />
-              <h3 className="font-bold text-sm text-slate-900">Clinic Front Desk & Waiting Room Queue</h3>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Clinic Front Desk & Waiting Room Queue</h3>
             </div>
             <span className="text-xs text-slate-500">Live Intake & Consultation Call Dispatch</span>
           </div>
 
           <div className="space-y-3">
             {appointments.map((apt) => (
-              <div
-                key={apt.id}
-                className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-              >
+              <div key={apt.id} className={rowClass}>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-black text-sm text-slate-900">{apt.patientName}</span>
-                    <span className="font-mono text-xs font-bold bg-sky-50 text-sky-700 px-2.5 py-0.5 rounded border border-sky-200">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-black text-sm text-slate-900 dark:text-slate-100">{apt.patientName}</span>
+                    <span className="font-mono text-xs font-bold bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 px-2.5 py-0.5 rounded border border-sky-200 dark:border-sky-800">
                       #{apt.queueNumber || 'Q-10'}
                     </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-800">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
                       {apt.status}
                     </span>
                   </div>
@@ -329,34 +314,32 @@ export const StaffDashboardView: React.FC<Props> = ({
         </div>
       )}
 
+      {/* Lab technician workspace */}
       {subRole === 'lab_technician' && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className={panelClass}>
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
               <FlaskConical className="w-4 h-4 text-amber-600" />
-              <h3 className="font-bold text-sm text-slate-900">Diagnostic Specimen Intake & Analysis Desk</h3>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Diagnostic Specimen Intake & Analysis Desk</h3>
             </div>
             <span className="text-xs text-slate-500">CLIA Accredited Clinical Pathology Laboratory</span>
           </div>
 
           <div className="space-y-3">
             {labOrders.map((lab) => (
-              <div
-                key={lab.id}
-                className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-              >
+              <div key={lab.id} className={rowClass}>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900 text-sm">{lab.testName}</span>
-                    <span className="font-mono text-xs font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">{lab.testName}</span>
+                    <span className="font-mono text-xs font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800">
                       {lab.orderNumber}
                     </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-800">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
                       {lab.status}
                     </span>
                   </div>
                   <p className="text-slate-500 text-[11px] mt-1">
-                    Patient: {lab.patientName} • Ordered by: {lab.doctorName} • Urgency: <strong className="text-rose-600">{lab.urgency}</strong>
+                    Patient: {lab.patientName} • Ordered by: {lab.doctorName} • Urgency: <strong className="text-rose-600 dark:text-rose-400">{lab.urgency}</strong>
                   </p>
                 </div>
 
