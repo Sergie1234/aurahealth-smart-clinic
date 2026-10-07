@@ -9,7 +9,6 @@ import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 
 // Views
-import { OverviewDashboard } from './components/dashboard/OverviewDashboard';
 import { PatientList } from './components/patients/PatientList';
 import { PatientDetailModal } from './components/patients/PatientDetailModal';
 import { NewPatientModal } from './components/patients/NewPatientModal';
@@ -30,7 +29,6 @@ import { ReportsAnalytics } from './components/reports/ReportsAnalytics';
 import { PredictiveAnalyticsDashboard } from './components/analytics/PredictiveAnalyticsDashboard';
 import { AIAssistantHub } from './components/ai/AIAssistantHub';
 import { AuditLogsView } from './components/audit/AuditLogsView';
-import { PatientPortalDashboard } from './components/patient_portal/PatientPortalDashboard';
 import { SupabaseModal } from './components/common/SupabaseModal';
 import { NetworkAwarePageTransition } from './components/common/NetworkAwarePageTransition';
 import { HomePage } from './components/home/HomePage';
