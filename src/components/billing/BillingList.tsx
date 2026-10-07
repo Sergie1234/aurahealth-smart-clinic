@@ -333,7 +333,7 @@ export const BillingList: React.FC = () => {
 
             <div className="p-6 print-area bg-white space-y-4 text-xs overflow-y-auto flex-1">
               <div className="text-center pb-3 border-b border-slate-200">
-                <h2 className="font-black text-sm uppercase text-slate-900">AuraHealth Clinic Receipt</h2>
+                <h2 className="font-black text-sm uppercase text-slate-900">Smart Clinic Receipt</h2>
                 <p className="text-[10px] text-slate-500">Official Patient Billing Statement</p>
                 <p className="font-mono text-[11px] font-bold text-teal-700 mt-1">{viewReceipt.invoiceNumber}</p>
               </div>

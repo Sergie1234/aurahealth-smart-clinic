@@ -14,6 +14,7 @@ import {
   Lightbulb
 } from 'lucide-react';
 import { AIDisclaimerBanner } from '../common/AIDisclaimerBanner';
+import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import { aiService } from '../../services/aiService';
 
 interface Message {
@@ -38,7 +39,7 @@ export const AIAssistantHub: React.FC = () => {
     {
       id: 'init-1',
       sender: 'assistant',
-      text: `Hello ${currentUser.name}. I am AuraHealth's clinical and administrative decision support assistant. You are currently in the ${activeRole.replace('_', ' ').toUpperCase()} perspective.\n\nI can help you review patient timelines, check drug safety interactions, analyze laboratory assays, draft consultation notes, and summarize clinic operational metrics. How can I assist you today?`,
+      text: `Hello ${currentUser.name}. I am Smart Clinic's clinical and administrative decision support assistant. You are currently in the ${activeRole.replace('_', ' ').toUpperCase()} perspective.\n\nI can help you review patient timelines, check drug safety interactions, analyze laboratory assays, draft consultation notes, and summarize clinic operational metrics. How can I assist you today?`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -140,12 +141,10 @@ export const AIAssistantHub: React.FC = () => {
       {/* Header Bar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-600 to-emerald-500 text-white flex items-center justify-center font-bold shadow-xs">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
+          <SmartClinicLogo className="w-10 h-10" glow={true} />
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-slate-900">AuraHealth AI Clinical Assistant</h1>
+              <h1 className="text-base font-bold text-slate-900">Smart Clinic AI Assistant</h1>
               <span className="text-[10px] bg-teal-50 text-teal-700 font-bold px-2 py-0.5 rounded-full border border-teal-200">
                 Gemini 3.8 Flash Active
               </span>
@@ -216,7 +215,7 @@ export const AIAssistantHub: React.FC = () => {
                 }`}
               >
                 <div className="flex items-center justify-between gap-4 text-[10px] opacity-70">
-                  <span className="font-semibold">{isUser ? currentUser.name : 'AuraHealth Assistant'}</span>
+                  <span className="font-semibold">{isUser ? currentUser.name : 'Smart Clinic Assistant'}</span>
                   <span>{msg.timestamp}</span>
                 </div>
 

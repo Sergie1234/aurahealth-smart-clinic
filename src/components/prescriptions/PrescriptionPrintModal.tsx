@@ -1,6 +1,7 @@
 import React from 'react';
 import { Prescription } from '../../types/clinic';
 import { X, Printer, Shield, HeartPulse } from 'lucide-react';
+import { SmartClinicLogo } from '../common/SmartClinicLogo';
 
 interface Props {
   prescription: Prescription;
@@ -30,16 +31,14 @@ export const PrescriptionPrintModal: React.FC<Props> = ({ prescription, onClose 
           {/* Clinic Header */}
           <div className="flex justify-between items-start border-b-2 border-teal-700 pb-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-teal-700 text-white font-extrabold text-xl flex items-center justify-center">
-                A+
-              </div>
+              <SmartClinicLogo className="w-12 h-12" glow={true} />
               <div>
                 <h1 className="text-lg font-black tracking-tight text-slate-950 uppercase">
-                  AuraHealth Integrated Clinic
+                  Smart Clinic Integrated Healthcare
                 </h1>
                 <p className="text-xs text-slate-600 font-medium">Department of Outpatient Medicine & Therapeutics</p>
                 <p className="text-[11px] text-slate-500">
-                  740 Healthcare Blvd, Suite 400 • Phone: (555) 900-AURA • Web: aurahealth.clinic
+                  740 Healthcare Blvd, Suite 400 • Phone: (555) 900-SMART • Web: smartclinic.health
                 </p>
               </div>
             </div>

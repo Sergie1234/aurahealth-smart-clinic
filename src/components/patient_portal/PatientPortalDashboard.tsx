@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useClinic } from '../../context/ClinicContext';
+import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import {
   Heart,
   Calendar,
@@ -42,16 +43,19 @@ export const PatientPortalDashboard: React.FC<Props> = ({
     <div className="space-y-5 max-w-5xl mx-auto text-xs">
       {/* Patient Welcome Hero */}
       <div className="bg-gradient-to-r from-teal-800 via-teal-700 to-slate-900 rounded-2xl p-6 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <span className="bg-white/10 text-teal-200 font-semibold text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-white/20">
-            AuraHealth Patient Health Portal
-          </span>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-white mt-1.5">
-            Welcome, {patient.fullName}
-          </h1>
-          <p className="text-teal-100 text-xs mt-1">
-            MRN: {patient.mrn} • Blood Type: {patient.bloodType} • Primary Care: Dr. Sarah Lin, MD
-          </p>
+        <div className="flex items-center gap-3.5">
+          <SmartClinicLogo className="w-12 h-12" glow={true} />
+          <div>
+            <span className="bg-white/10 text-teal-200 font-semibold text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-white/20">
+              Smart Clinic Patient Portal
+            </span>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-white mt-1.5">
+              Welcome, {patient.fullName}
+            </h1>
+            <p className="text-teal-100 text-xs mt-1">
+              MRN: {patient.mrn} • Blood Type: {patient.bloodType} • Primary Care: Dr. Sarah Lin, MD
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 self-start md:self-auto">

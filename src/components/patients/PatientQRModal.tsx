@@ -1,6 +1,7 @@
 import React from 'react';
 import { Patient } from '../../types/clinic';
 import { X, Printer, Shield, HeartPulse } from 'lucide-react';
+import { SmartClinicLogo } from '../common/SmartClinicLogo';
 
 interface Props {
   patient: Patient;
@@ -31,11 +32,9 @@ export const PatientQRModal: React.FC<Props> = ({ patient, onClose }) => {
           <div className="w-full bg-white border-2 border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 relative overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-teal-600 text-white font-extrabold flex items-center justify-center text-xs">
-                  A+
-                </div>
+                <SmartClinicLogo className="w-7 h-7" glow={true} />
                 <div className="text-left">
-                  <p className="font-bold text-slate-900 text-xs leading-none">AuraHealth Clinic</p>
+                  <p className="font-bold text-slate-900 text-xs leading-none">Smart Clinic</p>
                   <p className="text-[9px] text-slate-400">Electronic Health Identification</p>
                 </div>
               </div>

@@ -51,6 +51,8 @@ interface ClinicContextType {
   // Navigation
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  isNavigating: boolean;
+  navigatingTargetTitle: string;
 
   // Patients
   patients: Patient[];
@@ -115,7 +117,61 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [users] = useState<User[]>(INITIAL_USERS);
   const [activeRole, setActiveRole] = useState<UserRole>('doctor');
   const [currentUser, setCurrentUser] = useState<User>(INITIAL_USERS[0]);
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [activeTab, setActiveTabState] = useState<string>('dashboard');
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [navigatingTargetTitle, setNavigatingTargetTitle] = useState('Clinic Dashboard');
+
+  const TAB_TITLES: Record<string, string> = {
+    dashboard: 'Clinic Dashboard',
+    patients: 'Patient Directory',
+    appointments: 'Appointment Calendar',
+    queue: 'Live Queue & Triage',
+    consultations: 'Consultation Workspace',
+    emr: 'Medical Records (EMR)',
+    prescriptions: 'Pharmacy & e-Prescriptions',
+    laboratory: 'Diagnostic Laboratory',
+    inventory: 'Medication Stock & Inventory',
+    billing: 'Billing & Revenue',
+    reports: 'Reports & Analytics',
+    'predictive-analytics': 'Predictive Analytics & Risk Stratification',
+    'ai-assistant': 'Smart Clinic AI Assistant',
+    'audit-logs': 'Audit Logs & Compliance',
+  };
+
+  const setActiveTab = (tab: string) => {
+    if (tab === activeTab) return;
+    const title = TAB_TITLES[tab] || 'Clinic Workspace';
+    setNavigatingTargetTitle(title);
+    setIsNavigating(true);
+
+    // Calculate dynamic duration based on browser Network Information API
+    const nav = typeof navigator !== 'undefined' ? (navigator as any) : null;
+    const conn = nav?.connection || nav?.mozConnection || nav?.webkitConnection;
+    let transitionTime = 380; // Fast 4G / broadband default
+    if (conn) {
+      if (
+        conn.effectiveType === 'slow-2g' ||
+        conn.effectiveType === '2g' ||
+        (typeof conn.downlink === 'number' && conn.downlink < 1.5) ||
+        (typeof conn.rtt === 'number' && conn.rtt > 300)
+      ) {
+        transitionTime = 1350;
+      } else if (
+        conn.effectiveType === '3g' ||
+        (typeof conn.downlink === 'number' && conn.downlink < 5) ||
+        (typeof conn.rtt === 'number' && conn.rtt > 150)
+      ) {
+        transitionTime = 700;
+      }
+    }
+
+    setTimeout(() => {
+      setActiveTabState(tab);
+      setTimeout(() => {
+        setIsNavigating(false);
+      }, 180);
+    }, transitionTime);
+  };
 
   const [patients, setPatients] = useState<Patient[]>(() => {
     const saved = localStorage.getItem('aura_patients');
@@ -604,6 +660,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         users,
         activeTab,
         setActiveTab,
+        isNavigating,
+        navigatingTargetTitle,
         patients,
         selectedPatientId,
         selectedPatient,

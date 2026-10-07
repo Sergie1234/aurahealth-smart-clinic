@@ -11,6 +11,7 @@ import {
   FileText
 } from 'lucide-react';
 import { AIDisclaimerBanner } from '../common/AIDisclaimerBanner';
+import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import { aiService, LabInterpretationResponse } from '../../services/aiService';
 
 interface Props {
@@ -64,12 +65,10 @@ export const LabReportModal: React.FC<Props> = ({ order, onClose }) => {
           {/* Clinic & Lab Header */}
           <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
             <div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-teal-600 text-white font-black flex items-center justify-center text-sm">
-                  A+
-                </div>
+              <div className="flex items-center gap-2.5">
+                <SmartClinicLogo className="w-8 h-8" glow={true} />
                 <h1 className="text-base font-black tracking-tight text-slate-950 uppercase">
-                  AuraHealth Diagnostic Laboratories
+                  Smart Clinic Diagnostic Laboratories
                 </h1>
               </div>
               <p className="text-[11px] text-slate-500 mt-1">

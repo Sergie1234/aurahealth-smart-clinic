@@ -713,7 +713,7 @@ app.post('/api/ai/chat', async (req: Request, res: Response) => {
     lab_technician: 'You are assisting a medical laboratory technologist. Focus on test turnaround, sample handling protocols, reference ranges, and calibration standards.',
     patient: 'You are interacting with a patient. Provide empathetic, easy-to-understand health information. Always advise them to speak directly with their doctor for specific medical advice.',
     admin: 'You are assisting a clinic operations director. Focus on operational metrics, revenue cycle, inventory thresholds, and staffing efficiency.',
-  }[role as string] || 'You are an intelligent clinical and administrative assistant for AuraHealth.';
+  }[role as string] || 'You are an intelligent clinical and administrative assistant for Smart Clinic.';
 
   const prompt = `System Role: ${roleGuidance}
 Current Clinic Operational Snapshot:
@@ -748,7 +748,7 @@ Instructions:
           config: {
             temperature: 0.3,
             systemInstruction:
-              'You are AuraHealth Smart Clinic AI Assistant. Be precise, helpful, and prioritize clinical safety.',
+              'You are Smart Clinic AI Assistant. Be precise, helpful, and prioritize clinical safety.',
           },
         }),
         25000
@@ -765,7 +765,7 @@ Instructions:
   }
 
   // Fallback conversational assistant
-  let fallbackReply = `AuraHealth Assistant: I received your request regarding "${message}". `;
+  let fallbackReply = `Smart Clinic Assistant: I received your request regarding "${message}". `;
   if (message.toLowerCase().includes('appointment')) {
     fallbackReply += `Today there are ${context?.todayAppointmentsCount || 4} scheduled appointments, with ${context?.queueCount || 2} patients currently checked in or in queue.`;
   } else if (message.toLowerCase().includes('stock') || message.toLowerCase().includes('medicine') || message.toLowerCase().includes('inventory')) {

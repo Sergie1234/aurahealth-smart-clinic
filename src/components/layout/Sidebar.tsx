@@ -1,5 +1,6 @@
 import React from 'react';
 import { useClinic } from '../../context/ClinicContext';
+import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import {
   LayoutDashboard,
   Users,
@@ -133,11 +134,9 @@ export const Sidebar: React.FC = () => {
       {/* Top Clinic Status */}
       <div className="p-4 border-b border-slate-800/80">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400">
-            <HeartPulse className="w-4 h-4" />
-          </div>
+          <SmartClinicLogo className="w-8 h-8" glow={true} />
           <div>
-            <h2 className="text-xs font-bold text-white tracking-wide">Aura Clinic Center</h2>
+            <h2 className="text-xs font-bold text-white tracking-wide">Smart Clinic Center</h2>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
               <span className="text-[10px] text-slate-400 font-medium">Outpatient Service Active</span>

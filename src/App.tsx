@@ -33,11 +33,21 @@ import { AIAssistantHub } from './components/ai/AIAssistantHub';
 import { AuditLogsView } from './components/audit/AuditLogsView';
 import { PatientPortalDashboard } from './components/patient_portal/PatientPortalDashboard';
 import { SupabaseModal } from './components/common/SupabaseModal';
+import { NetworkAwarePageTransition } from './components/common/NetworkAwarePageTransition';
 
 import { Patient, Prescription, LabTestOrder } from './types/clinic';
 
 const ClinicAppContent: React.FC = () => {
-  const { activeTab, setActiveTab, activeRole, patients, selectedPatient, selectPatient } = useClinic();
+  const {
+    activeTab,
+    setActiveTab,
+    activeRole,
+    patients,
+    selectedPatient,
+    selectPatient,
+    isNavigating,
+    navigatingTargetTitle,
+  } = useClinic();
 
   // Modals state
   const [showNewPatient, setShowNewPatient] = useState(false);
@@ -66,6 +76,12 @@ const ClinicAppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900 font-sans selection:bg-teal-500 selection:text-white">
+      {/* Network-Aware Page Transition Full-Screen Loader */}
+      <NetworkAwarePageTransition
+        isNavigating={isNavigating}
+        destinationTitle={navigatingTargetTitle}
+      />
+
       {/* 1. Fast Role Perspective Switcher Bar */}
       <RoleSwitcher />
 

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useClinic } from '../../context/ClinicContext';
+import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import {
   Search,
   Bell,
@@ -93,15 +94,13 @@ export const Header: React.FC<Props> = ({
         {/* Left: Brand & Mobile Title */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center text-white font-bold text-lg shadow-sm shadow-teal-700/20">
-              <span className="font-extrabold tracking-tighter">A+</span>
-            </div>
+            <SmartClinicLogo className="w-9 h-9" glow={true} />
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-slate-900 text-base tracking-tight leading-none">AuraHealth</span>
+                <span className="font-bold text-slate-900 text-base tracking-tight leading-none">Smart Clinic</span>
                 <span className="bg-teal-50 text-teal-700 font-semibold text-[10px] px-1.5 py-0.5 rounded border border-teal-200/60 uppercase">Clinic AI</span>
               </div>
-              <p className="text-[11px] text-slate-500 font-medium leading-tight">Smart Clinical Management</p>
+              <p className="text-[11px] text-slate-500 font-medium leading-tight">Advanced Healthcare Management</p>
             </div>
           </div>
         </div>

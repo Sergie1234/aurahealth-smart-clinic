@@ -30,7 +30,7 @@ export const SupabaseModal: React.FC<Props> = ({ onClose }) => {
   } | null>(null);
 
   const handleCopySchema = () => {
-    const sqlNotice = `-- AuraHealth Supabase (PostgreSQL) Schema
+    const sqlNotice = `-- Smart Clinic Supabase (PostgreSQL) Schema
 -- Execute in your Supabase SQL Editor:
 -- File is located at /supabase/schema.sql in the repository.
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
