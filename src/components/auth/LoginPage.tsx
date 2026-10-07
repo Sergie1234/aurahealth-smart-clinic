@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTheme } from '../../context/ThemeContext';
 import { useClinic, PrimaryAuthRole, StaffSubRole } from '../../context/ClinicContext';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import {
@@ -12,14 +13,12 @@ import {
   CheckCircle2,
   AlertTriangle,
   Shield,
-  Sun,
-  Moon
 } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const { login, setActiveTab } = useClinic();
+  const { isDark: isDarkMode } = useTheme();
 
-  const [isDarkMode, setIsDarkMode] = useState(true);
   const [selectedRole, setSelectedRole] = useState<PrimaryAuthRole>('patient');
   const [staffSubRole, setStaffSubRole] = useState<StaffSubRole>('nurse');
 
@@ -120,27 +119,6 @@ export const LoginPage: React.FC = () => {
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to home</span>
-          </button>
-
-          <button
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer ${
-              isDarkMode
-                ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-800'
-                : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            {isDarkMode ? (
-              <>
-                <Sun className="w-3.5 h-3.5 text-amber-400" />
-                <span>Light</span>
-              </>
-            ) : (
-              <>
-                <Moon className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Dark</span>
-              </>
-            )}
           </button>
         </div>
       </header>
