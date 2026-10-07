@@ -5,7 +5,6 @@
 
 import React, { useState } from 'react';
 import { ClinicProvider, useClinic } from './context/ClinicContext';
-import { RoleSwitcher } from './components/layout/RoleSwitcher';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 
@@ -36,6 +35,10 @@ import { SupabaseModal } from './components/common/SupabaseModal';
 import { NetworkAwarePageTransition } from './components/common/NetworkAwarePageTransition';
 import { HomePage } from './components/home/HomePage';
 import { LoginPage } from './components/auth/LoginPage';
+import { PatientDashboardView } from './components/dashboards/PatientDashboardView';
+import { StaffDashboardView } from './components/dashboards/StaffDashboardView';
+import { DoctorDashboardView } from './components/dashboards/DoctorDashboardView';
+import { AdminDashboardView } from './components/dashboards/AdminDashboardView';
 
 import { Patient, Prescription, LabTestOrder } from './types/clinic';
 
@@ -44,6 +47,8 @@ const ClinicAppContent: React.FC = () => {
     activeTab,
     setActiveTab,
     activeRole,
+    primaryRole,
+    staffSubRole,
     patients,
     selectedPatient,
     selectPatient,
@@ -84,23 +89,20 @@ const ClinicAppContent: React.FC = () => {
         destinationTitle={navigatingTargetTitle}
       />
 
-      {/* Global Quick Switcher Bar with Public Homepage & Secure Login triggers */}
-      <RoleSwitcher />
-
       {activeTab === 'home' ? (
         <HomePage onOpenBookAppointment={() => setShowBookAppointment(true)} />
       ) : activeTab === 'login' ? (
         <LoginPage />
       ) : (
         <>
-          {/* 2. Top Header Navigation */}
+          {/* Header Navigation */}
           <Header
             onOpenBookAppointment={() => setShowBookAppointment(true)}
             onOpenNewPatient={() => setShowNewPatient(true)}
             onOpenSupabaseModal={() => setShowSupabaseModal(true)}
           />
 
-          {/* 3. Main Body: Sidebar + Dynamic Module Workspace */}
+          {/* Main Body: Sidebar + Dynamic Module Workspace */}
           <div className="flex-1 flex overflow-hidden">
             {/* Dynamic Role-Filtered Sidebar */}
             <div className="hidden md:block">
@@ -109,18 +111,26 @@ const ClinicAppContent: React.FC = () => {
 
             {/* Main Workspace Content Area */}
             <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
-          {/* Dashboard Tab */}
+          {/* 4 Dedicated Dashboards based on Strict Role Separation */}
           {activeTab === 'dashboard' && (
             <>
-              {activeRole === 'patient' ? (
-                <PatientPortalDashboard
+              {primaryRole === 'patient' || activeRole === 'patient' ? (
+                <PatientDashboardView
                   onOpenBookAppointment={() => setShowBookAppointment(true)}
                   onOpenQR={() => setQrPatient(patients[0])}
                   onOpenLabReport={(lab) => setLabOrderForReport(lab)}
                   onOpenPrescription={(rx) => setPrintingRx(rx)}
                 />
+              ) : primaryRole === 'staff' || ['nurse', 'pharmacist', 'receptionist', 'lab_technician'].includes(activeRole) ? (
+                <StaffDashboardView
+                  subRole={staffSubRole || (activeRole as any) || 'nurse'}
+                  onOpenBookAppointment={() => setShowBookAppointment(true)}
+                  onOpenNewPatient={() => setShowNewPatient(true)}
+                />
+              ) : primaryRole === 'admin' || activeRole === 'admin' ? (
+                <AdminDashboardView />
               ) : (
-                <OverviewDashboard
+                <DoctorDashboardView
                   onStartConsultation={handleStartConsultation}
                   onOpenBookAppointment={() => setShowBookAppointment(true)}
                 />

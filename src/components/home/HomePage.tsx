@@ -30,7 +30,7 @@ interface Props {
 }
 
 export const HomePage: React.FC<Props> = ({ onOpenBookAppointment }) => {
-  const { setActiveTab, switchRole } = useClinic();
+  const { setActiveTab, isAuthenticated, primaryRole } = useClinic();
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [supportMessage, setSupportMessage] = useState('');
@@ -66,12 +66,23 @@ export const HomePage: React.FC<Props> = ({ onOpenBookAppointment }) => {
   };
 
   const handlePatientPortalClick = () => {
-    switchRole('patient');
-    setActiveTab('dashboard');
+    if (isAuthenticated && primaryRole === 'patient') {
+      setActiveTab('dashboard');
+    } else {
+      setActiveTab('login');
+    }
   };
 
   const handleLoginClick = () => {
     setActiveTab('login');
+  };
+
+  const handleMyDashboardClick = () => {
+    if (isAuthenticated) {
+      setActiveTab('dashboard');
+    } else {
+      setActiveTab('login');
+    }
   };
 
   return (
@@ -114,7 +125,7 @@ export const HomePage: React.FC<Props> = ({ onOpenBookAppointment }) => {
             <button
               onClick={() => setActiveTab('home')}
               className={`hover:text-teal-400 transition cursor-pointer ${
-                isDarkMode ? 'text-teal-300' : 'text-teal-700 font-semibold'
+                isDarkMode ? 'text-teal-300 font-semibold' : 'text-teal-700 font-semibold'
               }`}
             >
               Home
@@ -126,16 +137,10 @@ export const HomePage: React.FC<Props> = ({ onOpenBookAppointment }) => {
               Departments
             </a>
             <a
-              href="#features"
+              href="#services"
               className="hover:text-teal-400 transition cursor-pointer"
             >
               Services
-            </a>
-            <a
-              href="#doctors"
-              className="hover:text-teal-400 transition cursor-pointer"
-            >
-              Doctors
             </a>
             <a
               href="#contact"
@@ -183,7 +188,7 @@ export const HomePage: React.FC<Props> = ({ onOpenBookAppointment }) => {
 
             {/* My Dashboard CTA Button */}
             <button
-              onClick={() => setActiveTab('dashboard')}
+              onClick={handleMyDashboardClick}
               className="px-4 py-2 rounded-lg text-xs sm:text-sm font-bold bg-teal-400 hover:bg-teal-300 text-slate-950 flex items-center gap-1.5 transition shadow-sm shadow-teal-500/20 cursor-pointer"
             >
               <span>My dashboard</span>
@@ -355,9 +360,9 @@ export const HomePage: React.FC<Props> = ({ onOpenBookAppointment }) => {
         </div>
       </section>
 
-      {/* 3. Feature Highlights (Three-Column Grid) */}
+      {/* 3. Feature Highlights (Three-Column Grid - Services) */}
       <section
-        id="features"
+        id="services"
         className={`py-16 border-t ${
           isDarkMode ? 'bg-[#081820] border-slate-800/80' : 'bg-white border-slate-200'
         }`}
@@ -423,10 +428,10 @@ export const HomePage: React.FC<Props> = ({ onOpenBookAppointment }) => {
                 Longitudinal patient health summaries, vital sign trend tracking, diagnostic lab result archives, and encrypted e-prescriptions.
               </p>
               <button
-                onClick={() => setActiveTab('emr')}
+                onClick={() => setActiveTab('login')}
                 className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
               >
-                <span>View EMR system</span>
+                <span>Access EMR portal</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -449,12 +454,111 @@ export const HomePage: React.FC<Props> = ({ onOpenBookAppointment }) => {
                 High-definition remote video consultations, secure digital chat, drug allergy screening, and direct e-prescription pharmacy dispatch.
               </p>
               <button
-                onClick={() => setActiveTab('consultations')}
+                onClick={() => {
+                  if (onOpenBookAppointment) onOpenBookAppointment();
+                  else setActiveTab('appointments');
+                }}
                 className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer"
               >
-                <span>Start consultation</span>
+                <span>Request teleconsultation</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. Specialized Hospital Departments */}
+      <section
+        id="departments"
+        className={`py-16 border-t ${
+          isDarkMode ? 'bg-[#091e28] border-slate-800/80' : 'bg-slate-50 border-slate-200'
+        }`}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <span className="text-xs font-bold uppercase tracking-wider text-teal-400 font-mono">
+              Clinical Specializations
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold mt-1 tracking-tight">
+              Hospital & Ambulatory Departments
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-400 mt-2">
+              Comprehensive outpatient care, diagnostic pathology, and licensed specialist clinics.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Dept 1 */}
+            <div
+              className={`p-6 rounded-2xl border transition hover:border-teal-500/60 ${
+                isDarkMode ? 'bg-[#0f2a36] border-slate-800' : 'bg-white border-slate-200 shadow-xs'
+              }`}
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2.5 rounded-xl bg-teal-500/10 text-teal-400 border border-teal-500/20">
+                  <Stethoscope className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-white">Internal & Preventive Medicine</h4>
+                  <p className="text-[10px] text-teal-300 font-mono">Dept ID: MED-101</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                Chronic illness management (Diabetes, Hypertension), executive health exams, and longitudinal primary care.
+              </p>
+              <div className="flex items-center justify-between text-[11px] pt-3 border-t border-slate-800 text-slate-400">
+                <span>Lead: Dr. Sarah Lin, MD</span>
+                <span className="text-emerald-400 font-semibold">Available Mon-Sat</span>
+              </div>
+            </div>
+
+            {/* Dept 2 */}
+            <div
+              className={`p-6 rounded-2xl border transition hover:border-teal-500/60 ${
+                isDarkMode ? 'bg-[#0f2a36] border-slate-800' : 'bg-white border-slate-200 shadow-xs'
+              }`}
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                  <HeartPulse className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-white">Cardiovascular Medicine</h4>
+                  <p className="text-[10px] text-rose-300 font-mono">Dept ID: CARD-202</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                Electrocardiography (ECG), coronary assessment, echocardiograms, and preventive cardiovascular surveillance.
+              </p>
+              <div className="flex items-center justify-between text-[11px] pt-3 border-t border-slate-800 text-slate-400">
+                <span>Lead: Dr. Marcus Vance, MD</span>
+                <span className="text-emerald-400 font-semibold">Available Daily</span>
+              </div>
+            </div>
+
+            {/* Dept 3 */}
+            <div
+              className={`p-6 rounded-2xl border transition hover:border-teal-500/60 ${
+                isDarkMode ? 'bg-[#0f2a36] border-slate-800' : 'bg-white border-slate-200 shadow-xs'
+              }`}
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-white">Pathology & Diagnostics</h4>
+                  <p className="text-[10px] text-amber-300 font-mono">Dept ID: LAB-303</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                Full-spectrum automated hematology, HbA1c panels, lipid profiles, urinalysis, and rapid PCR molecular testing.
+              </p>
+              <div className="flex items-center justify-between text-[11px] pt-3 border-t border-slate-800 text-slate-400">
+                <span>Lead: Dr. Arthur Chen, MD</span>
+                <span className="text-emerald-400 font-semibold">24/7 Lab Operation</span>
+              </div>
             </div>
           </div>
         </div>

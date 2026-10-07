@@ -13,7 +13,8 @@ import {
   Plus,
   Database,
   Home,
-  LogIn
+  LogIn,
+  LogOut
 } from 'lucide-react';
 
 interface Props {
@@ -39,7 +40,8 @@ export const Header: React.FC<Props> = ({
     appointments,
     inventory,
     selectPatient,
-    setActiveTab
+    setActiveTab,
+    logout
   } = useClinic();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -395,6 +397,14 @@ export const Header: React.FC<Props> = ({
               <p className="text-xs font-semibold text-slate-800 leading-tight">{currentUser.name}</p>
               <p className="text-[10px] text-slate-500 leading-tight capitalize">{currentUser.department || activeRole}</p>
             </div>
+            <button
+              onClick={logout}
+              className="ml-1 p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition flex items-center gap-1 cursor-pointer"
+              title="Sign Out of Session"
+            >
+              <LogOut className="w-3.5 h-3.5 text-rose-500" />
+              <span className="text-[11px] font-semibold text-slate-700 hover:text-rose-600 hidden md:inline">Sign Out</span>
+            </button>
           </div>
         </div>
       </div>

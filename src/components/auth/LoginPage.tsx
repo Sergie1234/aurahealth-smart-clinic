@@ -1,91 +1,144 @@
 import React, { useState } from 'react';
-import { useClinic } from '../../context/ClinicContext';
+import { useClinic, PrimaryAuthRole, StaffSubRole } from '../../context/ClinicContext';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
-import { UserRole } from '../../types/clinic';
 import {
+  User,
+  Building2,
+  Stethoscope,
+  ShieldAlert,
   Lock,
   Mail,
-  Shield,
   Eye,
   EyeOff,
   ArrowLeft,
   CheckCircle2,
-  Sun,
-  Moon,
-  AlertCircle,
-  Building2,
-  User,
+  AlertTriangle,
   KeyRound,
-  Stethoscope,
-  HeartPulse
+  Shield,
+  Send,
+  HelpCircle,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
-  const { setActiveTab, switchRole, users } = useClinic();
+  const {
+    login,
+    setActiveTab,
+    simulateSendAdmin2FA,
+    admin2FACode,
+  } = useClinic();
+
   const [isDarkMode, setIsDarkMode] = useState(true);
 
-  // Auth Mode: Patient vs Staff/Provider
-  const [authType, setAuthType] = useState<'patient' | 'staff'>('staff');
-  const [staffRole, setStaffRole] = useState<UserRole>('doctor');
+  // 1. Strict 4-way Role Selector: 'patient' | 'staff' | 'doctor' | 'admin'
+  const [selectedRole, setSelectedRole] = useState<PrimaryAuthRole>('patient');
+
+  // Staff sub-role (Mandatory: Pharmacist, Nurse, Receptionist, Lab Tech)
+  // STRICT CONSTRAINT: Do NOT include 'Doctor' or 'Admin'
+  const [staffSubRole, setStaffSubRole] = useState<StaffSubRole>('nurse');
 
   // Form Fields
-  const [emailOrId, setEmailOrId] = useState('staff@smartclinic.test');
+  const [email, setEmail] = useState('patient.vance@smartclinic.ph');
   const [password, setPassword] = useState('••••••••');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showForgotNotice, setShowForgotNotice] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmailSent, setForgotEmailSent] = useState(false);
 
-  const handleRoleTypeChange = (type: 'patient' | 'staff') => {
-    setAuthType(type);
-    if (type === 'patient') {
-      setEmailOrId('patient@smartclinic.test');
-      setPassword('••••••••');
-    } else {
-      setEmailOrId(
-        staffRole === 'doctor'
-          ? 'sarah.lin@smartclinic.ph'
-          : `${staffRole}@smartclinic.ph`
-      );
-      setPassword('••••••••');
+  // Admin 2FA Intercept State
+  const [is2FAIntercepted, setIs2FAIntercepted] = useState(false);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [simulatedEmailNotification, setSimulatedEmailNotification] = useState<string | null>(null);
+
+  // Status & Error handling
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Handle switching between the 4 unified roles
+  const handleRoleSelect = (role: PrimaryAuthRole) => {
+    setSelectedRole(role);
+    setErrorMessage(null);
+    setIs2FAIntercepted(false);
+    setTwoFactorCode('');
+    setSimulatedEmailNotification(null);
+
+    // Autofill demo emails for convenience
+    switch (role) {
+      case 'patient':
+        setEmail('patient.vance@smartclinic.ph');
+        break;
+      case 'staff':
+        setEmail(`${staffSubRole}@smartclinic.ph`);
+        break;
+      case 'doctor':
+        setEmail('dr.sarahlin@smartclinic.ph');
+        break;
+      case 'admin':
+        setEmail('admin.sterling@smartclinic.ph');
+        break;
     }
   };
 
-  const handleStaffRoleSelect = (role: UserRole) => {
-    setStaffRole(role);
-    setEmailOrId(`${role}@smartclinic.ph`);
+  const handleStaffSubRoleChange = (sub: StaffSubRole) => {
+    setStaffSubRole(sub);
+    setEmail(`${sub}@smartclinic.ph`);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Mock Authentication Logic with Admin 2FA Interception
+  const handleSubmitCredentials = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setErrorMessage(null);
 
+    if (!email || !password) {
+      setErrorMessage('Please provide both email address and password.');
+      return;
+    }
+
+    // If Admin role: intercept login and display 2FA input field
+    if (selectedRole === 'admin' && !is2FAIntercepted) {
+      setIsLoading(true);
+      setTimeout(() => {
+        setIsLoading(false);
+        setIs2FAIntercepted(true);
+
+        // Simulate sending verification email from smartclinicrealacc@gmail.com
+        const generatedCode = simulateSendAdmin2FA();
+        setSimulatedEmailNotification(
+          `New Message from: smartclinicrealacc@gmail.com\nSubject: Smart Clinic 2FA Passcode\nYour one-time authorization code is: ${generatedCode}`
+        );
+      }, 400);
+      return;
+    }
+
+    // Submit full login credentials
+    setIsLoading(true);
     setTimeout(() => {
       setIsLoading(false);
-      if (authType === 'patient') {
-        switchRole('patient');
-      } else {
-        switchRole(staffRole);
+      const res = login({
+        primaryRole: selectedRole,
+        subRole: selectedRole === 'staff' ? staffSubRole : undefined,
+        email,
+        password,
+        twoFactorCode: selectedRole === 'admin' ? twoFactorCode : undefined,
+      });
+
+      if (!res.success) {
+        setErrorMessage(res.error || 'Authentication failed. Please verify credentials.');
       }
-      // Navigate straight to dashboard
-      setActiveTab('dashboard');
     }, 450);
   };
 
   return (
     <div
       className={`min-h-screen flex flex-col transition-colors duration-300 font-sans selection:bg-teal-500 selection:text-white ${
-        isDarkMode
-          ? 'bg-[#0b1e27] text-slate-100'
-          : 'bg-slate-50 text-slate-900'
+        isDarkMode ? 'bg-[#0b1e27] text-slate-100' : 'bg-slate-50 text-slate-900'
       }`}
     >
       {/* 1. Header Bar */}
       <header
         className={`px-4 sm:px-8 py-3.5 border-b flex items-center justify-between ${
-          isDarkMode
-            ? 'bg-[#0b1e27]/90 border-slate-800'
-            : 'bg-white border-slate-200 shadow-xs'
+          isDarkMode ? 'bg-[#0b1e27]/90 border-slate-800' : 'bg-white border-slate-200 shadow-xs'
         }`}
       >
         <div
@@ -100,7 +153,7 @@ export const LoginPage: React.FC = () => {
               </span>
             </div>
             <p className="text-[9px] tracking-wider uppercase font-semibold text-slate-400">
-              Health Hub
+              Health Hub Access
             </p>
           </div>
         </div>
@@ -116,7 +169,6 @@ export const LoginPage: React.FC = () => {
             <span>Back to home</span>
           </button>
 
-          {/* Theme Toggle (matching screenshot) */}
           <button
             onClick={() => setIsDarkMode(!isDarkMode)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition cursor-pointer ${
@@ -128,38 +180,35 @@ export const LoginPage: React.FC = () => {
             {isDarkMode ? (
               <>
                 <Sun className="w-3.5 h-3.5 text-amber-400" />
-                <span>Light mode</span>
+                <span>Light</span>
               </>
             ) : (
               <>
                 <Moon className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Dark mode</span>
+                <span>Dark</span>
               </>
             )}
           </button>
         </div>
       </header>
 
-      {/* 2. Main Centered Authentication Area */}
+      {/* 2. Main Authentication Card Area */}
       <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 my-auto relative">
-        {/* Soft Background Radial Light */}
-        <div className="absolute w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="w-full max-w-md relative z-10 space-y-4">
-          {/* Headline & Explanatory Copy */}
+        <div className="w-full max-w-lg relative z-10 space-y-4">
+          {/* Card Header & Headline */}
           <div className="text-center space-y-1.5">
             <span className="text-[10px] font-bold uppercase tracking-wider text-teal-400 font-mono">
-              Secure Sign In
+              Strict 4-Role Authentication
             </span>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Welcome back
+              Hospital Access Portal
             </h1>
             <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
-              Patients, clinic staff and administrators all sign in here. The system sends you to the right dashboard based on your role.
+              Strict role-based isolation for Patients, Staff, Physicians, and Administrators.
             </p>
           </div>
 
-          {/* Authentication Card */}
+          {/* Unified Login Card */}
           <div
             className={`p-6 sm:p-7 rounded-3xl border transition shadow-2xl space-y-5 ${
               isDarkMode
@@ -167,91 +216,118 @@ export const LoginPage: React.FC = () => {
                 : 'bg-white border-slate-200 shadow-slate-200'
             }`}
           >
-            {/* Role Switcher Tabs (Patient vs Staff/Provider) */}
-            <div className="p-1 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center gap-1">
+            {/* 4-Way Role Switcher: Patient | Staff | Doctor | Admin */}
+            <div className="p-1 rounded-2xl bg-slate-900/80 border border-slate-800 grid grid-cols-4 gap-1">
+              {/* 1. Patient */}
               <button
                 type="button"
-                onClick={() => handleRoleTypeChange('patient')}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                  authType === 'patient'
+                onClick={() => handleRoleSelect('patient')}
+                className={`py-2 px-1 rounded-xl text-xs font-bold transition flex flex-col sm:flex-row items-center justify-center gap-1.5 cursor-pointer ${
+                  selectedRole === 'patient'
                     ? 'bg-teal-400 text-slate-950 shadow-sm'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <User className="w-3.5 h-3.5" />
-                <span>Patient Login</span>
+                <span>Patient</span>
               </button>
 
+              {/* 2. Staff */}
               <button
                 type="button"
-                onClick={() => handleRoleTypeChange('staff')}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                  authType === 'staff'
+                onClick={() => handleRoleSelect('staff')}
+                className={`py-2 px-1 rounded-xl text-xs font-bold transition flex flex-col sm:flex-row items-center justify-center gap-1.5 cursor-pointer ${
+                  selectedRole === 'staff'
                     ? 'bg-teal-400 text-slate-950 shadow-sm'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <Building2 className="w-3.5 h-3.5" />
-                <span>Staff / Provider</span>
+                <span>Staff</span>
+              </button>
+
+              {/* 3. Doctor */}
+              <button
+                type="button"
+                onClick={() => handleRoleSelect('doctor')}
+                className={`py-2 px-1 rounded-xl text-xs font-bold transition flex flex-col sm:flex-row items-center justify-center gap-1.5 cursor-pointer ${
+                  selectedRole === 'doctor'
+                    ? 'bg-teal-400 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Stethoscope className="w-3.5 h-3.5" />
+                <span>Doctor</span>
+              </button>
+
+              {/* 4. Admin */}
+              <button
+                type="button"
+                onClick={() => handleRoleSelect('admin')}
+                className={`py-2 px-1 rounded-xl text-xs font-bold transition flex flex-col sm:flex-row items-center justify-center gap-1.5 cursor-pointer ${
+                  selectedRole === 'admin'
+                    ? 'bg-teal-400 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <ShieldAlert className="w-3.5 h-3.5" />
+                <span>Admin</span>
               </button>
             </div>
 
-            {/* If Staff: Quick Provider Role Selector */}
-            {authType === 'staff' && (
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-slate-400">
-                  Select Clinical Department / Position:
-                </label>
-                <div className="grid grid-cols-3 gap-1.5 text-[11px]">
-                  {[
-                    { role: 'doctor' as UserRole, label: 'Doctor / MD' },
-                    { role: 'nurse' as UserRole, label: 'Nurse' },
-                    { role: 'receptionist' as UserRole, label: 'Receptionist' },
-                    { role: 'pharmacist' as UserRole, label: 'Pharmacist' },
-                    { role: 'lab_technician' as UserRole, label: 'Lab Tech' },
-                    { role: 'admin' as UserRole, label: 'Director / Admin' },
-                  ].map((item) => (
-                    <button
-                      key={item.role}
-                      type="button"
-                      onClick={() => handleStaffRoleSelect(item.role)}
-                      className={`px-2 py-1.5 rounded-lg border text-center font-medium transition cursor-pointer ${
-                        staffRole === item.role
-                          ? 'bg-teal-500/20 border-teal-400 text-teal-300 font-bold'
-                          : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
+            {/* Error Message Box */}
+            {errorMessage && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{errorMessage}</span>
               </div>
             )}
 
-            {/* Login Form */}
-            <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-              {/* Email / ID Field */}
+            {/* If Staff: Mandatory Sub-Role Dropdown (Strict: NO Doctor, NO Admin) */}
+            {selectedRole === 'staff' && (
+              <div className="space-y-1.5 p-3.5 rounded-2xl bg-teal-950/30 border border-teal-800/40">
+                <label className="text-xs font-bold text-teal-300 flex items-center justify-between">
+                  <span>Mandatory Staff Sub-Role Menu:</span>
+                  <span className="text-[10px] text-teal-400/80 font-mono">Strict Access</span>
+                </label>
+                <select
+                  value={staffSubRole}
+                  onChange={(e) => handleStaffSubRoleChange(e.target.value as StaffSubRole)}
+                  className="w-full bg-[#123440] border border-teal-800/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-teal-400 cursor-pointer"
+                >
+                  <option value="nurse">Nurse (Outpatient Triage & Vitals)</option>
+                  <option value="pharmacist">Pharmacist (Formulary & Dispensary)</option>
+                  <option value="receptionist">Receptionist (Front Desk & Queue)</option>
+                  <option value="lab_technician">Lab Technician (Diagnostic Assays)</option>
+                </select>
+                <p className="text-[10px] text-slate-400">
+                  Strict Constraint: Doctor and Admin access are segregated into separate root privileges.
+                </p>
+              </div>
+            )}
+
+            {/* Main Form */}
+            <form onSubmit={handleSubmitCredentials} className="space-y-4 text-xs">
+              {/* Standard Email / ID Field */}
               <div className="space-y-1">
                 <label className="font-semibold text-slate-300 block">
-                  {authType === 'patient' ? 'Patient ID / Email address' : 'Staff Email address'}
+                  {selectedRole === 'patient'
+                    ? 'Patient Email or MRN Identifier'
+                    : `${selectedRole.toUpperCase()} Professional Email`}
                 </label>
                 <div className="relative">
                   <input
                     type="text"
                     required
-                    value={emailOrId}
-                    onChange={(e) => setEmailOrId(e.target.value)}
-                    placeholder={
-                      authType === 'patient'
-                        ? 'e.g. PAT-2026-001 or patient@smartclinic.ph'
-                        : 'e.g. staff@smartclinic.test'
-                    }
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter email address"
                     className="w-full bg-[#123440] border border-teal-800/60 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-400 transition"
                   />
                 </div>
               </div>
 
-              {/* Password Field */}
+              {/* Standard Password Field */}
               <div className="space-y-1">
                 <label className="font-semibold text-slate-300 block">Password</label>
                 <div className="relative">
@@ -268,16 +344,78 @@ export const LoginPage: React.FC = () => {
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
                   >
-                    {showPassword ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
-              {/* Remember Me & Show Password */}
+              {/* Admin 2FA Intercept Section */}
+              {selectedRole === 'admin' && is2FAIntercepted && (
+                <div className="p-4 rounded-2xl bg-indigo-950/50 border border-indigo-700/60 space-y-3 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2 text-indigo-300 font-bold text-xs">
+                    <KeyRound className="w-4 h-4 text-indigo-400" />
+                    <span>Two-Factor Authentication (2FA) Required</span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    A secure verification passcode has been dispatched from{' '}
+                    <span className="font-mono font-bold text-teal-300">smartclinicrealacc@gmail.com</span>{' '}
+                    to your authorized inbox.
+                  </p>
+
+                  {/* 2FA Input Field */}
+                  <div className="space-y-1">
+                    <label className="font-mono text-[10px] text-slate-400 uppercase tracking-wider block">
+                      Enter 6-Digit Passcode:
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={twoFactorCode}
+                      onChange={(e) => setTwoFactorCode(e.target.value)}
+                      placeholder="e.g. 842915"
+                      maxLength={8}
+                      className="w-full bg-[#0a232e] border border-indigo-500/80 rounded-xl px-3.5 py-2.5 text-center font-mono text-base tracking-widest text-teal-300 focus:outline-none focus:border-teal-400"
+                    />
+                  </div>
+
+                  {/* Simulated Email Verification Helper */}
+                  {simulatedEmailNotification && (
+                    <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-700 text-[10px] text-slate-300 font-mono space-y-1">
+                      <div className="text-teal-400 font-bold flex items-center justify-between">
+                        <span>Simulated Dispatch Received</span>
+                        <button
+                          type="button"
+                          onClick={() => setTwoFactorCode(admin2FACode)}
+                          className="text-xs text-amber-300 hover:underline cursor-pointer"
+                        >
+                          Autofill {admin2FACode}
+                        </button>
+                      </div>
+                      <p className="text-slate-400 leading-tight whitespace-pre-wrap">
+                        {simulatedEmailNotification}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newCode = simulateSendAdmin2FA();
+                        setSimulatedEmailNotification(
+                          `New Message from: smartclinicrealacc@gmail.com\nSubject: Smart Clinic 2FA Passcode\nYour one-time authorization code is: ${newCode}`
+                        );
+                      }}
+                      className="text-teal-400 hover:underline cursor-pointer"
+                    >
+                      Resend code from smartclinicrealacc@gmail.com
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Remember Me & Forgot Password */}
               <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
@@ -288,17 +426,19 @@ export const LoginPage: React.FC = () => {
                   />
                   <span>Remember me</span>
                 </label>
-
                 <button
                   type="button"
-                  onClick={() => setShowForgotNotice(true)}
-                  className="text-teal-400 hover:underline cursor-pointer"
+                  onClick={() => {
+                    setShowForgotPassword(true);
+                    setForgotEmailSent(false);
+                  }}
+                  className="text-[11px] text-teal-400 hover:underline cursor-pointer"
                 >
-                  Forgot your password?
+                  Forgot password?
                 </button>
               </div>
 
-              {/* Submit Button */}
+              {/* Action Submit Button */}
               <button
                 type="submit"
                 disabled={isLoading}
@@ -307,34 +447,24 @@ export const LoginPage: React.FC = () => {
                 {isLoading ? (
                   <>
                     <span className="w-4 h-4 rounded-full border-2 border-slate-950 border-t-transparent animate-spin" />
-                    <span>Authenticating...</span>
+                    <span>Validating credentials...</span>
                   </>
+                ) : selectedRole === 'admin' && !is2FAIntercepted ? (
+                  <span>Verify Credentials & Request 2FA</span>
+                ) : selectedRole === 'admin' && is2FAIntercepted ? (
+                  <span>Confirm 2FA & Access Admin Dashboard</span>
                 ) : (
-                  <span>Log in</span>
+                  <span>Sign In to {selectedRole.toUpperCase()} Dashboard</span>
                 )}
               </button>
             </form>
-
-            {/* Registration Prompt */}
-            <div className="pt-2 text-center text-xs text-slate-400 border-t border-teal-900/40">
-              <span>No account yet? </span>
-              <button
-                onClick={() => {
-                  switchRole('patient');
-                  setActiveTab('dashboard');
-                }}
-                className="text-teal-400 hover:underline font-semibold cursor-pointer"
-              >
-                Register as a patient.
-              </button>
-            </div>
           </div>
 
-          {/* 3. Philippine Security & Medical Encryption Trust Marks */}
+          {/* Security Compliance Trust Marks */}
           <div className="p-4 rounded-2xl bg-teal-950/40 border border-teal-800/40 space-y-2 text-[11px] text-slate-300">
             <div className="flex items-center gap-2 font-bold text-white">
               <Shield className="w-4 h-4 text-emerald-400" />
-              <span>Philippine Medical Cloud Security & Encryption</span>
+              <span>Philippine Health Data Security & Encryption Standards</span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-400 font-mono">
               <div className="flex items-center gap-1.5">
@@ -354,36 +484,81 @@ export const LoginPage: React.FC = () => {
                 <span>PhilHealth Security Stds</span>
               </div>
             </div>
-            <p className="text-[10px] text-slate-400 leading-tight">
-              Patient health identifiers and electronic medical records are encrypted end-to-end under Philippine National Privacy Commission guidelines.
-            </p>
           </div>
         </div>
+      </main>
 
-        {/* Forgot Password Modal */}
-        {showForgotNotice && (
-          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm w-full space-y-4 text-xs text-slate-200">
-              <div className="flex items-center gap-2.5 text-white font-bold text-sm">
+      {/* Forgot Password Modal */}
+      {showForgotPassword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 text-slate-200 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
                 <KeyRound className="w-5 h-5 text-teal-400" />
-                <span>Reset Credentials</span>
-              </div>
-              <p className="text-slate-300 leading-relaxed">
-                For security reasons under the Philippine Data Privacy Act, patient and provider password resets require two-factor identity verification through your registered clinic mobile number or hospital IT desk.
-              </p>
-              <div className="p-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 font-mono text-[10px]">
-                Hospital Helpdesk: (02) 8888-7627 (Ext. 104)
+                <h3 className="font-bold text-sm text-white">Reset Account Access</h3>
               </div>
               <button
-                onClick={() => setShowForgotNotice(false)}
-                className="w-full py-2.5 rounded-xl font-bold bg-teal-400 text-slate-950 hover:bg-teal-300 transition cursor-pointer"
+                type="button"
+                onClick={() => setShowForgotPassword(false)}
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
-                Close
+                ✕
               </button>
             </div>
+
+            {forgotEmailSent ? (
+              <div className="p-4 rounded-xl bg-teal-950/50 border border-teal-800/80 text-teal-300 text-xs space-y-2">
+                <p className="font-bold text-white flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>Recovery Instructions Dispatched</span>
+                </p>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  We have sent a secure temporary access link to <span className="font-mono font-semibold text-teal-200">{email}</span>. Please check your inbox and spam folder.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(false)}
+                  className="mt-3 w-full py-2 bg-teal-400 hover:bg-teal-300 text-slate-950 font-bold rounded-lg text-xs cursor-pointer"
+                >
+                  Return to Sign In
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3 text-xs">
+                <p className="text-slate-300 text-[11px] leading-relaxed">
+                  Enter your registered medical staff or patient email address. We will verify your identity according to Philippine Data Privacy standards and send recovery instructions.
+                </p>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 mb-1">Registered Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-teal-400 text-xs"
+                    placeholder="name@smartclinic.ph"
+                  />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPassword(false)}
+                    className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForgotEmailSent(true)}
+                    className="flex-1 py-2 rounded-xl bg-teal-400 hover:bg-teal-300 text-slate-950 text-xs font-bold cursor-pointer"
+                  >
+                    Send Reset Link
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </main>
+        </div>
+      )}
     </div>
   );
 };

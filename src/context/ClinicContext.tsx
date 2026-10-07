@@ -41,12 +41,33 @@ import {
   isSupabaseConfigured
 } from '../lib/supabase';
 
+export type PrimaryAuthRole = 'patient' | 'staff' | 'doctor' | 'admin';
+export type StaffSubRole = 'nurse' | 'pharmacist' | 'receptionist' | 'lab_technician';
+
+export interface LoginCredentials {
+  primaryRole: PrimaryAuthRole;
+  email: string;
+  password?: string;
+  subRole?: StaffSubRole;
+  twoFactorCode?: string;
+}
+
 interface ClinicContextType {
   // Authentication & Role
   currentUser: User;
   activeRole: UserRole;
   switchRole: (role: UserRole) => void;
   users: User[];
+
+  // Strict 4-Role Authentication & 2FA
+  primaryRole: PrimaryAuthRole | null;
+  staffSubRole: StaffSubRole | null;
+  isAuthenticated: boolean;
+  admin2FAVerified: boolean;
+  admin2FACode: string;
+  simulateSendAdmin2FA: () => string;
+  login: (credentials: LoginCredentials) => { success: boolean; error?: string; requires2FA?: boolean };
+  logout: () => void;
 
   // Navigation
   activeTab: string;
@@ -117,6 +138,20 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [users] = useState<User[]>(INITIAL_USERS);
   const [activeRole, setActiveRole] = useState<UserRole>('doctor');
   const [currentUser, setCurrentUser] = useState<User>(INITIAL_USERS[0]);
+
+  // Strict 4-Role Authentication & 2FA State
+  const [primaryRole, setPrimaryRole] = useState<PrimaryAuthRole | null>(null);
+  const [staffSubRole, setStaffSubRole] = useState<StaffSubRole | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [admin2FAVerified, setAdmin2FAVerified] = useState<boolean>(false);
+  const [admin2FACode, setAdmin2FACode] = useState<string>('842915');
+
+  const simulateSendAdmin2FA = () => {
+    const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+    setAdmin2FACode(newCode);
+    return newCode;
+  };
+
   const [activeTab, setActiveTabState] = useState<string>('home');
   const [isNavigating, setIsNavigating] = useState(false);
   const [navigatingTargetTitle, setNavigatingTargetTitle] = useState('Smart Clinic Homepage');
@@ -271,6 +306,98 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     logAction('ROLE_SWITCH', 'Security', matched.id, `User switched perspective to role: ${role}`);
+  };
+
+  // Strict 4-Role Authentication handler
+  const login = (credentials: LoginCredentials) => {
+    const { primaryRole: role, subRole, twoFactorCode } = credentials;
+
+    if (role === 'patient') {
+      const patientUser = users.find((u) => u.role === 'patient') || users[users.length - 1];
+      setCurrentUser(patientUser);
+      setActiveRole('patient');
+      setPrimaryRole('patient');
+      setStaffSubRole(null);
+      setIsAuthenticated(true);
+      setSelectedPatientId('pat-1');
+      setActiveTab('dashboard');
+      logAction('AUTH_LOGIN', 'Security', patientUser.id, 'Patient successfully authenticated to Patient Portal.');
+      return { success: true };
+    }
+
+    if (role === 'doctor') {
+      const doctorUser = users.find((u) => u.role === 'doctor') || users[0];
+      setCurrentUser(doctorUser);
+      setActiveRole('doctor');
+      setPrimaryRole('doctor');
+      setStaffSubRole(null);
+      setIsAuthenticated(true);
+      setActiveTab('dashboard');
+      logAction('AUTH_LOGIN', 'Security', doctorUser.id, 'Doctor successfully authenticated to Clinical Workspace.');
+      return { success: true };
+    }
+
+    if (role === 'staff') {
+      if (!subRole || !['nurse', 'pharmacist', 'receptionist', 'lab_technician'].includes(subRole)) {
+        return {
+          success: false,
+          error: 'Mandatory sub-role required: Pharmacist, Nurse, Receptionist, or Lab Technician.',
+        };
+      }
+      const staffUser = users.find((u) => u.role === subRole) || {
+        id: `usr-${subRole}`,
+        name: `${subRole.replace('_', ' ').toUpperCase()} Practitioner`,
+        email: `${subRole}@smartclinic.ph`,
+        role: subRole as UserRole,
+      };
+      setCurrentUser(staffUser);
+      setActiveRole(subRole as UserRole);
+      setPrimaryRole('staff');
+      setStaffSubRole(subRole);
+      setIsAuthenticated(true);
+      setActiveTab('dashboard');
+      logAction('AUTH_LOGIN', 'Security', staffUser.id, `Staff member logged in with role: ${subRole}`);
+      return { success: true };
+    }
+
+    if (role === 'admin') {
+      if (!twoFactorCode) {
+        return {
+          success: false,
+          requires2FA: true,
+          error: 'Two-factor authentication code required.',
+        };
+      }
+      if (twoFactorCode.trim() !== admin2FACode.trim()) {
+        return {
+          success: false,
+          requires2FA: true,
+          error: 'Invalid 2FA code. Please enter the passcode dispatched from smartclinicrealacc@gmail.com.',
+        };
+      }
+
+      const adminUser = users.find((u) => u.role === 'admin') || users[users.length - 1];
+      setCurrentUser(adminUser);
+      setActiveRole('admin');
+      setPrimaryRole('admin');
+      setStaffSubRole(null);
+      setAdmin2FAVerified(true);
+      setIsAuthenticated(true);
+      setActiveTab('dashboard');
+      logAction('AUTH_2FA_VERIFIED', 'Security', adminUser.id, 'Admin authenticated via 2FA from smartclinicrealacc@gmail.com.');
+      return { success: true };
+    }
+
+    return { success: false, error: 'Unknown role specified.' };
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    setPrimaryRole(null);
+    setStaffSubRole(null);
+    setAdmin2FAVerified(false);
+    setActiveRole('patient');
+    setActiveTab('login');
   };
 
   const logAction = (
@@ -666,6 +793,14 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         activeRole,
         switchRole,
         users,
+        primaryRole,
+        staffSubRole,
+        isAuthenticated,
+        admin2FAVerified,
+        admin2FACode,
+        simulateSendAdmin2FA,
+        login,
+        logout,
         activeTab,
         setActiveTab,
         isNavigating,
