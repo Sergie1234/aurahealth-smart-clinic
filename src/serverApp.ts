@@ -221,7 +221,7 @@ app.post('/api/ai/clinical-notes', async (req: Request, res: Response) => {
       const prompt = `Draft SOAP clinical note JSON for patient ${patientInfo?.fullName || 'Anonymous'}. Notes: ${rawNotes || 'Routine'}. Chief: ${chiefComplaint || 'Follow-up'}.`;
       const response = await withTimeout(
         ai.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash',
           contents: prompt,
           config: { responseMimeType: 'application/json', temperature: 0.2 },
         }),
