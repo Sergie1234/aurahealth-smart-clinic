@@ -54,10 +54,8 @@ const ClinicAppContent: React.FC = () => {
     isNavigating,
     navigatingTargetTitle,
     isAuthenticated,
-    pendingAction,
-    setPendingAction,
-    linkedPatientId,
   } = useClinic();
+  const [pendingBook, setPendingBook] = useState(false);
 
   const [showNewPatient, setShowNewPatient] = useState(false);
   const [showBookAppointment, setShowBookAppointment] = useState(false);
@@ -72,25 +70,19 @@ const ClinicAppContent: React.FC = () => {
 
   const openBookAppointment = () => {
     if (!isAuthenticated) {
-      setPendingAction('book');
+      setPendingBook(true);
       setActiveTab('login');
       return;
-    }
-    if (primaryRole === 'patient' && linkedPatientId) {
-      selectPatient(linkedPatientId);
     }
     setShowBookAppointment(true);
   };
 
   useEffect(() => {
-    if (isAuthenticated && pendingAction === 'book') {
-      if (primaryRole === 'patient' && linkedPatientId) {
-        selectPatient(linkedPatientId);
-      }
+    if (isAuthenticated && pendingBook) {
       setShowBookAppointment(true);
-      setPendingAction(null);
+      setPendingBook(false);
     }
-  }, [isAuthenticated, pendingAction, primaryRole, linkedPatientId, selectPatient, setPendingAction]);
+  }, [isAuthenticated, pendingBook]);
 
   const handleStartConsultation = (patientId: string) => {
     setConsultPatientId(patientId);
