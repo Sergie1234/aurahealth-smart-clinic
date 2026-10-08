@@ -1,42 +1,18 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
-  Patient,
-  User,
-  UserRole,
-  Appointment,
-  AppointmentStatus,
-  Consultation,
-  Prescription,
-  LabTestOrder,
-  LabResultItem,
-  InventoryItem,
-  Invoice,
-  Notification,
-  AuditLog,
-  Vitals,
+  Patient, User, UserRole, Appointment, AppointmentStatus, Consultation,
+  Prescription, LabTestOrder, LabResultItem, InventoryItem, Invoice,
+  Notification, AuditLog, Vitals,
 } from '../types/clinic';
 import {
-  INITIAL_PATIENTS,
-  INITIAL_USERS,
-  INITIAL_APPOINTMENTS,
-  INITIAL_CONSULTATIONS,
-  INITIAL_PRESCRIPTIONS,
-  INITIAL_LAB_ORDERS,
-  INITIAL_INVENTORY,
-  INITIAL_INVOICES,
-  INITIAL_NOTIFICATIONS,
-  INITIAL_AUDIT_LOGS,
+  INITIAL_PATIENTS, INITIAL_USERS, INITIAL_APPOINTMENTS, INITIAL_CONSULTATIONS,
+  INITIAL_PRESCRIPTIONS, INITIAL_LAB_ORDERS, INITIAL_INVENTORY, INITIAL_INVOICES,
+  INITIAL_NOTIFICATIONS, INITIAL_AUDIT_LOGS,
 } from '../data/mockData';
 import {
-  syncPatientToSupabase,
-  syncAppointmentToSupabase,
-  syncConsultationToSupabase,
-  syncPrescriptionToSupabase,
-  syncLabOrderToSupabase,
-  syncInventoryItemToSupabase,
-  syncInvoiceToSupabase,
-  syncAuditLogToSupabase,
-  syncAllClinicDataToSupabase,
+  syncPatientToSupabase, syncAppointmentToSupabase, syncConsultationToSupabase,
+  syncPrescriptionToSupabase, syncLabOrderToSupabase, syncInventoryItemToSupabase,
+  syncInvoiceToSupabase, syncAuditLogToSupabase, syncAllClinicDataToSupabase,
   getSupabaseConfigInfo,
 } from '../lib/supabase';
 
@@ -74,12 +50,14 @@ interface ClinicContextType {
   primaryRole: PrimaryAuthRole | null;
   staffSubRole: StaffSubRole | null;
   isAuthenticated: boolean;
-  login: (credentials: LoginCredentials) => { success: boolean; error?: string };
+  authReady: boolean;
+  login: (credentials: LoginCredentials) => Promise<{ success: boolean; error?: string }> | { success: boolean; error?: string };
   logout: () => void;
   pendingAction: PendingAction;
   setPendingAction: (action: PendingAction) => void;
-  requestPhoneOtp: (phone: string) => { success: boolean; demoCode?: string; error?: string };
-  verifyPhoneOtp: (phone: string, code: string) => { success: boolean; error?: string };
+  requestPhoneOtp: (phone: string) => Promise<{ success: boolean; error?: string }>;
+  requestEmailOtp: (email: string, purpose?: 'patient_login' | 'patient_register' | 'admin_2fa') => Promise<{ success: boolean; error?: string }>;
+  verifyServerOtp: (input: { channel: 'email' | 'sms'; destination: string; code: string }) => Promise<{ success: boolean; error?: string }>;
   registerPatient: (input: { fullName: string; email?: string; phone?: string; password?: string }) => { success: boolean; error?: string };
   linkedPatientId: string | null;
   visiblePatients: Patient[];
@@ -133,16 +111,14 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [primaryRole, setPrimaryRole] = useState<PrimaryAuthRole | null>(null);
   const [staffSubRole, setStaffSubRole] = useState<StaffSubRole | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [authReady, setAuthReady] = useState<boolean>(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [linkedPatientId, setLinkedPatientId] = useState<string | null>(null);
-  const [otpStore, setOtpStore] = useState<Record<string, { code: string; expires: number }>>({});
   const [patientAccounts, setPatientAccounts] = useState<PatientAccount[]>(() => {
     try {
       const saved = localStorage.getItem('aura_patient_accounts');
       return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
+    } catch { return []; }
   });
 
   const ADMIN_EMAIL = 'smartclinicrealacc@gmail.com';
@@ -153,28 +129,19 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [navigatingTargetTitle, setNavigatingTargetTitle] = useState('Smart Clinic Homepage');
 
   const TAB_TITLES: Record<string, string> = {
-    home: 'Smart Clinic Homepage',
-    login: 'Secure Healthcare Authentication',
-    dashboard: 'Clinic Dashboard',
-    patients: 'Patient Directory',
-    appointments: 'Appointment Calendar',
-    queue: 'Live Queue & Triage',
-    consultations: 'Consultation Workspace',
-    emr: 'Medical Records (EMR)',
-    prescriptions: 'Pharmacy & e-Prescriptions',
-    laboratory: 'Diagnostic Laboratory',
-    inventory: 'Medication Stock & Inventory',
-    billing: 'Billing & Revenue',
-    reports: 'Reports & Analytics',
-    'predictive-analytics': 'Predictive Analytics & Risk Stratification',
-    'ai-assistant': 'Smart Clinic AI Assistant',
-    'audit-logs': 'Audit Logs & Compliance',
+    home: 'Smart Clinic Homepage', login: 'Secure Healthcare Authentication',
+    dashboard: 'Clinic Dashboard', patients: 'Patient Directory',
+    appointments: 'Appointment Calendar', queue: 'Live Queue & Triage',
+    consultations: 'Consultation Workspace', emr: 'Medical Records (EMR)',
+    prescriptions: 'Pharmacy & e-Prescriptions', laboratory: 'Diagnostic Laboratory',
+    inventory: 'Medication Stock & Inventory', billing: 'Billing & Revenue',
+    reports: 'Reports & Analytics', 'predictive-analytics': 'Predictive Analytics & Risk Stratification',
+    'ai-assistant': 'Smart Clinic AI Assistant', 'audit-logs': 'Audit Logs & Compliance',
   };
 
   const setActiveTab = (tab: string) => {
     if (tab === activeTab) return;
-    const title = TAB_TITLES[tab] || 'Clinic Workspace';
-    setNavigatingTargetTitle(title);
+    setNavigatingTargetTitle(TAB_TITLES[tab] || 'Clinic Workspace');
     setIsNavigating(true);
     setTimeout(() => {
       setActiveTabState(tab);
@@ -232,18 +199,52 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => { localStorage.setItem('aura_notifications', JSON.stringify(notifications)); }, [notifications]);
   useEffect(() => { localStorage.setItem('aura_audit_logs', JSON.stringify(auditLogs)); }, [auditLogs]);
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('aura_auth_session');
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s?.isAuthenticated && s.primaryRole) {
+          setIsAuthenticated(true);
+          setPrimaryRole(s.primaryRole);
+          setStaffSubRole(s.staffSubRole || null);
+          setLinkedPatientId(s.linkedPatientId || null);
+          setActiveRole(s.activeRole || (s.primaryRole === 'staff' ? 'nurse' : s.primaryRole));
+          setCurrentUser({
+            id: s.userId || 'session-user',
+            name: s.userName || 'User',
+            email: s.userEmail || '',
+            role: (s.activeRole || s.primaryRole) as UserRole,
+          });
+          if (s.linkedPatientId) setSelectedPatientId(s.linkedPatientId);
+        }
+      }
+    } catch {
+      localStorage.removeItem('aura_auth_session');
+    } finally {
+      setAuthReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
+    if (!isAuthenticated || !primaryRole) {
+      localStorage.removeItem('aura_auth_session');
+      return;
+    }
+    try {
+      localStorage.setItem('aura_auth_session', JSON.stringify({
+        isAuthenticated: true, primaryRole, staffSubRole, linkedPatientId,
+        userId: currentUser.id, userName: currentUser.name, userEmail: currentUser.email, activeRole,
+      }));
+    } catch { /* ignore */ }
+  }, [authReady, isAuthenticated, primaryRole, staffSubRole, linkedPatientId, currentUser, activeRole]);
+
   const logAction = (action: string, resourceType: AuditLog['resourceType'], resourceId: string, description: string) => {
     const newLog: AuditLog = {
-      id: `aud-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userRole: activeRole,
-      action,
-      resourceType,
-      resourceId,
-      description,
-      ipAddress: '192.168.1.104',
+      id: `aud-${Date.now()}`, timestamp: new Date().toISOString(),
+      userId: currentUser.id, userName: currentUser.name, userRole: activeRole,
+      action, resourceType, resourceId, description, ipAddress: '192.168.1.104',
     };
     setAuditLogs((prev) => [newLog, ...prev]);
     syncAuditLogToSupabase(newLog);
@@ -264,20 +265,53 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return `h${h.toString(16)}`;
   };
 
-  const requestPhoneOtp = (phone: string) => {
+  const requestPhoneOtp = async (phone: string) => {
     const digits = normalizePhone(phone);
     if (digits.length < 10) return { success: false, error: 'Enter a valid mobile number (at least 10 digits).' };
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    setOtpStore((prev) => ({ ...prev, [digits]: { code, expires: Date.now() + 10 * 60 * 1000 } }));
-    return { success: true, demoCode: code };
+    try {
+      const res = await fetch('/api/auth/otp/sms', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, purpose: 'patient_login' }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) return { success: false, error: data.error || 'Failed to send SMS OTP.' };
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Network error sending SMS OTP. Try again.' };
+    }
   };
 
-  const verifyPhoneOtp = (phone: string, code: string) => {
-    const digits = normalizePhone(phone);
-    const entry = otpStore[digits];
-    if (!entry || entry.expires < Date.now()) return { success: false, error: 'Code expired. Request a new OTP.' };
-    if (entry.code !== code.trim()) return { success: false, error: 'Incorrect OTP code.' };
-    return { success: true };
+  const requestEmailOtp = async (
+    email: string,
+    purpose: 'patient_login' | 'patient_register' | 'admin_2fa' = 'patient_login'
+  ) => {
+    const emailNorm = (email || '').trim().toLowerCase();
+    if (!emailNorm.includes('@')) return { success: false, error: 'Enter a valid email address.' };
+    try {
+      const res = await fetch('/api/auth/otp/email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailNorm, purpose }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) return { success: false, error: data.error || 'Failed to send email OTP.' };
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Network error sending email OTP. Try again.' };
+    }
+  };
+
+  const verifyServerOtp = async (input: { channel: 'email' | 'sms'; destination: string; code: string }) => {
+    try {
+      const res = await fetch('/api/auth/otp/verify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) return { success: false, error: data.error || 'OTP verification failed.' };
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Network error verifying OTP.' };
+    }
   };
 
   const finishPatientSession = (accountId: string, fullName: string, email: string, patientId: string) => {
@@ -299,41 +333,21 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const email = (input.email || '').trim().toLowerCase();
     const phone = input.phone ? normalizePhone(input.phone) : '';
     if (!email && !phone) return { success: false, error: 'Provide an email or phone number.' };
-    if (email && patientAccounts.some((a) => a.email === email)) {
-      return { success: false, error: 'Email already registered. Sign in instead.' };
-    }
-    if (phone && patientAccounts.some((a) => a.phone === phone)) {
-      return { success: false, error: 'Phone already registered. Sign in instead.' };
-    }
+    if (email && patientAccounts.some((a) => a.email === email)) return { success: false, error: 'Email already registered. Sign in instead.' };
+    if (phone && patientAccounts.some((a) => a.phone === phone)) return { success: false, error: 'Phone already registered. Sign in instead.' };
     const patientId = `pat-${Date.now()}`;
     const mrn = `MRN-2026-${String(patients.length + 101).padStart(3, '0')}`;
     const newPatient: Patient = {
-      id: patientId,
-      mrn,
-      fullName,
-      dob: '1990-01-01',
-      age: 0,
-      gender: 'Other',
-      bloodType: 'O+',
-      phone: phone ? `+${phone}` : '',
-      email: email || `${phone}@phone.smartclinic.local`,
-      address: '',
-      emergencyContact: { name: fullName, relationship: 'Self', phone: phone ? `+${phone}` : '' },
-      allergies: [],
-      chronicConditions: [],
-      currentMedications: [],
-      primaryDoctorId: 'usr-1',
-      createdAt: new Date().toISOString(),
-      vitalsHistory: [],
+      id: patientId, mrn, fullName, dob: '1990-01-01', age: 0, gender: 'Other', bloodType: 'O+',
+      phone: phone ? `+${phone}` : '', email: email || `${phone}@phone.smartclinic.local`,
+      address: '', emergencyContact: { name: fullName, relationship: 'Self', phone: phone ? `+${phone}` : '' },
+      allergies: [], chronicConditions: [], currentMedications: [], primaryDoctorId: 'usr-1',
+      createdAt: new Date().toISOString(), vitalsHistory: [],
     };
     setPatients((prev) => [newPatient, ...prev]);
     const account: PatientAccount = {
-      id: `acc-${Date.now()}`,
-      fullName,
-      email: email || undefined,
-      phone: phone || undefined,
-      passwordHash: simpleHash(input.password || phone || email),
-      patientId,
+      id: `acc-${Date.now()}`, fullName, email: email || undefined, phone: phone || undefined,
+      passwordHash: simpleHash(input.password || phone || email), patientId,
     };
     setPatientAccounts((prev) => [...prev, account]);
     finishPatientSession(account.id, fullName, account.email || `${phone}@phone.smartclinic.local`, patientId);
@@ -341,7 +355,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return { success: true };
   };
 
-  const login = (credentials: LoginCredentials) => {
+  const login = async (credentials: LoginCredentials) => {
     const { primaryRole: role, subRole } = credentials;
 
     if (role === 'patient') {
@@ -356,7 +370,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
       if (method === 'phone') {
         const phone = normalizePhone(credentials.phone || credentials.email || '');
-        const otp = verifyPhoneOtp(phone, credentials.twoFactorCode || '');
+        const otp = await verifyServerOtp({ channel: 'sms', destination: phone, code: credentials.twoFactorCode || '' });
         if (!otp.success) return otp;
         const account = patientAccounts.find((a) => a.phone === phone);
         if (!account) return { success: false, error: 'No account for this number. Create an account first.' };
@@ -366,20 +380,13 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const emailNorm = (credentials.email || '').trim().toLowerCase();
       const account = patientAccounts.find((a) => a.email === emailNorm);
       if (account) {
-        if (account.passwordHash !== simpleHash(credentials.password || '')) {
-          return { success: false, error: 'Incorrect password.' };
-        }
+        if (account.passwordHash !== simpleHash(credentials.password || '')) return { success: false, error: 'Incorrect password.' };
         finishPatientSession(account.id, account.fullName, account.email || emailNorm, account.patientId);
         return { success: true };
       }
-      // Demo fallback patient
       const patientUser = users.find((u) => u.role === 'patient') || users[users.length - 1];
-      setCurrentUser(patientUser);
-      setActiveRole('patient');
-      setPrimaryRole('patient');
-      setStaffSubRole(null);
-      setIsAuthenticated(true);
-      setLinkedPatientId('pat-1');
+      setCurrentUser(patientUser); setActiveRole('patient'); setPrimaryRole('patient');
+      setStaffSubRole(null); setIsAuthenticated(true); setLinkedPatientId('pat-1');
       setSelectedPatientId('pat-1');
       setActiveTab(pendingAction === 'book' ? 'home' : 'dashboard');
       logAction('AUTH_LOGIN', 'Security', patientUser.id, 'Patient authenticated (demo).');
@@ -388,32 +395,21 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (role === 'doctor') {
       const doctorUser = users.find((u) => u.role === 'doctor') || users[0];
-      setCurrentUser(doctorUser);
-      setActiveRole('doctor');
-      setPrimaryRole('doctor');
-      setStaffSubRole(null);
-      setIsAuthenticated(true);
-      setActiveTab('dashboard');
+      setCurrentUser(doctorUser); setActiveRole('doctor'); setPrimaryRole('doctor');
+      setStaffSubRole(null); setIsAuthenticated(true); setActiveTab('dashboard');
       logAction('AUTH_LOGIN', 'Security', doctorUser.id, 'Doctor authenticated.');
       return { success: true };
     }
 
     if (role === 'staff') {
-      if (!subRole || !['nurse', 'pharmacist', 'receptionist', 'lab_technician'].includes(subRole)) {
+      if (!subRole || !['nurse', 'pharmacist', 'receptionist', 'lab_technician'].includes(subRole))
         return { success: false, error: 'Mandatory sub-role required.' };
-      }
       const staffUser = users.find((u) => u.role === subRole) || {
-        id: `usr-${subRole}`,
-        name: `${subRole.replace('_', ' ').toUpperCase()} Practitioner`,
-        email: `${subRole}@smartclinic.ph`,
-        role: subRole as UserRole,
+        id: `usr-${subRole}`, name: `${subRole.replace('_', ' ').toUpperCase()} Practitioner`,
+        email: `${subRole}@smartclinic.ph`, role: subRole as UserRole,
       };
-      setCurrentUser(staffUser);
-      setActiveRole(subRole as UserRole);
-      setPrimaryRole('staff');
-      setStaffSubRole(subRole);
-      setIsAuthenticated(true);
-      setActiveTab('dashboard');
+      setCurrentUser(staffUser); setActiveRole(subRole as UserRole); setPrimaryRole('staff');
+      setStaffSubRole(subRole); setIsAuthenticated(true); setActiveTab('dashboard');
       logAction('AUTH_LOGIN', 'Security', staffUser.id, `Staff logged in: ${subRole}`);
       return { success: true };
     }
@@ -421,24 +417,13 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (role === 'admin') {
       const emailNorm = (credentials.email || '').trim().toLowerCase();
       const pass = credentials.password || '';
-      if (emailNorm !== ADMIN_EMAIL) {
-        return { success: false, error: 'Admin access restricted to smartclinicrealacc@gmail.com' };
-      }
-      if (pass !== ADMIN_PASSWORD) {
-        return { success: false, error: 'Incorrect admin password.' };
-      }
+      if (emailNorm !== ADMIN_EMAIL) return { success: false, error: 'Admin access restricted to smartclinicrealacc@gmail.com' };
+      if (pass !== ADMIN_PASSWORD) return { success: false, error: 'Incorrect admin password.' };
       const adminUser = users.find((u) => u.role === 'admin') || {
-        id: 'usr-7',
-        name: 'System Administrator',
-        email: ADMIN_EMAIL,
-        role: 'admin' as UserRole,
+        id: 'usr-7', name: 'System Administrator', email: ADMIN_EMAIL, role: 'admin' as UserRole,
       };
-      setCurrentUser({ ...adminUser, email: ADMIN_EMAIL });
-      setActiveRole('admin');
-      setPrimaryRole('admin');
-      setStaffSubRole(null);
-      setIsAuthenticated(true);
-      setActiveTab('dashboard');
+      setCurrentUser({ ...adminUser, email: ADMIN_EMAIL }); setActiveRole('admin'); setPrimaryRole('admin');
+      setStaffSubRole(null); setIsAuthenticated(true); setActiveTab('dashboard');
       logAction('AUTH_LOGIN', 'Security', adminUser.id, 'Admin authenticated.');
       return { success: true };
     }
@@ -447,243 +432,122 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const logout = () => {
-    setIsAuthenticated(false);
-    setPrimaryRole(null);
-    setStaffSubRole(null);
-    setLinkedPatientId(null);
-    setPendingAction(null);
-    setActiveRole('patient');
-    setActiveTab('login');
+    setIsAuthenticated(false); setPrimaryRole(null); setStaffSubRole(null);
+    setLinkedPatientId(null); setPendingAction(null); setActiveRole('patient');
+    try { localStorage.removeItem('aura_auth_session'); } catch { /* */ }
+    setActiveTab('home');
   };
 
-  const visiblePatients =
-    primaryRole === 'patient' && linkedPatientId
-      ? patients.filter((p) => p.id === linkedPatientId)
-      : patients;
-
-  const myAppointments =
-    primaryRole === 'patient' && linkedPatientId
-      ? appointments.filter((a) => a.patientId === linkedPatientId)
-      : appointments;
+  const visiblePatients = primaryRole === 'patient' && linkedPatientId
+    ? patients.filter((p) => p.id === linkedPatientId) : patients;
+  const myAppointments = primaryRole === 'patient' && linkedPatientId
+    ? appointments.filter((a) => a.patientId === linkedPatientId) : appointments;
 
   const selectedPatient = patients.find((p) => p.id === selectedPatientId) || null;
-
   const selectPatient = (id: string | null) => {
     if (primaryRole === 'patient' && linkedPatientId && id && id !== linkedPatientId) return;
     setSelectedPatientId(id);
   };
 
   const addPatient = (newPatData: Omit<Patient, 'id' | 'createdAt' | 'mrn'>) => {
-    const patNum = patients.length + 101;
-    const mrn = `MRN-2026-${String(patNum).padStart(3, '0')}`;
-    const newPatient: Patient = {
-      ...newPatData,
-      id: `pat-${Date.now()}`,
-      mrn,
-      createdAt: new Date().toISOString(),
-      vitalsHistory: newPatData.vitalsHistory || [],
-    };
-    setPatients((prev) => [newPatient, ...prev]);
-    setSelectedPatientId(newPatient.id);
+    const mrn = `MRN-2026-${String(patients.length + 101).padStart(3, '0')}`;
+    const newPatient: Patient = { ...newPatData, id: `pat-${Date.now()}`, mrn, createdAt: new Date().toISOString(), vitalsHistory: newPatData.vitalsHistory || [] };
+    setPatients((prev) => [newPatient, ...prev]); setSelectedPatientId(newPatient.id);
     logAction('PATIENT_CREATE', 'Patient', newPatient.id, `Registered ${newPatient.fullName}`);
-    syncPatientToSupabase(newPatient);
-    return newPatient;
+    syncPatientToSupabase(newPatient); return newPatient;
   };
-
   const updatePatient = (id: string, updates: Partial<Patient>) => {
     if (primaryRole === 'patient' && linkedPatientId && id !== linkedPatientId) return;
     setPatients((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
   };
-
   const addVitals = (patientId: string, vitalsData: Omit<Vitals, 'id' | 'recordedAt'>) => {
     const newVitals: Vitals = { ...vitalsData, id: `vit-${Date.now()}`, recordedAt: new Date().toISOString(), recordedBy: currentUser.name };
     setPatients((prev) => prev.map((p) => (p.id === patientId ? { ...p, vitalsHistory: [newVitals, ...p.vitalsHistory] } : p)));
   };
-
   const addAppointment = (aptData: Omit<Appointment, 'id' | 'createdAt'>) => {
     if (primaryRole === 'patient' && linkedPatientId && aptData.patientId !== linkedPatientId) {
       aptData = { ...aptData, patientId: linkedPatientId };
     }
     const queueChar = aptData.department.startsWith('Cardio') ? 'B' : 'A';
-    const queueNum = `${queueChar}-${100 + appointments.length + 1}`;
-    const newApt: Appointment = { ...aptData, id: `apt-${Date.now()}`, queueNumber: queueNum, createdAt: new Date().toISOString() };
+    const newApt: Appointment = { ...aptData, id: `apt-${Date.now()}`, queueNumber: `${queueChar}-${100 + appointments.length + 1}`, createdAt: new Date().toISOString() };
     setAppointments((prev) => [newApt, ...prev]);
     logAction('APPOINTMENT_BOOKED', 'Appointment', newApt.id, `Booked for ${newApt.patientName}`);
-    syncAppointmentToSupabase(newApt);
-    return newApt;
+    syncAppointmentToSupabase(newApt); return newApt;
   };
-
   const updateAppointmentStatus = (id: string, status: AppointmentStatus) => {
     setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
   };
-
   const rescheduleAppointment = (id: string, newDate: string, newTime: string) => {
     setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, date: newDate, time: newTime, status: 'Scheduled' } : a)));
   };
-
   const addConsultation = (consData: Omit<Consultation, 'id'>) => {
     const newCons: Consultation = { ...consData, id: `con-${Date.now()}` };
     setConsultations((prev) => [newCons, ...prev]);
     if (consData.appointmentId) updateAppointmentStatus(consData.appointmentId, 'Completed');
-    syncConsultationToSupabase(newCons);
-    return newCons;
+    syncConsultationToSupabase(newCons); return newCons;
   };
-
   const addPrescription = (rxData: Omit<Prescription, 'id' | 'prescriptionNumber'>) => {
-    const prescriptionNumber = `RX-2026-${String(9000 + prescriptions.length + 1)}`;
-    const newRx: Prescription = { ...rxData, id: `rx-${Date.now()}`, prescriptionNumber };
-    setPrescriptions((prev) => [newRx, ...prev]);
-    syncPrescriptionToSupabase(newRx);
-    return newRx;
+    const newRx: Prescription = { ...rxData, id: `rx-${Date.now()}`, prescriptionNumber: `RX-2026-${String(9000 + prescriptions.length + 1)}` };
+    setPrescriptions((prev) => [newRx, ...prev]); syncPrescriptionToSupabase(newRx); return newRx;
   };
-
   const dispenseMedication = (prescriptionId: string, itemId: string) => {
-    setPrescriptions((prev) =>
-      prev.map((rx) => {
-        if (rx.id !== prescriptionId) return rx;
-        const items = rx.items.map((it) => (it.id === itemId ? { ...it, dispensed: true } : it));
-        const allDone = items.every((it) => it.dispensed);
-        return { ...rx, items, status: allDone ? 'Dispensed' : 'Partially Dispensed' };
-      })
-    );
+    setPrescriptions((prev) => prev.map((rx) => {
+      if (rx.id !== prescriptionId) return rx;
+      const items = rx.items.map((it) => (it.id === itemId ? { ...it, dispensed: true } : it));
+      return { ...rx, items, status: items.every((it) => it.dispensed) ? 'Dispensed' : 'Partially Dispensed' };
+    }));
   };
-
   const addLabOrder = (orderData: Omit<LabTestOrder, 'id' | 'orderNumber' | 'requestedAt'>) => {
-    const orderNumber = `LAB-2026-${String(1000 + labOrders.length + 1)}`;
-    const newOrder: LabTestOrder = { ...orderData, id: `lab-${Date.now()}`, orderNumber, requestedAt: new Date().toISOString() };
-    setLabOrders((prev) => [newOrder, ...prev]);
-    syncLabOrderToSupabase(newOrder);
-    return newOrder;
+    const newOrder: LabTestOrder = { ...orderData, id: `lab-${Date.now()}`, orderNumber: `LAB-2026-${String(1000 + labOrders.length + 1)}`, requestedAt: new Date().toISOString() };
+    setLabOrders((prev) => [newOrder, ...prev]); syncLabOrderToSupabase(newOrder); return newOrder;
   };
-
   const updateLabStatus = (orderId: string, status: LabTestOrder['status']) => {
     setLabOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status } : o)));
   };
-
   const enterLabResults = (orderId: string, results: LabResultItem[], interpretation?: string, aiSummary?: string) => {
-    setLabOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? { ...o, results, interpretation, aiSummary, status: 'Completed', completedAt: new Date().toISOString() }
-          : o
-      )
-    );
+    setLabOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, results, interpretation, aiSummary, status: 'Completed', completedAt: new Date().toISOString() } : o));
   };
-
   const adjustStock = (itemId: string, quantityChange: number, _reason: string) => {
-    setInventory((prev) =>
-      prev.map((item) => (item.id === itemId ? { ...item, stockQuantity: Math.max(0, item.stockQuantity + quantityChange) } : item))
-    );
+    setInventory((prev) => prev.map((item) => (item.id === itemId ? { ...item, quantity: Math.max(0, item.quantity + quantityChange) } : item)));
   };
-
   const addInvoice = (invData: Omit<Invoice, 'id' | 'invoiceNumber'>) => {
-    const invoiceNumber = `INV-2026-${String(5000 + invoices.length + 1)}`;
-    const newInv: Invoice = { ...invData, id: `inv-${Date.now()}`, invoiceNumber };
-    setInvoices((prev) => [newInv, ...prev]);
-    syncInvoiceToSupabase(newInv);
-    return newInv;
+    const newInv: Invoice = { ...invData, id: `inv-${Date.now()}`, invoiceNumber: `INV-2026-${String(5000 + invoices.length + 1)}` };
+    setInvoices((prev) => [newInv, ...prev]); syncInvoiceToSupabase(newInv); return newInv;
   };
-
   const payInvoice = (invoiceId: string, amount: number, method: Invoice['paymentMethod']) => {
-    setInvoices((prev) =>
-      prev.map((inv) => {
-        if (inv.id !== invoiceId) return inv;
-        const newPaid = (inv.paidAmount || 0) + amount;
-        return {
-          ...inv,
-          paidAmount: newPaid,
-          paymentMethod: method,
-          status: newPaid >= inv.totalAmount ? 'Paid' : 'Partially Paid',
-        };
-      })
-    );
+    setInvoices((prev) => prev.map((inv) => inv.id === invoiceId ? {
+      ...inv, amountPaid: (inv.amountPaid || 0) + amount, paymentMethod: method,
+      status: (inv.amountPaid || 0) + amount >= inv.total ? 'Paid' : 'Partial',
+    } : inv));
   };
-
   const markNotificationAsRead = (id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
   };
-
   const markAllNotificationsAsRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
-
   const supabaseInfo = getSupabaseConfigInfo();
-
   const syncAllToSupabase = async () => {
-    const res = await syncAllClinicDataToSupabase({
-      patients,
-      appointments,
-      consultations,
-      prescriptions,
-      labOrders,
-      inventory,
-      invoices,
-      auditLogs,
-    });
+    const res = await syncAllClinicDataToSupabase({ patients, appointments, consultations, prescriptions, labOrders, inventory, invoices, auditLogs });
     logAction('SUPABASE_FULL_SYNC', 'System', 'supabase-cloud', res.message);
     return res;
   };
 
   return (
-    <ClinicContext.Provider
-      value={{
-        currentUser,
-        activeRole,
-        switchRole,
-        users,
-        primaryRole,
-        staffSubRole,
-        isAuthenticated,
-        login,
-        logout,
-        pendingAction,
-        setPendingAction,
-        requestPhoneOtp,
-        verifyPhoneOtp,
-        registerPatient,
-        linkedPatientId,
-        visiblePatients,
-        myAppointments,
-        activeTab,
-        setActiveTab,
-        isNavigating,
-        navigatingTargetTitle,
-        patients,
-        selectedPatientId,
-        selectedPatient,
-        selectPatient,
-        addPatient,
-        updatePatient,
-        addVitals,
-        appointments,
-        addAppointment,
-        updateAppointmentStatus,
-        rescheduleAppointment,
-        consultations,
-        addConsultation,
-        prescriptions,
-        addPrescription,
-        dispenseMedication,
-        labOrders,
-        addLabOrder,
-        updateLabStatus,
-        enterLabResults,
-        inventory,
-        adjustStock,
-        invoices,
-        addInvoice,
-        payInvoice,
-        notifications,
-        markNotificationAsRead,
-        markAllNotificationsAsRead,
-        auditLogs,
-        logAction,
-        searchQuery,
-        setSearchQuery,
-        supabaseInfo,
-        syncAllToSupabase,
-      }}
-    >
+    <ClinicContext.Provider value={{
+      currentUser, activeRole, switchRole, users, primaryRole, staffSubRole,
+      isAuthenticated, authReady, login, logout, pendingAction, setPendingAction,
+      requestPhoneOtp, requestEmailOtp, verifyServerOtp, registerPatient,
+      linkedPatientId, visiblePatients, myAppointments,
+      activeTab, setActiveTab, isNavigating, navigatingTargetTitle,
+      patients, selectedPatientId, selectedPatient, selectPatient, addPatient, updatePatient, addVitals,
+      appointments, addAppointment, updateAppointmentStatus, rescheduleAppointment,
+      consultations, addConsultation, prescriptions, addPrescription, dispenseMedication,
+      labOrders, addLabOrder, updateLabStatus, enterLabResults,
+      inventory, adjustStock, invoices, addInvoice, payInvoice,
+      notifications, markNotificationAsRead, markAllNotificationsAsRead,
+      auditLogs, logAction, searchQuery, setSearchQuery, supabaseInfo, syncAllToSupabase,
+    }}>
       {children}
     </ClinicContext.Provider>
   );
