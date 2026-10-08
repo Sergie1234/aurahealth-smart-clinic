@@ -128,16 +128,30 @@ export const aiService = {
     return res.json();
   },
 
-  // 5. Chat with AI Medical & Administrative Assistant
+  // 5. Chat with AI Medical & Administrative Assistant (Role & Page-constrained Routing)
   async sendChatMessage(payload: {
     message: string;
     conversationHistory: { sender: string; text: string }[];
     context: any;
     role: string;
-  }): Promise<{ reply: string; disclaimer: string }> {
+    page?: string;
+    token?: string | null;
+  }): Promise<{
+    reply: string;
+    disclaimer: string;
+    isEmergency?: boolean;
+    persona?: string;
+    interfaceMode?: string;
+    activePage?: string;
+    activeRole?: string;
+  }> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (payload.token) {
+      headers['Authorization'] = `Bearer ${payload.token}`;
+    }
     const res = await fetch('/api/ai/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error('Failed to send message to AI assistant');

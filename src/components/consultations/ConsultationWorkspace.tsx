@@ -784,8 +784,8 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-teal-600" />
                 <div>
-                  <h3 className="font-bold text-slate-900 text-sm">Gemini Clinical SOAP Draft</h3>
-                  <p className="text-[10px] text-slate-500">Review, modify, or adopt into clinical record</p>
+                  <h3 className="font-bold text-slate-900 text-sm">AIC Health Hub — Clinical SOAP Draft</h3>
+                  <p className="text-[10px] text-slate-500">Automated medical scribe & differential suggestions • Physician review required</p>
                 </div>
               </div>
               <button onClick={() => setShowAiDraftModal(false)} className="text-slate-400 hover:text-slate-600">
@@ -794,7 +794,18 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
             </div>
 
             <div className="p-5 flex-1 overflow-y-auto space-y-3.5 text-xs">
-              <AIDisclaimerBanner />
+              {/* Mandatory Review Prompt Banner */}
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-950 flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-[11px] uppercase tracking-wide text-amber-900">
+                    Mandatory Attending Physician Review & Approval
+                  </p>
+                  <p className="text-amber-800 text-[11px] leading-relaxed mt-0.5">
+                    The Clinical Decision Support Assistant operates strictly as analytical decision support to improve clinical efficiency. It cannot finalize a diagnosis or issue a prescription autonomously. Please review, edit as appropriate, and explicitly approve this note before committing it to the medical record.
+                  </p>
+                </div>
+              </div>
 
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
                 <span className="font-bold text-slate-800 text-[11px] block uppercase">Chief Complaint</span>

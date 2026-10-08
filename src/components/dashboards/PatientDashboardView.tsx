@@ -11,8 +11,10 @@ import {
   Heart,
   Activity,
   AlertTriangle,
+  Sparkles,
 } from 'lucide-react';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
+import { EmergencyDisclaimerBanner } from '../common/EmergencyDisclaimerBanner';
 import { formatPeso } from '../../utils/currency';
 
 interface Props {
@@ -28,7 +30,7 @@ export const PatientDashboardView: React.FC<Props> = ({
   onOpenLabReport,
   onOpenPrescription,
 }) => {
-  const { patients, appointments, prescriptions, labOrders, invoices, linkedPatientId, currentUser } = useClinic();
+  const { patients, appointments, prescriptions, labOrders, invoices, linkedPatientId, currentUser, setActiveTab } = useClinic();
 
   // Active patient (logged-in portal patient)
   const patient =
@@ -72,7 +74,16 @@ export const PatientDashboardView: React.FC<Props> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 self-start md:self-auto">
+        <div className="flex items-center gap-2.5 self-start md:self-auto flex-wrap">
+          <button
+            onClick={() => setActiveTab('ai-assistant')}
+            className="px-3.5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-bold flex items-center gap-2 transition shadow-md shadow-emerald-500/20 cursor-pointer"
+            title="Chat with SmartClinic AI Triage Chatbot"
+          >
+            <Sparkles className="w-4 h-4 text-slate-950" />
+            <span>AI Triage Chatbot</span>
+          </button>
+
           {onOpenQR && (
             <button
               onClick={onOpenQR}
@@ -94,6 +105,8 @@ export const PatientDashboardView: React.FC<Props> = ({
           )}
         </div>
       </div>
+
+      <EmergencyDisclaimerBanner />
 
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">

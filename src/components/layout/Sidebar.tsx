@@ -50,7 +50,12 @@ export const Sidebar: React.FC = () => {
     { id: 'billing', label: 'Billing & Payments', icon: Receipt, roles: ['admin', 'receptionist', 'patient'] },
     { id: 'reports', label: 'Reports & Analytics', icon: BarChart3, roles: ['admin', 'doctor'] },
     { id: 'predictive-analytics', label: 'Predictive Analytics', icon: TrendingUp, roles: ['admin', 'doctor', 'nurse'] },
-    { id: 'ai-assistant', label: 'AI Clinic Assistant', icon: Sparkles, roles: ['admin', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician'] },
+    {
+      id: 'ai-assistant',
+      label: activeRole === 'patient' ? 'AI Triage Chatbot' : 'AIC Health Hub Assistant',
+      icon: Sparkles,
+      roles: ['admin', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician', 'patient'],
+    },
     { id: 'audit-logs', label: 'Audit & Compliance', icon: ShieldAlert, roles: ['admin'] },
   ];
 
