@@ -75,16 +75,25 @@ const ClinicAppContent: React.FC = () => {
       setActiveTab('login');
       return;
     }
+    // Staff / doctor / admin do not use patient self-booking
+    if (primaryRole && primaryRole !== 'patient') {
+      setActiveTab('dashboard');
+      return;
+    }
     setShowBookAppointment(true);
   };
 
   useEffect(() => {
     if (isAuthenticated && pendingBook) {
-      setShowBookAppointment(true);
+      if (!primaryRole || primaryRole === 'patient') {
+        setShowBookAppointment(true);
+      } else {
+        setActiveTab('dashboard');
+      }
       setPendingBook(false);
       setPendingAction(null);
     }
-  }, [isAuthenticated, pendingBook, setPendingAction]);
+  }, [isAuthenticated, pendingBook, primaryRole, setPendingAction, setActiveTab]);
 
   const handleStartConsultation = (patientId: string) => {
     setConsultPatientId(patientId);
