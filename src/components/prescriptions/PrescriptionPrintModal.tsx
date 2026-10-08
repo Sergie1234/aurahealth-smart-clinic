@@ -120,7 +120,7 @@ export const PrescriptionPrintModal: React.FC<Props> = ({ prescription, onClose 
             </div>
 
             <div className="text-right">
-              <p className="font-mono text-[10px] text-slate-400">Security Hash: SHA256-AURA-{prescription.prescriptionNumber.replace(/[^0-9]/g, '')}</p>
+              <p className="font-mono text-[10px] text-slate-400">Security Hash: SHA256-SC-{prescription.prescriptionNumber.replace(/[^0-9]/g, '')}</p>
               <p className="text-[10px] text-slate-500">Official Electronic Prescription</p>
             </div>
           </div>

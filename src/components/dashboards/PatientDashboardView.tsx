@@ -28,19 +28,25 @@ export const PatientDashboardView: React.FC<Props> = ({
   onOpenLabReport,
   onOpenPrescription,
 }) => {
-  const { patients, appointments, prescriptions, labOrders, invoices } = useClinic();
+  const { patients, appointments, prescriptions, labOrders, invoices, linkedPatientId, currentUser } = useClinic();
 
-  // Active patient (primary portal patient)
-  const patient = patients[0] || {
-    id: 'pat-1',
-    mrn: 'MRN-2026-081',
-    fullName: 'Elena Vargas',
-    dateOfBirth: '1978-04-12',
-    gender: 'Female',
-    bloodType: 'A+',
-    allergies: ['Penicillin', 'Sulfa Drugs'],
-    chronicConditions: ['Type 2 Diabetes Mellitus', 'Essential Hypertension'],
-  };
+  // Active patient (logged-in portal patient)
+  const patient =
+    patients.find((p) => p.id === linkedPatientId) ||
+    patients.find((p) => p.email.toLowerCase() === currentUser.email?.toLowerCase()) ||
+    patients[0] || {
+      id: 'pat-1',
+      mrn: 'MRN-2026-081',
+      fullName: 'Elena Vargas',
+      dob: '1978-04-12',
+      age: 48,
+      gender: 'Female' as const,
+      bloodType: 'A+' as const,
+      phone: '+63 917 823 4410',
+      email: 'elena.vargas@example.com',
+      allergies: [{ allergen: 'Penicillin', severity: 'severe' as const, reaction: 'Anaphylaxis' }],
+      chronicConditions: ['Type 2 Diabetes Mellitus', 'Essential Hypertension'],
+    };
 
   const patientAppointments = appointments.filter((a) => a.patientId === patient.id || a.patientName === patient.fullName);
   const patientPrescriptions = prescriptions.filter((p) => p.patientId === patient.id || p.patientName === patient.fullName);

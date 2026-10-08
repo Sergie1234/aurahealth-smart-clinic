@@ -1,4 +1,4 @@
-# AuraHealth — Smart Clinic Management & AI Clinical Assistant
+# Smart Clinic — Outpatient Management & Clinical Assistant
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -9,7 +9,7 @@
 [![Google Gemini API](https://img.shields.io/badge/Google_Gemini-3.8_Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev/)
 [![Compliance](https://img.shields.io/badge/Compliance-HIPAA_Ready_Audit-0d9488)](#security-and-compliance)
 
-A modern, production-ready, full-stack **Smart Clinic Management Web Application** engineered with integrated artificial intelligence capabilities and cloud persistence. AuraHealth unites clinical workflows, electronic medical records (EMR), outpatient scheduling, diagnostic pathology, digital pharmacy inventory, billing reconciliation, and automated clinical documentation into a unified, secure platform.
+A modern, production-ready, full-stack **Smart Clinic Management Web Application** engineered with integrated artificial intelligence capabilities and cloud persistence. Smart Clinic unites clinical workflows, electronic medical records (EMR), outpatient scheduling, diagnostic pathology, digital pharmacy inventory, billing reconciliation, and automated clinical documentation into a unified, secure platform.
 
 ---
 
@@ -26,7 +26,7 @@ A modern, production-ready, full-stack **Smart Clinic Management Web Application
 
 ## 1. Key System Modules
 
-AuraHealth is architected around 7 distinct operational roles and modular clinical micro-workflows:
+Smart Clinic is architected around 7 distinct operational roles and modular clinical micro-workflows:
 
 ### 🧑‍⚕️ 1. Doctor Consultation Suite
 - **Electronic Medical Records (EMR):** Comprehensive longitudinal patient histories, chronic conditions, and past encounters.
@@ -89,7 +89,7 @@ All AI capabilities operate through secure server-side proxy routes via the `@go
 
 ## 3. Supabase Backend Integration (PostgreSQL)
 
-AuraHealth features complete database integration with **Supabase**, providing persistent cloud storage, relational integrity, and Row Level Security (RLS).
+Smart Clinic features complete database integration with **Supabase**, providing persistent cloud storage, relational integrity, and Row Level Security (RLS).
 
 ### Database Tables Catalog
 
@@ -127,7 +127,7 @@ AuraHealth features complete database integration with **Supabase**, providing p
 
 ## 4. Vercel Deployment Guide
 
-AuraHealth is fully optimized for **Vercel** serverless hosting:
+Smart Clinic is fully optimized for **Vercel** serverless hosting:
 
 ### Project Deployment Configuration
 
@@ -141,7 +141,7 @@ AuraHealth is fully optimized for **Vercel** serverless hosting:
 1. **Push to GitHub:**
    ```bash
    git add .
-   git commit -m "Deploy AuraHealth to Vercel"
+   git commit -m "Deploy Smart Clinic to Vercel"
    git push origin main
    ```
 
@@ -185,8 +185,8 @@ AuraHealth is fully optimized for **Vercel** serverless hosting:
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/Sergie1234/aurahealth-smart-clinic.git
-   cd aurahealth-smart-clinic
+   git clone https://github.com/Sergie1234/smart-clinic.git
+   cd smart-clinic
    ```
 
 2. **Install dependencies:**

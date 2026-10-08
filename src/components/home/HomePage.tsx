@@ -60,7 +60,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
             </span>
             <span className="hidden md:inline">|</span>
             <span className="flex items-center gap-1">
-              <Phone className="w-3.5 h-3.5" /> Emergency Hotline: (02) 8888-AURA
+              <Phone className="w-3.5 h-3.5" /> Emergency Hotline: (02) 8888-7627 (SMART)
             </span>
           </div>
         </div>
@@ -74,9 +74,8 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-teal-700 to-cyan-600 dark:from-teal-400 dark:to-cyan-400 bg-clip-text text-transparent">
-                  AuraHealth
+                  Smart Clinic
                 </span>
-                <span className="text-xl font-light text-slate-700 dark:text-slate-200">Smart Clinic</span>
               </div>
               <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-widest font-semibold">
                 Outpatient & Clinical Management
@@ -96,26 +95,27 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
             {isAuthenticated ? (
               <button
                 onClick={() => setActiveTab('dashboard')}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 rounded-lg shadow-sm transition"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 rounded-lg shadow-sm transition cursor-pointer"
               >
-                <span>Dashboard ({currentUser.role})</span>
+                <span>My Dashboard</span>
+                <span className="text-xs font-normal opacity-90 capitalize">({currentUser.role})</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             ) : (
               <>
                 <button
                   onClick={() => setActiveTab('login')}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
                 >
                   <LogIn className="w-4 h-4" />
-                  <span>Portal Login</span>
+                  <span>Login</span>
                 </button>
                 <button
                   onClick={onOpenBookAppointment}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 rounded-lg shadow-sm hover:shadow transition"
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 rounded-lg shadow-sm hover:shadow transition cursor-pointer"
                 >
                   <Calendar className="w-4 h-4" />
-                  <span>Book Appointment</span>
+                  <span>Book Now</span>
                 </button>
               </>
             )}
@@ -581,7 +581,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <SmartClinicLogo className="w-7 h-7" />
-                <span className="font-bold text-sm text-slate-800 dark:text-slate-200">AuraHealth Smart Clinic</span>
+                <span className="font-bold text-sm text-slate-800 dark:text-slate-200">Smart Clinic</span>
               </div>
               <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
                 Outpatient Management & Intelligent Clinical Decision Support Platform.
@@ -602,14 +602,14 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
 
             <div>
               <h5 className="font-bold text-slate-800 dark:text-slate-200 mb-2.5">Contact</h5>
-              <p className="text-xs flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-teal-600" /> Trunkline: (02) 8888-AURA</p>
-              <p className="text-xs mt-1">Email: contact@aurahealth.clinic</p>
+              <p className="text-xs flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-teal-600" /> Trunkline: (02) 8888-7627 (SMART)</p>
+              <p className="text-xs mt-1">Email: contact@smartclinic.ph</p>
             </div>
           </div>
 
           <div className="pt-6 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px]">
             <div>
-              © {new Date().getFullYear()} AuraHealth Smart Clinic. All rights reserved.
+              © {new Date().getFullYear()} Smart Clinic. All rights reserved.
             </div>
             <div className="flex items-center gap-4">
               <span>Republic Act No. 10173</span>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { StaffSubRole } from '../../context/ClinicContext';
+import { useToast } from '../../context/ToastContext';
 import {
   Users,
   Activity,
@@ -35,6 +36,7 @@ export const StaffDashboardView: React.FC<Props> = ({
     dispenseMedication,
     updateLabStatus,
   } = useClinic();
+  const { info: toastInfo } = useToast();
 
   const roleLabels: Record<StaffSubRole, { title: string; badge: string; color: string; desc: string }> = {
     nurse: {
@@ -198,7 +200,7 @@ export const StaffDashboardView: React.FC<Props> = ({
                     </span>
                   </div>
                   <button
-                    onClick={() => alert(`Nurse vitals checklist opened for ${pat.fullName}`)}
+                    onClick={() => toastInfo(`Nurse vitals checklist opened for ${pat.fullName}`)}
                     className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold cursor-pointer transition text-xs"
                   >
                     Log Vitals

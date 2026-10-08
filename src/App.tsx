@@ -10,6 +10,7 @@ import { ToastProvider, ToastViewport } from './context/ToastContext';
 import { ThemeToggle } from './components/common/ThemeToggle';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
+import { SmartClinicLogo } from './components/common/SmartClinicLogo';
 
 import { PatientList } from './components/patients/PatientList';
 import { PatientDetailModal } from './components/patients/PatientDetailModal';
@@ -49,15 +50,17 @@ const ClinicAppContent: React.FC = () => {
     primaryRole,
     staffSubRole,
     patients,
-    selectedPatient,
+    linkedPatientId,
     selectPatient,
     isNavigating,
     navigatingTargetTitle,
     isAuthenticated,
+    authReady,
+    pendingAction,
     setPendingAction,
   } = useClinic();
-  const [pendingBook, setPendingBook] = useState(false);
 
+  const [pendingBook, setPendingBook] = useState(false);
   const [showNewPatient, setShowNewPatient] = useState(false);
   const [showBookAppointment, setShowBookAppointment] = useState(false);
   const [showNewPrescription, setShowNewPrescription] = useState(false);
@@ -83,8 +86,9 @@ const ClinicAppContent: React.FC = () => {
     setShowBookAppointment(true);
   };
 
+  // 'Book Now' Auth-Gate auto-redirect to booking modal upon successful login
   useEffect(() => {
-    if (isAuthenticated && pendingBook) {
+    if (isAuthenticated && (pendingBook || pendingAction === 'book')) {
       if (!primaryRole || primaryRole === 'patient') {
         setShowBookAppointment(true);
       } else {
@@ -93,13 +97,28 @@ const ClinicAppContent: React.FC = () => {
       setPendingBook(false);
       setPendingAction(null);
     }
-  }, [isAuthenticated, pendingBook, primaryRole, setPendingAction, setActiveTab]);
+  }, [isAuthenticated, pendingBook, pendingAction, primaryRole, setPendingAction, setActiveTab]);
 
   const handleStartConsultation = (patientId: string) => {
     setConsultPatientId(patientId);
     selectPatient(patientId);
     setActiveTab('consultations');
   };
+
+  // Eliminate UI flashing by rendering loading skeleton during session verification
+  if (!authReady) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-6 space-y-4">
+        <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl flex items-center justify-center animate-pulse">
+          <SmartClinicLogo className="w-10 h-10" glow={true} />
+        </div>
+        <div className="text-center space-y-1">
+          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Smart Clinic</p>
+          <p className="text-xs text-slate-400">Verifying secure healthcare session…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col text-slate-900 dark:text-slate-100 font-sans selection:bg-teal-500 selection:text-white">
@@ -114,23 +133,41 @@ const ClinicAppContent: React.FC = () => {
 
       {activeTab !== 'home' && activeTab !== 'login' && isAuthenticated && (
         <>
-          <Header onOpenSupabaseModal={() => setShowSupabaseModal(true)} />
+          <Header
+            onOpenBookAppointment={openBookAppointment}
+            onOpenNewPatient={() => setShowNewPatient(true)}
+            onOpenSupabaseModal={() => setShowSupabaseModal(true)}
+          />
           <div className="flex flex-1 overflow-hidden">
             <Sidebar />
             <main className="flex-1 overflow-y-auto p-4 md:p-6">
               {activeTab === 'dashboard' && primaryRole === 'patient' && (
-                <PatientDashboardView onOpenBookAppointment={openBookAppointment} />
+                <PatientDashboardView
+                  onOpenBookAppointment={openBookAppointment}
+                  onOpenQR={() => {
+                    const p = patients.find((pat) => pat.id === linkedPatientId) || patients[0];
+                    setQrPatient(p);
+                  }}
+                  onOpenLabReport={(o: LabTestOrder) => setLabOrderForReport(o)}
+                  onOpenPrescription={(rx: Prescription) => setPrintingRx(rx)}
+                />
               )}
               {activeTab === 'dashboard' && primaryRole === 'staff' && (
-                <StaffDashboardView subRole={staffSubRole || 'nurse'} onOpenBookAppointment={openBookAppointment} />
+                <StaffDashboardView
+                  subRole={staffSubRole || 'nurse'}
+                  onOpenBookAppointment={openBookAppointment}
+                />
               )}
               {activeTab === 'dashboard' && (primaryRole === 'doctor' || activeRole === 'doctor') && (
-                <DoctorDashboardView onStartConsultation={handleStartConsultation} onOpenBookAppointment={openBookAppointment} />
+                <DoctorDashboardView
+                  onStartConsultation={handleStartConsultation}
+                  onOpenBookAppointment={openBookAppointment}
+                />
               )}
               {activeTab === 'dashboard' && primaryRole === 'admin' && (
                 <AdminDashboardView />
               )}
-              {activeTab === 'patients' && (
+              {(activeTab === 'patients' || activeTab === 'emr') && (
                 <PatientList
                   onSelectPatient={(id) => {
                     selectPatient(id);

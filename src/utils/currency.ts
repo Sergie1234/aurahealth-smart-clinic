@@ -1,4 +1,4 @@
-/** Philippine peso formatting — AuraHealth Smart Clinic */
+/** Philippine peso formatting — Smart Clinic */
 export function formatPeso(amount: number, opts?: { compact?: boolean }): string {
   const n = Number.isFinite(amount) ? amount : 0;
   if (opts?.compact && Math.abs(n) >= 1_000_000) {

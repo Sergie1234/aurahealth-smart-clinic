@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useClinic } from '../../context/ClinicContext';
+import { useToast } from '../../context/ToastContext';
 import {
   calculatePatientRiskStratification,
   predictAppointmentNoShow,
@@ -48,6 +49,7 @@ export const PredictiveAnalyticsDashboard: React.FC = () => {
     selectPatient,
     setActiveTab,
   } = useClinic();
+  const { info: toastInfo, success: toastSuccess } = useToast();
 
   const [activeSubTab, setActiveSubTab] = useState<
     'stratification' | 'noshow' | 'pharmacy' | 'surge'
@@ -116,8 +118,8 @@ export const PredictiveAnalyticsDashboard: React.FC = () => {
 
   // Action handlers
   const handleTriggerOutreach = (pred: NoShowPrediction) => {
-    alert(
-      `Priority Automated Outreach Triggered:\nPatient: ${pred.patientName}\nAction: ${pred.recommendedAction}`
+    toastInfo(
+      `Priority Automated Outreach Triggered: ${pred.patientName} — ${pred.recommendedAction}`
     );
   };
 
@@ -755,7 +757,7 @@ export const PredictiveAnalyticsDashboard: React.FC = () => {
 
                     <button
                       onClick={() =>
-                        alert(`Reorder purchase request drafted for ${item.name} (${item.recommendedReorderQty} units).`)
+                        toastSuccess(`Reorder purchase request drafted for ${item.name} (${item.recommendedReorderQty} units).`)
                       }
                       className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-semibold text-xs rounded-lg transition border border-purple-200 cursor-pointer"
                     >
@@ -837,7 +839,7 @@ export const PredictiveAnalyticsDashboard: React.FC = () => {
                 </span>
               </div>
               <button
-                onClick={() => alert('Operational alert dispatched to Nurse Coordinator.')}
+                onClick={() => toastSuccess('Operational alert dispatched to Nurse Coordinator.')}
                 className="px-3 py-1 bg-white hover:bg-slate-100 text-slate-800 font-semibold rounded-lg border border-slate-200 shadow-2xs shrink-0 cursor-pointer"
               >
                 Apply Reallocation

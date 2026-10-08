@@ -37,7 +37,7 @@ function getInitialTheme(): ThemeMode {
       applyDomTheme(saved);
       return saved;
     }
-    const legacy = localStorage.getItem('aura_theme') as ThemeMode | null;
+    const legacy = localStorage.getItem('smart_clinic_theme') as ThemeMode | null;
     if (legacy === 'light' || legacy === 'dark') {
       applyDomTheme(legacy);
       return legacy;

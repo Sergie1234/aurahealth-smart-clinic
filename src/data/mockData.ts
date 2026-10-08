@@ -12,12 +12,12 @@ import {
 } from '../types/clinic';
 
 export const INITIAL_USERS: User[] = [
-  { id: 'usr-1', name: 'Dr. Maria Cristina Reyes, MD', email: 'maria.reyes@aurahealth.clinic', role: 'doctor', avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&auto=format&fit=crop&q=80', department: 'Internal Medicine', specialty: 'Internal Medicine & Endocrinology', licenseNumber: 'MD-892410' },
-  { id: 'usr-2', name: 'Dr. Juan Miguel Santos, MD', email: 'juan.santos@aurahealth.clinic', role: 'doctor', avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=150&auto=format&fit=crop&q=80', department: 'Cardiology', specialty: 'Cardiovascular Medicine', licenseNumber: 'MD-741923' },
-  { id: 'usr-3', name: 'Nurse Ana Patricia Villanueva, RN', email: 'ana.villanueva@aurahealth.clinic', role: 'nurse', avatar: 'https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=150&auto=format&fit=crop&q=80', department: 'Outpatient Triage', licenseNumber: 'RN-382914' },
-  { id: 'usr-4', name: 'Claire Mendoza', email: 'reception@aurahealth.clinic', role: 'receptionist', avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80', department: 'Front Desk & Patient Access' },
-  { id: 'usr-5', name: 'Julian Dela Cruz, RPh', email: 'pharmacy@aurahealth.clinic', role: 'pharmacist', avatar: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=150&auto=format&fit=crop&q=80', department: 'Clinic Pharmacy & Dispensary', licenseNumber: 'RPh-102948' },
-  { id: 'usr-6', name: 'Amina Bautista, RMT', email: 'lab@aurahealth.clinic', role: 'lab_technician', avatar: 'https://images.unsplash.com/photo-1594824813682-beec138c5ec1?w=150&auto=format&fit=crop&q=80', department: 'Diagnostic Pathology & Laboratory', licenseNumber: 'RMT-559102' },
+  { id: 'usr-1', name: 'Dr. Maria Cristina Reyes, MD', email: 'maria.reyes@smartclinic.ph', role: 'doctor', avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&auto=format&fit=crop&q=80', department: 'Internal Medicine', specialty: 'Internal Medicine & Endocrinology', licenseNumber: 'MD-892410' },
+  { id: 'usr-2', name: 'Dr. Juan Miguel Santos, MD', email: 'juan.santos@smartclinic.ph', role: 'doctor', avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=150&auto=format&fit=crop&q=80', department: 'Cardiology', specialty: 'Cardiovascular Medicine', licenseNumber: 'MD-741923' },
+  { id: 'usr-3', name: 'Nurse Ana Patricia Villanueva, RN', email: 'ana.villanueva@smartclinic.ph', role: 'nurse', avatar: 'https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=150&auto=format&fit=crop&q=80', department: 'Outpatient Triage', licenseNumber: 'RN-382914' },
+  { id: 'usr-4', name: 'Claire Mendoza', email: 'reception@smartclinic.ph', role: 'receptionist', avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80', department: 'Front Desk & Patient Access' },
+  { id: 'usr-5', name: 'Julian Dela Cruz, RPh', email: 'pharmacy@smartclinic.ph', role: 'pharmacist', avatar: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=150&auto=format&fit=crop&q=80', department: 'Clinic Pharmacy & Dispensary', licenseNumber: 'RPh-102948' },
+  { id: 'usr-6', name: 'Amina Bautista, RMT', email: 'lab@smartclinic.ph', role: 'lab_technician', avatar: 'https://images.unsplash.com/photo-1594824813682-beec138c5ec1?w=150&auto=format&fit=crop&q=80', department: 'Diagnostic Pathology & Laboratory', licenseNumber: 'RMT-559102' },
   { id: 'usr-7', name: 'Admin Smart Clinic', email: 'smartclinicrealacc@gmail.com', role: 'admin', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80', department: 'Clinical Operations Administration' },
   { id: 'usr-8', name: 'Elena Vargas (Patient)', email: 'elena.vargas@example.com', role: 'patient', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80', department: 'Patient Portal' }
 ];
@@ -86,12 +86,12 @@ export const INITIAL_PATIENTS: Patient[] = [
     address: '900 University Way, Apt 412, Los Baños, Laguna',
     emergencyContact: { name: 'Rajiv Santos', relationship: 'Father', phone: '+63 921 912 8899' },
     allergies: [{ allergen: 'Codeine', severity: 'moderate', reaction: 'Nausea, severe dizziness, rash' }],
-    chronicConditions: ['Migraine with Aura', 'Iron Deficiency Anemia'],
+    chronicConditions: ['Migraine with Photophobia', 'Iron Deficiency Anemia'],
     currentMedications: ['Sumatriptan 50mg PRN at onset', 'Ferrous Sulfate 325mg PO Daily'],
     primaryDoctorId: 'usr-1', insuranceProvider: 'PhilHealth', insurancePolicyNumber: 'PH-882-9012-44',
     createdAt: '2026-04-11T13:15:00Z', tags: ['Neurology Tracking', 'Anemia Monitoring'],
     vitalsHistory: [
-      { id: 'vit-5', recordedAt: '2026-10-06T11:20:00Z', recordedBy: 'Nurse Ana Patricia Villanueva', bloodPressureSystolic: 110, bloodPressureDiastolic: 72, heartRate: 88, respiratoryRate: 16, temperature: 36.7, oxygenSaturation: 99, height: 162, weight: 52, bmi: 19.8, notes: 'Reports fatigue and episodic visual aura.' }
+      { id: 'vit-5', recordedAt: '2026-10-06T11:20:00Z', recordedBy: 'Nurse Ana Patricia Villanueva', bloodPressureSystolic: 110, bloodPressureDiastolic: 72, heartRate: 88, respiratoryRate: 16, temperature: 36.7, oxygenSaturation: 99, height: 162, weight: 52, bmi: 19.8, notes: 'Reports fatigue and episodic visual disturbances.' }
     ]
   }
 ];
