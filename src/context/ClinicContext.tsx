@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Patient, User, UserRole, Appointment, AppointmentStatus, Consultation,
   Prescription, LabTestOrder, LabResultItem, InventoryItem, Invoice,
@@ -101,6 +101,7 @@ interface ClinicContextType {
   setSearchQuery: (query: string) => void;
   supabaseInfo: { isConfigured: boolean; url: string; domain: string; hasKey: boolean };
   syncAllToSupabase: () => Promise<{ success: boolean; syncedCounts: Record<string, number>; message: string }>;
+  refreshSupabaseConfig: () => void;
 }
 
 const ClinicContext = createContext<ClinicContextType | undefined>(undefined);
@@ -734,7 +735,9 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
-  const supabaseInfo = getSupabaseConfigInfo();
+  const [supabaseRefreshKey, setSupabaseRefreshKey] = useState(0);
+  const supabaseInfo = useMemo(() => getSupabaseConfigInfo(), [supabaseRefreshKey]);
+  const refreshSupabaseConfig = () => setSupabaseRefreshKey((k) => k + 1);
 
   const syncAllToSupabase = async () => {
     const res = await syncAllClinicDataToSupabase({
@@ -812,6 +815,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setSearchQuery,
         supabaseInfo,
         syncAllToSupabase,
+        refreshSupabaseConfig,
       }}
     >
       {children}

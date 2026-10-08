@@ -1,7 +1,8 @@
--- ==============================================================================
+// Supabase PostgreSQL Schema String for Smart Clinic Outpatient Management
+export const SUPABASE_SQL_SCHEMA = `-- ==============================================================================
 -- Smart Clinic Outpatient Management System
 -- Database Schema for Supabase (PostgreSQL)
--- Project Managed by: Mr. Lloyd Christopher F. Dacles, MIS, CCIP, CLYSSB, CITSMP, DBMP, CPAA, ITPO, CDSA
+-- Aligned with Philippine Health Data Security Standards (RA 10173)
 -- ==============================================================================
 
 -- Enable UUID extension
@@ -218,4 +219,15 @@ GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
+`;
 
+export const SUPABASE_GRANT_SQL = `-- Quick Fix for Supabase Error 42501 (Permission Denied)
+-- Run this in your Supabase Dashboard -> SQL Editor -> New Query -> Run:
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
+`;

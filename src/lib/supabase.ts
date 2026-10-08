@@ -1,30 +1,158 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SUPABASE_SQL_SCHEMA, SUPABASE_GRANT_SQL } from './supabaseSchema';
 
-// Read environment variables
-const supabaseUrl =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) ||
-  (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) ||
-  (typeof process !== 'undefined' && process.env?.SUPABASE_URL) ||
-  '';
+export { SUPABASE_SQL_SCHEMA, SUPABASE_GRANT_SQL };
 
-const supabaseAnonKey =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) ||
-  (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_ANON_KEY) ||
-  (typeof process !== 'undefined' && process.env?.SUPABASE_ANON_KEY) ||
-  '';
+// Cache client instance
+let activeClient: SupabaseClient | null = null;
+let lastUrl = '';
+let lastKey = '';
+
+export const getSupabaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('smart_clinic_supabase_url');
+    if (stored) return stored.trim();
+  }
+  return (
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) ||
+    (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) ||
+    (typeof process !== 'undefined' && process.env?.SUPABASE_URL) ||
+    ''
+  ).trim();
+};
+
+export const getSupabaseAnonKey = (): string => {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('smart_clinic_supabase_anon_key');
+    if (stored) return stored.trim();
+  }
+  return (
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) ||
+    (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_ANON_KEY) ||
+    (typeof process !== 'undefined' && process.env?.SUPABASE_ANON_KEY) ||
+    ''
+  ).trim();
+};
 
 export const isSupabaseConfigured = (): boolean => {
+  const url = getSupabaseUrl();
+  const key = getSupabaseAnonKey();
   return Boolean(
-    supabaseUrl &&
-      supabaseAnonKey &&
-      !supabaseUrl.includes('your-project.supabase.co') &&
-      !supabaseAnonKey.includes('your-anon-key')
+    url &&
+    key &&
+    !url.includes('your-project.supabase.co') &&
+    !key.includes('your-anon-key')
   );
+};
+
+export const getSupabaseClient = (): SupabaseClient | null => {
+  const url = getSupabaseUrl();
+  const key = getSupabaseAnonKey();
+
+  if (!isSupabaseConfigured()) {
+    activeClient = null;
+    return null;
+  }
+
+  if (activeClient && lastUrl === url && lastKey === key) {
+    return activeClient;
+  }
+
+  try {
+    activeClient = createClient(url, key);
+    lastUrl = url;
+    lastKey = key;
+    return activeClient;
+  } catch (err) {
+    console.warn('Failed to initialize Supabase client:', err);
+    activeClient = null;
+    return null;
+  }
+};
+
+export const setSupabaseCredentials = (url: string, key: string) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('smart_clinic_supabase_url', url.trim());
+    localStorage.setItem('smart_clinic_supabase_anon_key', key.trim());
+    lastUrl = '';
+    lastKey = '';
+    getSupabaseClient();
+  }
+};
+
+export const clearSupabaseCredentials = () => {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('smart_clinic_supabase_url');
+    localStorage.removeItem('smart_clinic_supabase_anon_key');
+    activeClient = null;
+    lastUrl = '';
+    lastKey = '';
+  }
+};
+
+export const testSupabaseConnection = async (
+  testUrl?: string,
+  testKey?: string
+): Promise<{ success: boolean; message: string; tablesFound?: boolean; needsGrants?: boolean }> => {
+  const url = (testUrl || getSupabaseUrl()).trim();
+  const key = (testKey || getSupabaseAnonKey()).trim();
+
+  if (!url || !key) {
+    return { success: false, message: 'Supabase URL and Anon Key are both required.' };
+  }
+
+  try {
+    const testClient = createClient(url, key);
+    const { error } = await testClient.from('patients').select('mrn', { count: 'exact', head: true });
+
+    if (error) {
+      if (
+        error.code === '42P01' ||
+        error.message?.toLowerCase().includes('relation') ||
+        error.message?.toLowerCase().includes('not exist') ||
+        error.message?.toLowerCase().includes('not found')
+      ) {
+        return {
+          success: true,
+          tablesFound: false,
+          message: 'Connected to Supabase project! Note: Tables have not been run yet. Please execute /supabase/schema.sql in your Supabase SQL Editor.',
+        };
+      }
+
+      if (error.code === '42501' || error.message?.toLowerCase().includes('permission denied')) {
+        return {
+          success: true,
+          tablesFound: true,
+          needsGrants: true,
+          message: 'Connected to Supabase project! Tables exist, but role permissions need to be granted. Please run the GRANT query in your Supabase SQL Editor.',
+        };
+      }
+
+      return {
+        success: false,
+        message: `Supabase returned: ${error.message} (Code: ${error.code})`,
+      };
+    }
+
+    return {
+      success: true,
+      tablesFound: true,
+      message: 'Successfully verified live connection to Supabase and confirmed database tables exist!',
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: `Connection failed: ${err?.message || 'Check your URL and API Key.'}`,
+    };
+  }
 };
 
 export const getSupabaseConfigInfo = () => {
   const configured = isSupabaseConfigured();
-  let projectDomain = 'Not Configured (Demo Mode)';
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseAnonKey = getSupabaseAnonKey();
+
+  let projectDomain = 'Not Configured (In-Memory Local Mode)';
   if (supabaseUrl) {
     try {
       projectDomain = new URL(supabaseUrl).hostname;
@@ -32,44 +160,55 @@ export const getSupabaseConfigInfo = () => {
       projectDomain = supabaseUrl.slice(0, 30);
     }
   }
+
   return {
     isConfigured: configured,
-    url: supabaseUrl || 'https://your-project.supabase.co',
+    url: supabaseUrl || '',
     domain: projectDomain,
     hasKey: Boolean(supabaseAnonKey),
   };
 };
 
-export const supabase: SupabaseClient | null = isSupabaseConfigured()
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+// Dynamic client proxy ensuring activeClient is used
+export const supabase: SupabaseClient | null = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    const client = getSupabaseClient();
+    if (!client) return undefined;
+    const val = (client as any)[prop];
+    return typeof val === 'function' ? val.bind(client) : val;
+  },
+});
 
 // 1. Patient Sync
 export async function syncPatientToSupabase(patient: any) {
-  if (!supabase) return null;
+  const client = getSupabaseClient();
+  if (!client) return null;
   try {
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from('patients')
-      .upsert({
-        mrn: patient.mrn,
-        full_name: patient.fullName,
-        dob: patient.dob,
-        age: patient.age,
-        gender: patient.gender,
-        blood_type: patient.bloodType,
-        phone: patient.phone,
-        email: patient.email,
-        address: patient.address,
-        emergency_contact: patient.emergencyContact,
-        allergies: patient.allergies,
-        chronic_conditions: patient.chronicConditions,
-        current_medications: patient.currentMedications,
-        primary_doctor_id: patient.primaryDoctorId,
-        insurance_provider: patient.insuranceProvider,
-        insurance_policy_number: patient.insurancePolicyNumber,
-        vitals_history: patient.vitalsHistory,
-        tags: patient.tags,
-      }, { onConflict: 'mrn' })
+      .upsert(
+        {
+          mrn: patient.mrn,
+          full_name: patient.fullName,
+          dob: patient.dob,
+          age: patient.age,
+          gender: patient.gender,
+          blood_type: patient.bloodType,
+          phone: patient.phone,
+          email: patient.email,
+          address: patient.address,
+          emergency_contact: patient.emergencyContact,
+          allergies: patient.allergies,
+          chronic_conditions: patient.chronicConditions,
+          current_medications: patient.currentMedications,
+          primary_doctor_id: patient.primaryDoctorId,
+          insurance_provider: patient.insuranceProvider,
+          insurance_policy_number: patient.insurancePolicyNumber,
+          vitals_history: patient.vitalsHistory,
+          tags: patient.tags,
+        },
+        { onConflict: 'mrn' }
+      )
       .select();
 
     if (error) {
@@ -85,9 +224,10 @@ export async function syncPatientToSupabase(patient: any) {
 
 // 2. Appointment Sync
 export async function syncAppointmentToSupabase(appointment: any) {
-  if (!supabase) return null;
+  const client = getSupabaseClient();
+  if (!client) return null;
   try {
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from('appointments')
       .upsert({
         patient_name: appointment.patientName,
@@ -120,9 +260,10 @@ export async function syncAppointmentToSupabase(appointment: any) {
 
 // 3. Consultation Sync
 export async function syncConsultationToSupabase(consultation: any) {
-  if (!supabase) return null;
+  const client = getSupabaseClient();
+  if (!client) return null;
   try {
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from('consultations')
       .insert({
         appointment_id: consultation.appointmentId || null,
@@ -159,26 +300,30 @@ export async function syncConsultationToSupabase(consultation: any) {
 
 // 4. Prescription Sync
 export async function syncPrescriptionToSupabase(prescription: any) {
-  if (!supabase) return null;
+  const client = getSupabaseClient();
+  if (!client) return null;
   try {
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from('prescriptions')
-      .upsert({
-        prescription_number: prescription.prescriptionNumber,
-        patient_name: prescription.patientName,
-        patient_mrn: prescription.patientMrn,
-        patient_age: prescription.patientAge,
-        patient_gender: prescription.patientGender,
-        doctor_id: prescription.doctorId,
-        doctor_name: prescription.doctorName,
-        doctor_specialty: prescription.doctorSpecialty,
-        doctor_license: prescription.doctorLicense,
-        prescription_date: prescription.date,
-        items: prescription.items,
-        status: prescription.status,
-        ai_safety_audit: prescription.aiSafetyAudit,
-        notes: prescription.notes,
-      }, { onConflict: 'prescription_number' })
+      .upsert(
+        {
+          prescription_number: prescription.prescriptionNumber,
+          patient_name: prescription.patientName,
+          patient_mrn: prescription.patientMrn,
+          patient_age: prescription.patientAge,
+          patient_gender: prescription.patientGender,
+          doctor_id: prescription.doctorId,
+          doctor_name: prescription.doctorName,
+          doctor_specialty: prescription.doctorSpecialty,
+          doctor_license: prescription.doctorLicense,
+          prescription_date: prescription.date,
+          items: prescription.items,
+          status: prescription.status,
+          ai_safety_audit: prescription.aiSafetyAudit,
+          notes: prescription.notes,
+        },
+        { onConflict: 'prescription_number' }
+      )
       .select();
 
     if (error) {
@@ -194,27 +339,31 @@ export async function syncPrescriptionToSupabase(prescription: any) {
 
 // 5. Lab Order Sync
 export async function syncLabOrderToSupabase(order: any) {
-  if (!supabase) return null;
+  const client = getSupabaseClient();
+  if (!client) return null;
   try {
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from('lab_orders')
-      .upsert({
-        order_number: order.orderNumber,
-        patient_name: order.patientName,
-        patient_mrn: order.patientMrn,
-        doctor_id: order.doctorId,
-        doctor_name: order.doctorName,
-        test_name: order.testName,
-        category: order.category,
-        urgency: order.urgency,
-        status: order.status,
-        requested_at: order.requestedAt,
-        collected_at: order.collectedAt || null,
-        completed_at: order.completedAt || null,
-        results: order.results,
-        interpretation: order.interpretation || null,
-        ai_summary: order.aiSummary || null,
-      }, { onConflict: 'order_number' })
+      .upsert(
+        {
+          order_number: order.orderNumber,
+          patient_name: order.patientName,
+          patient_mrn: order.patientMrn,
+          doctor_id: order.doctorId,
+          doctor_name: order.doctorName,
+          test_name: order.testName,
+          category: order.category,
+          urgency: order.urgency,
+          status: order.status,
+          requested_at: order.requestedAt,
+          collected_at: order.collectedAt || null,
+          completed_at: order.completedAt || null,
+          results: order.results,
+          interpretation: order.interpretation || null,
+          ai_summary: order.aiSummary || null,
+        },
+        { onConflict: 'order_number' }
+      )
       .select();
 
     if (error) {
@@ -230,27 +379,31 @@ export async function syncLabOrderToSupabase(order: any) {
 
 // 6. Inventory Item Sync
 export async function syncInventoryItemToSupabase(item: any) {
-  if (!supabase) return null;
+  const client = getSupabaseClient();
+  if (!client) return null;
   try {
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from('inventory_items')
-      .upsert({
-        sku: item.sku,
-        name: item.name,
-        generic_name: item.genericName,
-        brand: item.brand,
-        category: item.category,
-        batch_number: item.batchNumber,
-        expiration_date: item.expirationDate,
-        supplier: item.supplier,
-        stock_quantity: item.stockQuantity,
-        reorder_level: item.reorderLevel,
-        purchase_price: item.purchasePrice,
-        selling_price: item.sellingPrice,
-        unit: item.unit,
-        location: item.location,
-        last_updated: item.lastUpdated,
-      }, { onConflict: 'sku' })
+      .upsert(
+        {
+          sku: item.sku,
+          name: item.name,
+          generic_name: item.genericName,
+          brand: item.brand,
+          category: item.category,
+          batch_number: item.batchNumber,
+          expiration_date: item.expirationDate,
+          supplier: item.supplier,
+          stock_quantity: item.stockQuantity,
+          reorder_level: item.reorderLevel,
+          purchase_price: item.purchasePrice,
+          selling_price: item.sellingPrice,
+          unit: item.unit,
+          location: item.location,
+          last_updated: item.lastUpdated,
+        },
+        { onConflict: 'sku' }
+      )
       .select();
 
     if (error) {
@@ -266,29 +419,33 @@ export async function syncInventoryItemToSupabase(item: any) {
 
 // 7. Invoice Sync
 export async function syncInvoiceToSupabase(invoice: any) {
-  if (!supabase) return null;
+  const client = getSupabaseClient();
+  if (!client) return null;
   try {
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from('invoices')
-      .upsert({
-        invoice_number: invoice.invoiceNumber,
-        patient_name: invoice.patientName,
-        patient_mrn: invoice.patientMrn,
-        invoice_date: invoice.date,
-        due_date: invoice.dueDate,
-        items: invoice.items,
-        subtotal: invoice.subtotal,
-        discount_percentage: invoice.discountPercentage,
-        discount_amount: invoice.discountAmount,
-        tax_amount: invoice.taxAmount,
-        total_amount: invoice.totalAmount,
-        paid_amount: invoice.paidAmount,
-        status: invoice.status,
-        payment_method: invoice.paymentMethod || null,
-        payment_date: invoice.paymentDate || null,
-        insurance_claim_status: invoice.insuranceClaimStatus || 'Not Filed',
-        notes: invoice.notes,
-      }, { onConflict: 'invoice_number' })
+      .upsert(
+        {
+          invoice_number: invoice.invoiceNumber,
+          patient_name: invoice.patientName,
+          patient_mrn: invoice.patientMrn,
+          invoice_date: invoice.date,
+          due_date: invoice.dueDate,
+          items: invoice.items,
+          subtotal: invoice.subtotal,
+          discount_percentage: invoice.discountPercentage,
+          discount_amount: invoice.discountAmount,
+          tax_amount: invoice.taxAmount,
+          total_amount: invoice.totalAmount,
+          paid_amount: invoice.paidAmount,
+          status: invoice.status,
+          payment_method: invoice.paymentMethod || null,
+          payment_date: invoice.paymentDate || null,
+          insurance_claim_status: invoice.insuranceClaimStatus || 'Not Filed',
+          notes: invoice.notes,
+        },
+        { onConflict: 'invoice_number' }
+      )
       .select();
 
     if (error) {
@@ -304,9 +461,10 @@ export async function syncInvoiceToSupabase(invoice: any) {
 
 // 8. Audit Log Sync
 export async function syncAuditLogToSupabase(log: any) {
-  if (!supabase) return null;
+  const client = getSupabaseClient();
+  if (!client) return null;
   try {
-    await supabase.from('audit_logs').insert({
+    await client.from('audit_logs').insert({
       timestamp: log.timestamp,
       user_id: log.userId,
       user_name: log.userName,
@@ -333,11 +491,12 @@ export async function syncAllClinicDataToSupabase(data: {
   invoices: any[];
   auditLogs: any[];
 }): Promise<{ success: boolean; syncedCounts: Record<string, number>; message: string }> {
-  if (!supabase) {
+  const client = getSupabaseClient();
+  if (!client) {
     return {
       success: false,
       syncedCounts: {},
-      message: 'Supabase credentials not configured. Running in Local Client & Server Mode.',
+      message: 'Supabase credentials not configured. Please enter your Supabase URL & Key in the setup form below.',
     };
   }
 
@@ -353,50 +512,42 @@ export async function syncAllClinicDataToSupabase(data: {
   };
 
   try {
-    // 1. Sync Patients
     for (const pat of data.patients) {
       const res = await syncPatientToSupabase(pat);
       if (res) counts.patients++;
     }
 
-    // 2. Sync Appointments
     for (const apt of data.appointments) {
       const res = await syncAppointmentToSupabase(apt);
       if (res) counts.appointments++;
     }
 
-    // 3. Sync Consultations
     for (const con of data.consultations) {
       const res = await syncConsultationToSupabase(con);
       if (res) counts.consultations++;
     }
 
-    // 4. Sync Prescriptions
     for (const rx of data.prescriptions) {
       const res = await syncPrescriptionToSupabase(rx);
       if (res) counts.prescriptions++;
     }
 
-    // 5. Sync Lab Orders
     for (const lab of data.labOrders) {
       const res = await syncLabOrderToSupabase(lab);
       if (res) counts.labOrders++;
     }
 
-    // 6. Sync Inventory
     for (const item of data.inventory) {
       const res = await syncInventoryItemToSupabase(item);
       if (res) counts.inventory++;
     }
 
-    // 7. Sync Invoices
     for (const inv of data.invoices) {
       const res = await syncInvoiceToSupabase(inv);
       if (res) counts.invoices++;
     }
 
-    // 8. Sync Logs
-    for (const log of data.auditLogs.slice(0, 15)) {
+    for (const log of data.auditLogs.slice(0, 20)) {
       await syncAuditLogToSupabase(log);
       counts.auditLogs++;
     }
@@ -404,7 +555,7 @@ export async function syncAllClinicDataToSupabase(data: {
     return {
       success: true,
       syncedCounts: counts,
-      message: `Successfully synchronized all active clinic entities to Supabase tables!`,
+      message: `Successfully synchronized active clinic data to Supabase PostgreSQL tables!`,
     };
   } catch (err: any) {
     return {
@@ -414,4 +565,3 @@ export async function syncAllClinicDataToSupabase(data: {
     };
   }
 }
-
