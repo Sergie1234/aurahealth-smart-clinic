@@ -508,17 +508,26 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setLabOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, results, interpretation, aiSummary, status: 'Completed', completedAt: new Date().toISOString() } : o));
   };
   const adjustStock = (itemId: string, quantityChange: number, _reason: string) => {
-    setInventory((prev) => prev.map((item) => (item.id === itemId ? { ...item, quantity: Math.max(0, item.quantity + quantityChange) } : item)));
+    setInventory((prev) => prev.map((item) => (item.id === itemId ? { ...item, stockQuantity: Math.max(0, item.stockQuantity + quantityChange) } : item)));
   };
   const addInvoice = (invData: Omit<Invoice, 'id' | 'invoiceNumber'>) => {
     const newInv: Invoice = { ...invData, id: `inv-${Date.now()}`, invoiceNumber: `INV-2026-${String(5000 + invoices.length + 1)}` };
     setInvoices((prev) => [newInv, ...prev]); syncInvoiceToSupabase(newInv); return newInv;
   };
   const payInvoice = (invoiceId: string, amount: number, method: Invoice['paymentMethod']) => {
-    setInvoices((prev) => prev.map((inv) => inv.id === invoiceId ? {
-      ...inv, amountPaid: (inv.amountPaid || 0) + amount, paymentMethod: method,
-      status: (inv.amountPaid || 0) + amount >= inv.total ? 'Paid' : 'Partial',
-    } : inv));
+    setInvoices((prev) => prev.map((inv) => {
+      if (inv.id !== invoiceId) return inv;
+      const newPaid = (inv.paidAmount || 0) + amount;
+      const isPaid = newPaid >= inv.totalAmount;
+      return {
+        ...inv,
+        paidAmount: newPaid,
+        paymentMethod: method,
+        paymentDate: new Date().toISOString(),
+        paidAt: isPaid ? new Date().toISOString() : inv.paidAt,
+        status: isPaid ? 'Paid' : 'Partially Paid',
+      };
+    }));
   };
   const markNotificationAsRead = (id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
