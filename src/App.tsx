@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ClinicProvider, useClinic } from './context/ClinicContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ThemeToggle } from './components/common/ThemeToggle';
@@ -53,9 +53,6 @@ const ClinicAppContent: React.FC = () => {
     selectPatient,
     isNavigating,
     navigatingTargetTitle,
-    isAuthenticated,
-    pendingBooking,
-    setPendingBooking,
   } = useClinic();
 
   const [showNewPatient, setShowNewPatient] = useState(false);
@@ -69,22 +66,10 @@ const ClinicAppContent: React.FC = () => {
   const [labOrderForReport, setLabOrderForReport] = useState<LabTestOrder | null>(null);
   const [consultPatientId, setConsultPatientId] = useState<string | undefined>(undefined);
 
-  useEffect(() => {
-    if (isAuthenticated && pendingBooking) {
-      setShowBookAppointment(true);
-      setPendingBooking(false);
-    }
-  }, [isAuthenticated, pendingBooking, setPendingBooking]);
-
   const handleStartConsultation = (patientId: string) => {
     setConsultPatientId(patientId);
     selectPatient(patientId);
     setActiveTab('consultations');
-  };
-
-  const handleSelectPatientProfile = (patientId: string) => {
-    const pat = patients.find((p) => p.id === patientId);
-    if (pat) setDetailPatient(pat);
   };
 
   return (
@@ -106,24 +91,17 @@ const ClinicAppContent: React.FC = () => {
             onOpenNewPatient={() => setShowNewPatient(true)}
             onOpenSupabaseModal={() => setShowSupabaseModal(true)}
           />
-
           <div className="flex-1 flex overflow-hidden">
             <Sidebar />
             <main className="flex-1 overflow-y-auto p-4 sm:p-6">
               {activeTab === 'dashboard' && primaryRole === 'patient' && (
-                <PatientDashboardView
-                  onOpenBookAppointment={() => setShowBookAppointment(true)}
-                />
+                <PatientDashboardView onOpenBookAppointment={() => setShowBookAppointment(true)} />
               )}
               {activeTab === 'dashboard' && primaryRole === 'staff' && (
-                <StaffDashboardView
-                  onOpenBookAppointment={() => setShowBookAppointment(true)}
-                />
+                <StaffDashboardView onOpenBookAppointment={() => setShowBookAppointment(true)} />
               )}
               {activeTab === 'dashboard' && primaryRole === 'doctor' && (
-                <DoctorDashboardView
-                  onOpenBookAppointment={() => setShowBookAppointment(true)}
-                />
+                <DoctorDashboardView onOpenBookAppointment={() => setShowBookAppointment(true)} />
               )}
               {activeTab === 'dashboard' && primaryRole === 'admin' && <AdminDashboardView />}
               {activeTab === 'patients' && (
@@ -136,9 +114,7 @@ const ClinicAppContent: React.FC = () => {
                 />
               )}
               {activeTab === 'appointments' && (
-                <AppointmentCalendar
-                  onOpenBookAppointment={() => setShowBookAppointment(true)}
-                />
+                <AppointmentCalendar onOpenBookAppointment={() => setShowBookAppointment(true)} />
               )}
               {activeTab === 'queue' && <QueueManager />}
               {activeTab === 'consultations' && (
