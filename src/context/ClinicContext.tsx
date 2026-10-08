@@ -49,6 +49,21 @@ export interface LoginCredentials {
   password?: string;
   subRole?: StaffSubRole;
   twoFactorCode?: string;
+  phone?: string;
+  method?: 'email' | 'phone';
+  fullName?: string;
+  isRegister?: boolean;
+}
+
+export type PendingAction = 'book' | null;
+
+export interface PatientAccount {
+  id: string;
+  fullName: string;
+  email?: string;
+  phone?: string;
+  passwordHash: string;
+  patientId: string;
 }
 
 interface ClinicContextType {
@@ -61,6 +76,14 @@ interface ClinicContextType {
   isAuthenticated: boolean;
   login: (credentials: LoginCredentials) => { success: boolean; error?: string };
   logout: () => void;
+  pendingAction: PendingAction;
+  setPendingAction: (action: PendingAction) => void;
+  requestPhoneOtp: (phone: string) => { success: boolean; demoCode?: string; error?: string };
+  verifyPhoneOtp: (phone: string, code: string) => { success: boolean; error?: string };
+  registerPatient: (input: { fullName: string; email?: string; phone?: string; password?: string }) => { success: boolean; error?: string };
+  linkedPatientId: string | null;
+  visiblePatients: Patient[];
+  myAppointments: Appointment[];
   activeTab: string;
   setActiveTab: (tab: string) => void;
   isNavigating: boolean;
@@ -110,6 +133,17 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [primaryRole, setPrimaryRole] = useState<PrimaryAuthRole | null>(null);
   const [staffSubRole, setStaffSubRole] = useState<StaffSubRole | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [linkedPatientId, setLinkedPatientId] = useState<string | null>(null);
+  const [otpStore, setOtpStore] = useState<Record<string, { code: string; expires: number }>>({});
+  const [patientAccounts, setPatientAccounts] = useState<PatientAccount[]>(() => {
+    try {
+      const saved = localStorage.getItem('aura_patient_accounts');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const ADMIN_EMAIL = 'smartclinicrealacc@gmail.com';
   const ADMIN_PASSWORD = 'SmartClinic@Admin2026';
@@ -188,6 +222,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => { localStorage.setItem('aura_patients', JSON.stringify(patients)); }, [patients]);
+  useEffect(() => { localStorage.setItem('aura_patient_accounts', JSON.stringify(patientAccounts)); }, [patientAccounts]);
   useEffect(() => { localStorage.setItem('aura_appointments', JSON.stringify(appointments)); }, [appointments]);
   useEffect(() => { localStorage.setItem('aura_consultations', JSON.stringify(consultations)); }, [consultations]);
   useEffect(() => { localStorage.setItem('aura_prescriptions', JSON.stringify(prescriptions)); }, [prescriptions]);
@@ -222,19 +257,132 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     logAction('ROLE_SWITCH', 'Security', matched.id, `User switched perspective to role: ${role}`);
   };
 
+  const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
+  const simpleHash = (value: string) => {
+    let h = 0;
+    for (let i = 0; i < value.length; i++) h = (h * 31 + value.charCodeAt(i)) >>> 0;
+    return `h${h.toString(16)}`;
+  };
+
+  const requestPhoneOtp = (phone: string) => {
+    const digits = normalizePhone(phone);
+    if (digits.length < 10) return { success: false, error: 'Enter a valid mobile number (at least 10 digits).' };
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    setOtpStore((prev) => ({ ...prev, [digits]: { code, expires: Date.now() + 10 * 60 * 1000 } }));
+    return { success: true, demoCode: code };
+  };
+
+  const verifyPhoneOtp = (phone: string, code: string) => {
+    const digits = normalizePhone(phone);
+    const entry = otpStore[digits];
+    if (!entry || entry.expires < Date.now()) return { success: false, error: 'Code expired. Request a new OTP.' };
+    if (entry.code !== code.trim()) return { success: false, error: 'Incorrect OTP code.' };
+    return { success: true };
+  };
+
+  const finishPatientSession = (accountId: string, fullName: string, email: string, patientId: string) => {
+    const patientUser: User = { id: accountId, name: fullName, email, role: 'patient' };
+    setCurrentUser(patientUser);
+    setActiveRole('patient');
+    setPrimaryRole('patient');
+    setStaffSubRole(null);
+    setIsAuthenticated(true);
+    setLinkedPatientId(patientId);
+    setSelectedPatientId(patientId);
+    setActiveTab(pendingAction === 'book' ? 'home' : 'dashboard');
+    logAction('AUTH_LOGIN', 'Security', accountId, `Patient session: ${fullName}`);
+  };
+
+  const registerPatient = (input: { fullName: string; email?: string; phone?: string; password?: string }) => {
+    const fullName = (input.fullName || '').trim();
+    if (fullName.length < 2) return { success: false, error: 'Full name is required.' };
+    const email = (input.email || '').trim().toLowerCase();
+    const phone = input.phone ? normalizePhone(input.phone) : '';
+    if (!email && !phone) return { success: false, error: 'Provide an email or phone number.' };
+    if (email && patientAccounts.some((a) => a.email === email)) {
+      return { success: false, error: 'Email already registered. Sign in instead.' };
+    }
+    if (phone && patientAccounts.some((a) => a.phone === phone)) {
+      return { success: false, error: 'Phone already registered. Sign in instead.' };
+    }
+    const patientId = `pat-${Date.now()}`;
+    const mrn = `MRN-2026-${String(patients.length + 101).padStart(3, '0')}`;
+    const newPatient: Patient = {
+      id: patientId,
+      mrn,
+      fullName,
+      dob: '1990-01-01',
+      age: 0,
+      gender: 'Other',
+      bloodType: 'O+',
+      phone: phone ? `+${phone}` : '',
+      email: email || `${phone}@phone.smartclinic.local`,
+      address: '',
+      emergencyContact: { name: fullName, relationship: 'Self', phone: phone ? `+${phone}` : '' },
+      allergies: [],
+      chronicConditions: [],
+      currentMedications: [],
+      primaryDoctorId: 'usr-1',
+      createdAt: new Date().toISOString(),
+      vitalsHistory: [],
+    };
+    setPatients((prev) => [newPatient, ...prev]);
+    const account: PatientAccount = {
+      id: `acc-${Date.now()}`,
+      fullName,
+      email: email || undefined,
+      phone: phone || undefined,
+      passwordHash: simpleHash(input.password || phone || email),
+      patientId,
+    };
+    setPatientAccounts((prev) => [...prev, account]);
+    finishPatientSession(account.id, fullName, account.email || `${phone}@phone.smartclinic.local`, patientId);
+    logAction('AUTH_REGISTER', 'Security', account.id, `Registered patient ${fullName}`);
+    return { success: true };
+  };
+
   const login = (credentials: LoginCredentials) => {
     const { primaryRole: role, subRole } = credentials;
 
     if (role === 'patient') {
+      const method = credentials.method || 'email';
+      if (credentials.isRegister) {
+        return registerPatient({
+          fullName: credentials.fullName || '',
+          email: method === 'email' ? credentials.email : undefined,
+          phone: method === 'phone' ? (credentials.phone || credentials.email) : undefined,
+          password: credentials.password,
+        });
+      }
+      if (method === 'phone') {
+        const phone = normalizePhone(credentials.phone || credentials.email || '');
+        const otp = verifyPhoneOtp(phone, credentials.twoFactorCode || '');
+        if (!otp.success) return otp;
+        const account = patientAccounts.find((a) => a.phone === phone);
+        if (!account) return { success: false, error: 'No account for this number. Create an account first.' };
+        finishPatientSession(account.id, account.fullName, account.email || `${phone}@phone.smartclinic.local`, account.patientId);
+        return { success: true };
+      }
+      const emailNorm = (credentials.email || '').trim().toLowerCase();
+      const account = patientAccounts.find((a) => a.email === emailNorm);
+      if (account) {
+        if (account.passwordHash !== simpleHash(credentials.password || '')) {
+          return { success: false, error: 'Incorrect password.' };
+        }
+        finishPatientSession(account.id, account.fullName, account.email || emailNorm, account.patientId);
+        return { success: true };
+      }
+      // Demo fallback patient
       const patientUser = users.find((u) => u.role === 'patient') || users[users.length - 1];
       setCurrentUser(patientUser);
       setActiveRole('patient');
       setPrimaryRole('patient');
       setStaffSubRole(null);
       setIsAuthenticated(true);
+      setLinkedPatientId('pat-1');
       setSelectedPatientId('pat-1');
-      setActiveTab('dashboard');
-      logAction('AUTH_LOGIN', 'Security', patientUser.id, 'Patient authenticated.');
+      setActiveTab(pendingAction === 'book' ? 'home' : 'dashboard');
+      logAction('AUTH_LOGIN', 'Security', patientUser.id, 'Patient authenticated (demo).');
       return { success: true };
     }
 
@@ -302,13 +450,26 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setIsAuthenticated(false);
     setPrimaryRole(null);
     setStaffSubRole(null);
+    setLinkedPatientId(null);
+    setPendingAction(null);
     setActiveRole('patient');
     setActiveTab('login');
   };
 
+  const visiblePatients =
+    primaryRole === 'patient' && linkedPatientId
+      ? patients.filter((p) => p.id === linkedPatientId)
+      : patients;
+
+  const myAppointments =
+    primaryRole === 'patient' && linkedPatientId
+      ? appointments.filter((a) => a.patientId === linkedPatientId)
+      : appointments;
+
   const selectedPatient = patients.find((p) => p.id === selectedPatientId) || null;
 
   const selectPatient = (id: string | null) => {
+    if (primaryRole === 'patient' && linkedPatientId && id && id !== linkedPatientId) return;
     setSelectedPatientId(id);
   };
 
@@ -330,6 +491,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const updatePatient = (id: string, updates: Partial<Patient>) => {
+    if (primaryRole === 'patient' && linkedPatientId && id !== linkedPatientId) return;
     setPatients((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
   };
 
@@ -339,6 +501,9 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const addAppointment = (aptData: Omit<Appointment, 'id' | 'createdAt'>) => {
+    if (primaryRole === 'patient' && linkedPatientId && aptData.patientId !== linkedPatientId) {
+      aptData = { ...aptData, patientId: linkedPatientId };
+    }
     const queueChar = aptData.department.startsWith('Cardio') ? 'B' : 'A';
     const queueNum = `${queueChar}-${100 + appointments.length + 1}`;
     const newApt: Appointment = { ...aptData, id: `apt-${Date.now()}`, queueNumber: queueNum, createdAt: new Date().toISOString() };
@@ -471,6 +636,14 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isAuthenticated,
         login,
         logout,
+        pendingAction,
+        setPendingAction,
+        requestPhoneOtp,
+        verifyPhoneOtp,
+        registerPatient,
+        linkedPatientId,
+        visiblePatients,
+        myAppointments,
         activeTab,
         setActiveTab,
         isNavigating,
@@ -518,6 +691,6 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
 export const useClinic = () => {
   const context = useContext(ClinicContext);
-  if (!context) throw new Error('useClinic must be used within a ClinicProvider');
+  if (!context) throw new Error('useClinic must be used within ClinicProvider');
   return context;
 };
