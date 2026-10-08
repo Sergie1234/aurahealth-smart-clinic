@@ -56,8 +56,8 @@ interface ClinicContextType {
   logout: () => void;
   pendingAction: PendingAction;
   setPendingAction: (action: PendingAction) => void;
-  requestPhoneOtp: (phone: string, purpose?: 'patient_login' | 'patient_register') => Promise<{ success: boolean; error?: string }>;
-  requestEmailOtp: (email: string, purpose?: 'patient_login' | 'patient_register' | 'admin_2fa') => Promise<{ success: boolean; error?: string }>;
+  requestPhoneOtp: (phone: string, purpose?: 'patient_login' | 'patient_register') => Promise<{ success: boolean; error?: string; code?: string; liveDispatched?: boolean; devNotice?: string }>;
+  requestEmailOtp: (email: string, purpose?: 'patient_login' | 'patient_register' | 'admin_2fa') => Promise<{ success: boolean; error?: string; code?: string; liveDispatched?: boolean; devNotice?: string }>;
   verifyServerOtp: (input: { channel: 'email' | 'sms'; destination: string; code: string }) => Promise<{ success: boolean; error?: string }>;
   registerPatient: (input: { fullName: string; email?: string; phone?: string; password?: string }) => { success: boolean; error?: string };
   linkedPatientId: string | null;
@@ -317,7 +317,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
       const data = await res.json();
       if (!res.ok || !data.success) return { success: false, error: data.error || 'Failed to dispatch SMS OTP.' };
-      return { success: true };
+      return data;
     } catch {
       return { success: false, error: 'Network error contacting SMS service. Please try again.' };
     }
@@ -337,7 +337,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
       const data = await res.json();
       if (!res.ok || !data.success) return { success: false, error: data.error || 'Failed to dispatch email OTP.' };
-      return { success: true };
+      return data;
     } catch {
       return { success: false, error: 'Network error contacting SMTP service. Please try again.' };
     }

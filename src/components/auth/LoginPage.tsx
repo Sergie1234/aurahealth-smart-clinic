@@ -47,6 +47,8 @@ export const LoginPage: React.FC = () => {
   // UI state
   const [otpSent, setOtpSent] = useState(false);
   const [admin2FaSent, setAdmin2FaSent] = useState(false);
+  const [generatedCode, setGeneratedCode] = useState<string>('');
+  const [isLiveDispatched, setIsLiveDispatched] = useState<boolean>(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -75,7 +77,16 @@ export const LoginPage: React.FC = () => {
         return;
       }
       setOtpSent(true);
-      toastSuccess(`SMS verification code dispatched to ${cleanPhone}.`);
+      if (res.code) {
+        setOtpCode(res.code);
+        setGeneratedCode(res.code);
+      }
+      setIsLiveDispatched(Boolean(res.liveDispatched));
+      if (res.liveDispatched) {
+        toastSuccess(`SMS verification code dispatched via carrier to ${cleanPhone}.`);
+      } else {
+        toastInfo(`Code generated: ${res.code || '123456'} (auto-filled for instant verification).`);
+      }
     } else {
       const cleanEmail = email.trim().toLowerCase();
       if (!cleanEmail || !cleanEmail.includes('@')) {
@@ -91,7 +102,16 @@ export const LoginPage: React.FC = () => {
         return;
       }
       setOtpSent(true);
-      toastSuccess(`Verification email dispatched from smartclinicrealacc@gmail.com to ${cleanEmail}.`);
+      if (res.code) {
+        setOtpCode(res.code);
+        setGeneratedCode(res.code);
+      }
+      setIsLiveDispatched(Boolean(res.liveDispatched));
+      if (res.liveDispatched) {
+        toastSuccess(`Verification email dispatched from smartclinicrealacc@gmail.com to ${cleanEmail}.`);
+      } else {
+        toastInfo(`Code generated: ${res.code || '123456'} (auto-filled for instant verification).`);
+      }
     }
   };
 
@@ -107,7 +127,16 @@ export const LoginPage: React.FC = () => {
       return;
     }
     setAdmin2FaSent(true);
-    toastSuccess('Real 2FA Security Code dispatched to smartclinicrealacc@gmail.com.');
+    if (res.code) {
+      setTwoFactorCode(res.code);
+      setGeneratedCode(res.code);
+    }
+    setIsLiveDispatched(Boolean(res.liveDispatched));
+    if (res.liveDispatched) {
+      toastSuccess('Real 2FA Security Code dispatched to smartclinicrealacc@gmail.com.');
+    } else {
+      toastInfo(`Admin 2FA code ${res.code || '123456'} generated and auto-filled.`);
+    }
   };
 
   // Handle Form Submission
@@ -118,11 +147,7 @@ export const LoginPage: React.FC = () => {
 
     // Patient Validation
     if (isPatient) {
-      if (mode === 'login' && !otpSent && !password) {
-        setError('Please click "Send Verification Code" first to receive your OTP.');
-        setLoading(false);
-        return;
-      }
+      const finalCode = (otpCode || generatedCode || '123456').trim();
 
       const res = await login({
         primaryRole: 'patient',
@@ -130,7 +155,7 @@ export const LoginPage: React.FC = () => {
         phone: method === 'phone' ? phone : undefined,
         method,
         password: password || undefined,
-        twoFactorCode: otpCode,
+        twoFactorCode: finalCode,
         fullName: mode === 'register' ? fullName : undefined,
         isRegister: mode === 'register',
       });
@@ -187,17 +212,13 @@ export const LoginPage: React.FC = () => {
 
     // Admin Login with 2FA
     if (isAdmin) {
-      if (!twoFactorCode) {
-        setError('Mandatory 2FA code required. Please enter the security code sent to smartclinicrealacc@gmail.com.');
-        setLoading(false);
-        return;
-      }
+      const finalAdminCode = (twoFactorCode || generatedCode || '123456').trim();
 
       const res = await login({
         primaryRole: 'admin',
         email: 'smartclinicrealacc@gmail.com',
         password: password || 'SmartClinic@Admin2026',
-        twoFactorCode,
+        twoFactorCode: finalAdminCode,
       });
 
       setLoading(false);
@@ -472,22 +493,68 @@ export const LoginPage: React.FC = () => {
             )}
 
             {/* Patient OTP Input */}
-            {isPatient && otpSent && (
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">6-Digit Verification Code</label>
+            {isPatient && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold text-slate-700 dark:text-slate-300">
+                    6-Digit Verification Code
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOtpCode('123456');
+                      setOtpSent(true);
+                    }}
+                    className="text-[11px] font-bold text-teal-600 hover:text-teal-700 dark:text-teal-400 hover:underline cursor-pointer"
+                  >
+                    Quick Test Code (123456)
+                  </button>
+                </div>
+
                 <div className="relative">
                   <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
                     inputMode="numeric"
-                    required
                     maxLength={6}
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value)}
-                    placeholder="Enter 6-digit code"
+                    placeholder="Enter 6-digit code (e.g. 123456)"
                     className="w-full rounded-xl border border-teal-400 dark:border-teal-700 bg-teal-50/20 dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-3 py-2.5 text-xs font-mono font-bold tracking-widest focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
+
+                {otpSent && (
+                  <div className="p-2.5 rounded-xl bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 text-[11px] text-teal-900 dark:text-teal-200 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                      <span>
+                        {isLiveDispatched ? (
+                          'Code dispatched to your carrier / inbox.'
+                        ) : (
+                          <>
+                            Active Verification Code: <strong className="font-mono text-teal-700 dark:text-teal-300 bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border border-teal-200 dark:border-teal-700">{otpCode || generatedCode || '123456'}</strong>
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    {(!otpCode || otpCode !== (generatedCode || '123456')) && (
+                      <button
+                        type="button"
+                        onClick={() => setOtpCode(generatedCode || '123456')}
+                        className="px-2 py-0.5 rounded bg-teal-600 hover:bg-teal-700 text-white font-bold text-[10px] shrink-0 cursor-pointer"
+                      >
+                        Auto-fill
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {!isLiveDispatched && (
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    💡 Tip: Real carrier SMS & Email require Twilio / SMTP keys in <code className="font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">.env</code>. The system provides immediate code auto-fill or testing code <strong className="font-mono text-slate-700 dark:text-slate-300">123456</strong>.
+                  </p>
+                )}
               </div>
             )}
 
@@ -516,32 +583,54 @@ export const LoginPage: React.FC = () => {
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <label className="font-bold text-slate-800 dark:text-slate-200">Admin 2FA Security Code</label>
-                  <button
-                    type="button"
-                    onClick={handleSendAdmin2FA}
-                    disabled={loading}
-                    className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition disabled:opacity-60"
-                  >
-                    <Send className="w-3 h-3" />
-                    <span>{admin2FaSent ? 'Resend 2FA Code' : 'Send 2FA Code'}</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTwoFactorCode('123456');
+                        setAdmin2FaSent(true);
+                      }}
+                      className="text-[11px] font-bold text-amber-600 hover:text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+                    >
+                      Test Code (123456)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSendAdmin2FA}
+                      disabled={loading}
+                      className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition disabled:opacity-60"
+                    >
+                      <Send className="w-3 h-3" />
+                      <span>{admin2FaSent ? 'Resend' : 'Send 2FA Code'}</span>
+                    </button>
+                  </div>
                 </div>
                 <div className="relative">
                   <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
-                    required
                     maxLength={6}
                     value={twoFactorCode}
                     onChange={(e) => setTwoFactorCode(e.target.value)}
-                    placeholder="Enter 6-digit code received by email"
+                    placeholder="Enter 6-digit code (e.g. 123456)"
                     className="w-full rounded-xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-3 py-2.5 text-xs font-mono font-bold tracking-widest focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
                 {admin2FaSent && (
-                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-                    ✓ Security code dispatched to smartclinicrealacc@gmail.com.
-                  </p>
+                  <div className="p-2 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-900 dark:text-amber-200 flex items-center justify-between">
+                    <span>
+                      Active 2FA Code: <strong className="font-mono text-amber-700 dark:text-amber-300 bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-700">{twoFactorCode || generatedCode || '123456'}</strong>
+                    </span>
+                    {(!twoFactorCode || twoFactorCode !== (generatedCode || '123456')) && (
+                      <button
+                        type="button"
+                        onClick={() => setTwoFactorCode(generatedCode || '123456')}
+                        className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] cursor-pointer"
+                      >
+                        Auto-fill
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -581,72 +670,121 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Quick Demo Fillers for testing */}
+          {/* Quick Demo Accounts for Testing */}
           <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-            <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-2 text-center">
-              Quick Provider & Role Shortcuts
-            </p>
-            <div className="flex flex-wrap gap-1.5 justify-center">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
+                1-Click Demo Accounts
+              </p>
+              <span className="text-[10px] font-medium text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 px-2 py-0.5 rounded-full border border-teal-200 dark:border-teal-800">
+                Universal Test Code: 123456
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mb-3">
               <button
                 type="button"
                 onClick={() => {
+                  setError('');
                   setPrimaryRole('patient');
                   setMethod('email');
                   setEmail('elena.vargas@example.com');
                   setMode('login');
                   setOtpSent(true);
                   setOtpCode('123456');
+                  setGeneratedCode('123456');
                 }}
-                className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-teal-50 dark:hover:bg-teal-900/40 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-medium transition cursor-pointer"
+                className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
-                Patient Demo
+                <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Patient</div>
+                <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">elena.vargas@example.com</div>
+                <div className="text-[9px] font-mono text-teal-600 dark:text-teal-400">Code: 123456</div>
               </button>
+
               <button
                 type="button"
                 onClick={() => {
+                  setError('');
                   setPrimaryRole('doctor');
                   setEmail('maria.reyes@smartclinic.ph');
                   setPassword('doctor123');
                 }}
-                className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-teal-50 dark:hover:bg-teal-900/40 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-medium transition cursor-pointer"
+                className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
-                Dr. Reyes (MD)
+                <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Doctor (MD)</div>
+                <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">maria.reyes@smartclinic.ph</div>
+                <div className="text-[9px] font-mono text-teal-600 dark:text-teal-400">Pass: doctor123</div>
               </button>
+
               <button
                 type="button"
                 onClick={() => {
+                  setError('');
                   setPrimaryRole('staff');
                   setStaffSubRole('nurse');
                   setEmail('ana.villanueva@smartclinic.ph');
                   setPassword('nurse123');
                 }}
-                className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-teal-50 dark:hover:bg-teal-900/40 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-medium transition cursor-pointer"
+                className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
-                Nurse Triage
+                <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Nurse Triage</div>
+                <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">ana.villanueva@smartclinic.ph</div>
+                <div className="text-[9px] font-mono text-teal-600 dark:text-teal-400">Pass: nurse123</div>
               </button>
+
               <button
                 type="button"
                 onClick={() => {
+                  setError('');
                   setPrimaryRole('staff');
                   setStaffSubRole('pharmacist');
                   setEmail('pharmacy@smartclinic.ph');
                   setPassword('pharm123');
                 }}
-                className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-teal-50 dark:hover:bg-teal-900/40 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-medium transition cursor-pointer"
+                className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
-                Pharmacist
+                <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Pharmacist</div>
+                <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">pharmacy@smartclinic.ph</div>
+                <div className="text-[9px] font-mono text-teal-600 dark:text-teal-400">Pass: pharm123</div>
               </button>
+
               <button
                 type="button"
                 onClick={() => {
-                  setPrimaryRole('admin');
-                  setPassword('SmartClinic@Admin2026');
+                  setError('');
+                  setPrimaryRole('staff');
+                  setStaffSubRole('receptionist');
+                  setEmail('reception@smartclinic.ph');
+                  setPassword('reception123');
                 }}
-                className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-teal-50 dark:hover:bg-teal-900/40 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-medium transition cursor-pointer"
+                className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
-                Admin 2FA
+                <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Receptionist</div>
+                <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">reception@smartclinic.ph</div>
+                <div className="text-[9px] font-mono text-teal-600 dark:text-teal-400">Pass: reception123</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setError('');
+                  setPrimaryRole('admin');
+                  setEmail('smartclinicrealacc@gmail.com');
+                  setPassword('SmartClinic@Admin2026');
+                  setTwoFactorCode('123456');
+                  setAdmin2FaSent(true);
+                  setGeneratedCode('123456');
+                }}
+                className="p-2 rounded-xl border border-amber-300 dark:border-amber-700/60 bg-amber-50/50 dark:bg-amber-950/30 hover:border-amber-500 text-left transition cursor-pointer"
+              >
+                <div className="text-[11px] font-bold text-amber-900 dark:text-amber-200">Admin 2FA</div>
+                <div className="text-[9px] text-amber-700 dark:text-amber-300 truncate">smartclinicrealacc@gmail.com</div>
+                <div className="text-[9px] font-mono text-amber-800 dark:text-amber-300">Pass: SmartClinic@Admin2026</div>
               </button>
             </div>
+            <p className="text-[10px] text-center text-slate-400">
+              Click any demo account above to auto-fill the login form, then click the submit button.
+            </p>
           </div>
 
           <button
