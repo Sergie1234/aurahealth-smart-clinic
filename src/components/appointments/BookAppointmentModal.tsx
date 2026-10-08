@@ -17,9 +17,14 @@ const labelClass =
   'font-semibold text-slate-700 dark:text-slate-200 block mb-1 text-xs';
 
 export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClose }) => {
-  const { patients, users, addAppointment } = useClinic();
+  const { patients, users, addAppointment, primaryRole, linkedPatientId, visiblePatients } = useClinic();
 
-  const [selectedPatId, setSelectedPatId] = useState(initialPatientId || patients[0]?.id || '');
+  const isPatientLocked = primaryRole === 'patient' && !!linkedPatientId;
+  const patientOptions = isPatientLocked ? visiblePatients : patients;
+
+  const [selectedPatId, setSelectedPatId] = useState(
+    (isPatientLocked ? linkedPatientId : null) || initialPatientId || patientOptions[0]?.id || ''
+  );
   const [selectedDocId, setSelectedDocId] = useState('usr-1');
   const [date, setDate] = useState('2026-10-06');
   const [time, setTime] = useState('14:30');
@@ -30,7 +35,8 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
   const [room, setRoom] = useState('Room 302');
 
   const doctors = users.filter((u) => u.role === 'doctor');
-  const selectedPatient = patients.find((p) => p.id === selectedPatId);
+  const effectivePatId = isPatientLocked ? (linkedPatientId || selectedPatId) : selectedPatId;
+  const selectedPatient = patientOptions.find((p) => p.id === effectivePatId) || patients.find((p) => p.id === effectivePatId);
   const selectedDoctor = doctors.find((d) => d.id === selectedDocId);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -87,16 +93,22 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
             <label className={labelClass}>Patient Record *</label>
             <select
               required
-              value={selectedPatId}
-              onChange={(e) => setSelectedPatId(e.target.value)}
-              className={fieldClass}
+              value={effectivePatId}
+              onChange={(e) => !isPatientLocked && setSelectedPatId(e.target.value)}
+              disabled={isPatientLocked}
+              className={fieldClass + (isPatientLocked ? ' opacity-90 cursor-not-allowed' : '')}
             >
-              {patients.map((p) => (
+              {patientOptions.map((p) => (
                 <option key={p.id} value={p.id} className="bg-white text-slate-900 dark:bg-slate-800 dark:text-slate-100">
                   {p.fullName} (MRN: {p.mrn}) - {p.age}y {p.gender}
                 </option>
               ))}
             </select>
+            {isPatientLocked && (
+              <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+                Privacy: you can only book under your own patient record.
+              </p>
+            )}
           </div>
 
           <div>
@@ -143,29 +155,15 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className={labelClass}>Date</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className={fieldClass}
-              />
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={fieldClass} />
             </div>
             <div>
               <label className={labelClass}>Time</label>
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className={fieldClass}
-              />
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={fieldClass} />
             </div>
             <div>
               <label className={labelClass}>Duration</label>
-              <select
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className={fieldClass}
-              >
+              <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className={fieldClass}>
                 <option value={15}>15 Minutes</option>
                 <option value={30}>30 Minutes</option>
                 <option value={45}>45 Minutes</option>
