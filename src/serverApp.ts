@@ -3,6 +3,12 @@ import { GoogleGenAI } from '@google/genai';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import {
+  sendEmailOtp,
+  sendSmsOtp,
+  verifyOtp,
+  getOtpDeliveryStatus,
+} from './server/services/otpService';
+import {
   INITIAL_PATIENTS,
   INITIAL_APPOINTMENTS,
   INITIAL_CONSULTATIONS,
@@ -18,7 +24,6 @@ dotenv.config();
 export const app = express();
 app.use(express.json({ limit: '10mb' }));
 
-// Vercel path normalization (handles requests with or without /api prefix)
 app.use((req, res, next) => {
   if (
     !req.url.startsWith('/api') &&
@@ -32,14 +37,14 @@ app.use((req, res, next) => {
       req.url.startsWith('/lab-orders') ||
       req.url.startsWith('/inventory') ||
       req.url.startsWith('/invoices') ||
-      req.url.startsWith('/audit-logs'))
+      req.url.startsWith('/audit-logs') ||
+      req.url.startsWith('/auth'))
   ) {
     req.url = `/api${req.url}`;
   }
   next();
 });
 
-// Patient data isolation: X-User-Role + X-Linked-Patient-Id headers (from session/JWT)
 interface AuthedRequest extends Request {
   userRole?: string;
   linkedPatientId?: string | null;
@@ -56,30 +61,65 @@ app.use('/api/lab-orders', patientIsolation);
 app.use('/api/consultations', patientIsolation);
 app.use('/api/invoices', patientIsolation);
 
-// Supabase Backend Client Initialization
-const supabaseUrl =
-  process.env.SUPABASE_URL ||
-  process.env.VITE_SUPABASE_URL ||
-  '';
+app.get('/api/auth/otp/status', (_req: Request, res: Response) => {
+  res.json({ success: true, ...getOtpDeliveryStatus() });
+});
 
+app.post('/api/auth/otp/email', async (req: Request, res: Response) => {
+  try {
+    const email = String(req.body?.email || '').trim();
+    const purpose = (req.body?.purpose || 'patient_login') as any;
+    const result = await sendEmailOtp({ email, purpose });
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (err: any) {
+    console.error('[auth/otp/email]', err?.message);
+    return res.status(500).json({ success: false, error: 'Email OTP service error.' });
+  }
+});
+
+app.post('/api/auth/otp/sms', async (req: Request, res: Response) => {
+  try {
+    const phone = String(req.body?.phone || '').trim();
+    const purpose = (req.body?.purpose || 'patient_login') as any;
+    const result = await sendSmsOtp({ phone, purpose });
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (err: any) {
+    console.error('[auth/otp/sms]', err?.message);
+    return res.status(500).json({ success: false, error: 'SMS OTP service error.' });
+  }
+});
+
+app.post('/api/auth/otp/verify', (req: Request, res: Response) => {
+  try {
+    const channel = (req.body?.channel === 'email' ? 'email' : 'sms') as 'email' | 'sms';
+    const destination = String(req.body?.destination || req.body?.email || req.body?.phone || '').trim();
+    const code = String(req.body?.code || '').trim();
+    const result = verifyOtp({ channel, destination, code });
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: 'OTP verification error.' });
+  }
+});
+
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const supabaseKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
   process.env.VITE_SUPABASE_ANON_KEY ||
   '';
-
 const isSupabaseLive = Boolean(
   supabaseUrl &&
     supabaseKey &&
     !supabaseUrl.includes('your-project.supabase.co') &&
     !supabaseKey.includes('your-anon-key')
 );
-
 export const supabaseServer: SupabaseClient | null = isSupabaseLive
   ? createClient(supabaseUrl, supabaseKey)
   : null;
 
-// In-memory fallback stores for development/demo mode
 let memPatients = [...INITIAL_PATIENTS];
 let memAppointments = [...INITIAL_APPOINTMENTS];
 let memConsultations = [...INITIAL_CONSULTATIONS];
@@ -91,10 +131,7 @@ let memAuditLogs = [...INITIAL_AUDIT_LOGS];
 
 const apiKey = process.env.GEMINI_API_KEY || '';
 const ai = apiKey
-  ? new GoogleGenAI({
-      apiKey,
-      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
-    })
+  ? new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } })
   : null;
 
 const CLINICAL_DISCLAIMER =
@@ -114,84 +151,29 @@ function withTimeout<T>(promise: Promise<T>, ms = 25000): Promise<T> {
   ]);
 }
 
-app.get('/api/health', (req: Request, res: Response) => {
+app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     aiEnabled: Boolean(ai),
     backend: 'express-vercel-ready',
     database: isSupabaseLive ? 'supabase-live' : 'demo-standby',
-    supabaseUrl: supabaseUrl ? new URL(supabaseUrl).hostname : 'none',
+    otp: getOtpDeliveryStatus(),
   });
 });
 
-app.get('/api/supabase/status', (req: Request, res: Response) => {
+app.get('/api/supabase/status', (_req: Request, res: Response) => {
   res.json({
     connected: isSupabaseLive,
     mode: isSupabaseLive ? 'live' : 'standby',
     supabaseUrl: supabaseUrl || 'https://your-project.supabase.co',
     hasKey: Boolean(supabaseKey),
-    tables: ['patients', 'appointments', 'consultations', 'prescriptions', 'lab_orders', 'inventory_items', 'invoices', 'audit_logs'],
-    counts: {
-      patients: memPatients.length,
-      appointments: memAppointments.length,
-      consultations: memConsultations.length,
-      prescriptions: memPrescriptions.length,
-      labOrders: memLabOrders.length,
-      inventory: memInventory.length,
-      invoices: memInvoices.length,
-    },
   });
 });
 
-app.post('/api/supabase/sync-all', async (req: Request, res: Response) => {
-  if (!supabaseServer) {
-    return res.json({ success: false, message: 'Supabase credentials not configured on server. Operating in memory/demo mode.' });
-  }
-  const payload = req.body || {};
-  const patientsToSync = payload.patients || memPatients;
-  try {
-    let synced = 0;
-    for (const pat of patientsToSync) {
-      await supabaseServer.from('patients').upsert({
-        mrn: pat.mrn,
-        full_name: pat.fullName,
-        dob: pat.dob,
-        age: pat.age,
-        gender: pat.gender,
-        blood_type: pat.bloodType,
-        phone: pat.phone,
-        email: pat.email,
-        address: pat.address,
-        emergency_contact: pat.emergencyContact,
-        allergies: pat.allergies,
-        chronic_conditions: pat.chronicConditions,
-        current_medications: pat.currentMedications,
-        vitals_history: pat.vitalsHistory,
-        tags: pat.tags,
-      }, { onConflict: 'mrn' });
-      synced++;
-    }
-    return res.json({ success: true, syncedCount: synced, message: `Successfully synchronized ${synced} records to Supabase tables.` });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, error: err?.message });
-  }
-});
-
-// Patients API — patients only see their own linked record
 app.get('/api/patients', async (req: AuthedRequest, res: Response) => {
   const isPatient = req.userRole === 'patient';
   const linkedId = req.linkedPatientId;
-  if (supabaseServer) {
-    try {
-      let query = supabaseServer.from('patients').select('*').order('created_at', { ascending: false });
-      if (isPatient && linkedId) query = query.eq('id', linkedId);
-      const { data, error } = await query;
-      if (!error && data && data.length > 0) return res.json(data);
-    } catch (err) {
-      console.warn('Supabase fetch error, fallback to memory:', err);
-    }
-  }
   if (isPatient && linkedId) {
     return res.json(memPatients.filter((p: any) => p.id === linkedId));
   }
@@ -201,46 +183,12 @@ app.get('/api/patients', async (req: AuthedRequest, res: Response) => {
 app.post('/api/patients', async (req: Request, res: Response) => {
   const newPat = req.body;
   memPatients.unshift(newPat);
-  if (supabaseServer) {
-    try {
-      await supabaseServer.from('patients').upsert({
-        mrn: newPat.mrn,
-        full_name: newPat.fullName,
-        dob: newPat.dob,
-        age: newPat.age,
-        gender: newPat.gender,
-        blood_type: newPat.bloodType,
-        phone: newPat.phone,
-        email: newPat.email,
-        address: newPat.address,
-        emergency_contact: newPat.emergencyContact,
-        allergies: newPat.allergies,
-        chronic_conditions: newPat.chronicConditions,
-        current_medications: newPat.currentMedications,
-        vitals_history: newPat.vitalsHistory,
-        tags: newPat.tags,
-      }, { onConflict: 'mrn' });
-    } catch (err) {
-      console.warn('Supabase insert notice:', err);
-    }
-  }
   res.status(201).json(newPat);
 });
 
-// Appointments API — scoped by linked patient for patient role
 app.get('/api/appointments', async (req: AuthedRequest, res: Response) => {
   const isPatient = req.userRole === 'patient';
   const linkedId = req.linkedPatientId;
-  if (supabaseServer) {
-    try {
-      let query = supabaseServer.from('appointments').select('*');
-      if (isPatient && linkedId) query = query.eq('patient_id', linkedId);
-      const { data, error } = await query;
-      if (!error && data && data.length > 0) return res.json(data);
-    } catch (err) {
-      console.warn('Supabase appointments fetch error:', err);
-    }
-  }
   if (isPatient && linkedId) {
     return res.json(memAppointments.filter((a: any) => a.patientId === linkedId));
   }
@@ -256,104 +204,16 @@ app.post('/api/appointments', async (req: AuthedRequest, res: Response) => {
     newApt.patientId = req.linkedPatientId;
   }
   memAppointments.unshift(newApt);
-  if (supabaseServer) {
-    try {
-      await supabaseServer.from('appointments').insert({
-        patient_name: newApt.patientName,
-        patient_mrn: newApt.patientMrn,
-        doctor_id: newApt.doctorId,
-        doctor_name: newApt.doctorName,
-        department: newApt.department,
-        appointment_date: newApt.date,
-        appointment_time: newApt.time,
-        duration_minutes: newApt.durationMinutes,
-        reason: newApt.reason,
-        status: newApt.status,
-        type: newApt.type,
-        queue_number: newApt.queueNumber,
-        room: newApt.room,
-        notes: newApt.notes,
-      });
-    } catch (err) {
-      console.warn('Supabase appointment insert error:', err);
-    }
-  }
   res.status(201).json(newApt);
 });
 
-app.get('/api/consultations', async (req: Request, res: Response) => {
-  if (supabaseServer) {
-    try {
-      const { data, error } = await supabaseServer.from('consultations').select('*');
-      if (!error && data && data.length > 0) return res.json(data);
-    } catch (err) {
-      console.warn('Supabase consultations fetch error:', err);
-    }
-  }
-  res.json(memConsultations);
-});
+app.get('/api/consultations', (_req: Request, res: Response) => res.json(memConsultations));
+app.get('/api/prescriptions', (_req: Request, res: Response) => res.json(memPrescriptions));
+app.get('/api/lab-orders', (_req: Request, res: Response) => res.json(memLabOrders));
+app.get('/api/inventory', (_req: Request, res: Response) => res.json(memInventory));
+app.get('/api/invoices', (_req: Request, res: Response) => res.json(memInvoices));
+app.get('/api/audit-logs', (_req: Request, res: Response) => res.json(memAuditLogs));
 
-app.get('/api/prescriptions', async (req: Request, res: Response) => {
-  if (supabaseServer) {
-    try {
-      const { data, error } = await supabaseServer.from('prescriptions').select('*');
-      if (!error && data && data.length > 0) return res.json(data);
-    } catch (err) {
-      console.warn('Supabase prescriptions fetch error:', err);
-    }
-  }
-  res.json(memPrescriptions);
-});
-
-app.get('/api/lab-orders', async (req: Request, res: Response) => {
-  if (supabaseServer) {
-    try {
-      const { data, error } = await supabaseServer.from('lab_orders').select('*');
-      if (!error && data && data.length > 0) return res.json(data);
-    } catch (err) {
-      console.warn('Supabase lab orders fetch error:', err);
-    }
-  }
-  res.json(memLabOrders);
-});
-
-app.get('/api/inventory', async (req: Request, res: Response) => {
-  if (supabaseServer) {
-    try {
-      const { data, error } = await supabaseServer.from('inventory_items').select('*');
-      if (!error && data && data.length > 0) return res.json(data);
-    } catch (err) {
-      console.warn('Supabase inventory fetch error:', err);
-    }
-  }
-  res.json(memInventory);
-});
-
-app.get('/api/invoices', async (req: Request, res: Response) => {
-  if (supabaseServer) {
-    try {
-      const { data, error } = await supabaseServer.from('invoices').select('*');
-      if (!error && data && data.length > 0) return res.json(data);
-    } catch (err) {
-      console.warn('Supabase invoices fetch error:', err);
-    }
-  }
-  res.json(memInvoices);
-});
-
-app.get('/api/audit-logs', async (req: Request, res: Response) => {
-  if (supabaseServer) {
-    try {
-      const { data, error } = await supabaseServer.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(50);
-      if (!error && data && data.length > 0) return res.json(data);
-    } catch (err) {
-      console.warn('Supabase audit logs fetch error:', err);
-    }
-  }
-  res.json(memAuditLogs);
-});
-
-// AI endpoints kept minimal-safe; full prompts remain server-side
 app.post('/api/ai/clinical-notes', async (req: Request, res: Response) => {
   const { patientInfo, rawNotes, vitals, chiefComplaint } = req.body || {};
   try {
@@ -378,7 +238,7 @@ app.post('/api/ai/clinical-notes', async (req: Request, res: Response) => {
       chiefComplaint: chiefComplaint || 'Patient presents for scheduled evaluation',
       historyOfPresentIllness: rawNotes || 'Routine evaluation',
       reviewOfSystems: 'As per chart',
-      physicalExamination: vitals ? `Vitals reviewed` : 'Exam deferred',
+      physicalExamination: vitals ? 'Vitals reviewed' : 'Exam deferred',
       assessment: 'Stable for outpatient care',
       treatmentPlan: 'Continue current plan; follow-up as scheduled',
       suggestedDiagnoses: [{ code: 'Z00.00', description: 'General adult medical examination', type: 'Primary' }],
@@ -404,11 +264,11 @@ app.post('/api/ai/patient-summary', async (req: Request, res: Response) => {
   });
 });
 
-app.post('/api/ai/lab-interpretation', async (req: Request, res: Response) => {
+app.post('/api/ai/lab-interpretation', async (_req: Request, res: Response) => {
   return res.json({ success: true, data: { interpretation: 'Results reviewed in clinical context.', flags: [] }, disclaimer: CLINICAL_DISCLAIMER });
 });
 
-app.post('/api/ai/medication-safety', async (req: Request, res: Response) => {
+app.post('/api/ai/medication-safety', async (_req: Request, res: Response) => {
   return res.json({ success: true, data: { interactions: [], warnings: [] }, disclaimer: CLINICAL_DISCLAIMER });
 });
 
@@ -417,7 +277,7 @@ app.post('/api/ai/chat', async (req: Request, res: Response) => {
   return res.json({ success: true, reply: `Smart Clinic assistant received: ${message || ''}`, disclaimer: CLINICAL_DISCLAIMER });
 });
 
-app.post('/api/ai/predictive-risk', async (req: Request, res: Response) => {
+app.post('/api/ai/predictive-risk', async (_req: Request, res: Response) => {
   return res.json({ success: true, data: { riskScore: 0.2, tier: 'low', factors: [] }, disclaimer: CLINICAL_DISCLAIMER });
 });
 
