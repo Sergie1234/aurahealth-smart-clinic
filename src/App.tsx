@@ -114,7 +114,7 @@ const ClinicAppContent: React.FC = () => {
 
       {activeTab !== 'home' && activeTab !== 'login' && isAuthenticated && (
         <>
-          <Header onOpenSupabase={() => setShowSupabaseModal(true)} />
+          <Header onOpenSupabaseModal={() => setShowSupabaseModal(true)} />
           <div className="flex flex-1 overflow-hidden">
             <Sidebar />
             <main className="flex-1 overflow-y-auto p-4 md:p-6">
@@ -122,13 +122,13 @@ const ClinicAppContent: React.FC = () => {
                 <PatientDashboardView onOpenBookAppointment={openBookAppointment} />
               )}
               {activeTab === 'dashboard' && primaryRole === 'staff' && (
-                <StaffDashboardView onOpenBookAppointment={openBookAppointment} />
+                <StaffDashboardView subRole={staffSubRole || 'nurse'} onOpenBookAppointment={openBookAppointment} />
               )}
               {activeTab === 'dashboard' && (primaryRole === 'doctor' || activeRole === 'doctor') && (
-                <DoctorDashboardView onOpenBookAppointment={openBookAppointment} />
+                <DoctorDashboardView onStartConsultation={handleStartConsultation} onOpenBookAppointment={openBookAppointment} />
               )}
               {activeTab === 'dashboard' && primaryRole === 'admin' && (
-                <AdminDashboardView onOpenSupabase={() => setShowSupabaseModal(true)} />
+                <AdminDashboardView />
               )}
               {activeTab === 'patients' && (
                 <PatientList
@@ -152,20 +152,20 @@ const ClinicAppContent: React.FC = () => {
                   onStartConsultation={handleStartConsultation}
                 />
               )}
-              {activeTab === 'queue' && <QueueManager />}
+              {activeTab === 'queue' && <QueueManager onStartConsultation={handleStartConsultation} />}
               {activeTab === 'consultations' && (
                 <ConsultationWorkspace initialPatientId={consultPatientId} />
               )}
               {activeTab === 'prescriptions' && (
                 <PrescriptionList
-                  onOpenNew={() => setShowNewPrescription(true)}
-                  onPrint={(rx) => setPrintingRx(rx)}
+                  onOpenNewPrescription={() => setShowNewPrescription(true)}
+                  onPrintPrescription={(rx: Prescription) => setPrintingRx(rx)}
                 />
               )}
               {activeTab === 'laboratory' && (
                 <LabOrdersList
-                  onEnterResults={(o) => setLabOrderForResults(o)}
-                  onViewReport={(o) => setLabOrderForReport(o)}
+                  onOpenEnterResults={(o: LabTestOrder) => setLabOrderForResults(o)}
+                  onOpenReport={(o: LabTestOrder) => setLabOrderForReport(o)}
                 />
               )}
               {activeTab === 'inventory' && <InventoryList />}

@@ -145,7 +145,7 @@ export interface LabTestOrder {
   testName: string;
   category: 'Hematology' | 'Biochemistry' | 'Microbiology' | 'Endocrinology' | 'Urinalysis' | 'Imaging';
   urgency: 'Routine' | 'Urgent' | 'STAT';
-  status: 'Requested' | 'Sample Collected' | 'Processing' | 'Result Available' | 'Reviewed';
+  status: 'Requested' | 'Sample Collected' | 'Processing' | 'Result Available' | 'Reviewed' | 'Completed';
   requestedAt: string;
   collectedAt?: string;
   completedAt?: string;
@@ -214,7 +214,7 @@ export interface InventoryItem {
   reorderLevel: number;
   purchasePrice: number;
   sellingPrice: number;
-  unit: 'Tablets' | 'Capsules' | 'Bottles' | 'Vials' | 'Boxes' | 'Packs';
+  unit: 'Tablets' | 'Capsules' | 'Bottles' | 'Vials' | 'Boxes' | 'Packs' | 'Inhalers' | 'Pieces';
   location: string;
   lastUpdated: string;
 }
@@ -244,19 +244,23 @@ export interface Invoice {
   totalAmount: number;
   paidAmount: number;
   status: 'Unpaid' | 'Partially Paid' | 'Paid' | 'Cancelled';
-  paymentMethod?: 'Cash' | 'Credit Card' | 'Debit Card' | 'Insurance' | 'Bank Transfer';
+  paymentMethod?: 'Cash' | 'Credit Card' | 'Debit Card' | 'Insurance' | 'Bank Transfer' | 'GCash';
   paymentDate?: string;
+  paidAt?: string;
   insuranceClaimStatus?: 'Not Filed' | 'Pending' | 'Approved' | 'Rejected';
   notes?: string;
 }
 
 export interface Notification {
   id: string;
+  userId?: string;
   title: string;
   message: string;
-  category: 'appointment' | 'lab' | 'prescription' | 'inventory' | 'billing' | 'system';
-  priority: 'low' | 'normal' | 'high' | 'urgent';
-  timestamp: string;
+  category?: 'appointment' | 'lab' | 'prescription' | 'inventory' | 'billing' | 'system';
+  type?: string;
+  priority?: 'low' | 'normal' | 'high' | 'urgent';
+  timestamp?: string;
+  createdAt?: string;
   read: boolean;
   link?: string;
 }
