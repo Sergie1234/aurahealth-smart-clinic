@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { ClinicProvider, useClinic } from './context/ClinicContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { ToastProvider, ToastViewport } from './context/ToastContext';
 import { ThemeToggle } from './components/common/ThemeToggle';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
@@ -75,7 +76,6 @@ const ClinicAppContent: React.FC = () => {
       setActiveTab('login');
       return;
     }
-    // Staff / doctor / admin do not use patient self-booking
     if (primaryRole && primaryRole !== 'patient') {
       setActiveTab('dashboard');
       return;
@@ -207,9 +207,12 @@ const ClinicAppContent: React.FC = () => {
 export default function App() {
   return (
     <ThemeProvider>
-      <ClinicProvider>
-        <ClinicAppContent />
-      </ClinicProvider>
+      <ToastProvider>
+        <ClinicProvider>
+          <ClinicAppContent />
+          <ToastViewport />
+        </ClinicProvider>
+      </ToastProvider>
     </ThemeProvider>
   );
 }
