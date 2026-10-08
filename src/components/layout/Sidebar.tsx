@@ -52,7 +52,7 @@ export const Sidebar: React.FC = () => {
     { id: 'predictive-analytics', label: 'Predictive Analytics', icon: TrendingUp, roles: ['admin', 'doctor', 'nurse'] },
     {
       id: 'ai-assistant',
-      label: activeRole === 'patient' ? 'AI Triage Chatbot' : 'AIC Health Hub Assistant',
+      label: activeRole === 'patient' ? 'AI Triage' : 'SmartClinic AI Engine',
       icon: Sparkles,
       roles: ['admin', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician', 'patient'],
     },
@@ -77,7 +77,7 @@ export const Sidebar: React.FC = () => {
       </div>
 
       <div className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        <div className="px-3 pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Clinic Modules</div>
+        <div className="px-3 pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Navigation</div>
         {visibleItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;

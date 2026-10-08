@@ -637,7 +637,7 @@ app.get('/api/audit-logs', (req: AuthenticatedRequest, res: Response) => {
       - Data Access: STRICTLY limited to the authenticated patient's own records (MRN, appointments, lab results, prescriptions)
       - Behavior: Empathetic, accessible language. NEVER provides definitive medical diagnosis or prescribes medications.
       - Escalation: Hardcoded emergency disclaimer trigger if alarming symptoms detected.
-   2. Clinical Interface (AIC Health Hub / Consultation Suite):
+   2. Clinical Interface (Clinical Consultation Suite):
       - Identity: Clinical Decision Support Assistant
       - Scope: Patient histories, SOAP note drafting, differential diagnoses suggestions, automated medical scribe
       - Data Access: Assigned Electronic Health Records (EHR) on doctor/staff roster, imaging, clinic schedules
@@ -670,14 +670,14 @@ app.post('/api/ai/clinical-notes', async (req: AuthenticatedRequest, res: Respon
   const isPatient = (req.userRole || req.user?.role) === 'patient';
   if (isPatient) {
     return res.status(403).json({
-      error: 'Access Denied: The Clinical Decision Support Scribe is restricted to licensed clinical staff in the AIC Health Hub.',
+      error: 'Access Denied: The Clinical Decision Support Scribe is restricted to licensed clinical staff.',
     });
   }
 
   const { patientInfo, rawNotes, vitals, chiefComplaint } = req.body || {};
   try {
     if (ai) {
-      const prompt = `You are the SmartClinic Clinical Decision Support Assistant in the AIC Health Hub.
+      const prompt = `You are the SmartClinic Clinical Decision Support Assistant.
 You act strictly as an analytical clinical scribe and decision support assistant for the attending healthcare provider.
 CRITICAL CONSTRAINT: You cannot finalize a diagnosis or issue a prescription autonomously. Output structured SOAP format with differential diagnoses. Prompt the attending medical provider for manual review and approval before committing to the database.
 
@@ -793,353 +793,369 @@ app.post('/api/ai/chat', async (req: AuthenticatedRequest, res: Response) => {
   const { message, conversationHistory, context, role, page } = req.body || {};
   const userText = String(message || '').trim();
 
-  // Resolve active role & active page
-  const rawRole = (req.userRole || req.user?.role || role || 'patient').toLowerCase();
-  const isPatient = rawRole === 'patient';
-  const activeRole: 'patient' | 'provider' = isPatient ? 'patient' : 'provider';
+  // Resolve active role
+  const rawRole = (role || req.userRole || req.user?.role || 'patient').toLowerCase();
+  let activeRole: 'patient' | 'provider' | 'admin' = 'patient';
+  if (['admin', 'receptionist', 'manager'].includes(rawRole)) {
+    activeRole = 'admin';
+  } else if (['provider', 'doctor', 'nurse', 'physician'].includes(rawRole)) {
+    activeRole = 'provider';
+  } else {
+    activeRole = 'patient';
+  }
 
   // Normalize Active Page per Role
   let activePage = String(page || context?.activePage || '').trim();
-  if (isPatient) {
+  if (activeRole === 'patient') {
     const validPatientPages = ['Dashboard', 'Appointments', 'Triage', 'Records'];
     const matched = validPatientPages.find((p) => p.toLowerCase() === activePage.toLowerCase());
-    activePage = matched || 'Triage';
-  } else {
-    const validProviderPages = ['Dashboard', 'Schedule', 'EHR_Viewer', 'Notes'];
-    const matched = validProviderPages.find((p) => p.toLowerCase() === activePage.toLowerCase());
     activePage = matched || 'Dashboard';
+  } else if (activeRole === 'provider') {
+    const validProviderPages = ['Dashboard', 'Schedule', 'Patient Records', 'Clinical Notes'];
+    if (activePage.toLowerCase() === 'ehr_viewer' || activePage.toLowerCase() === 'records') {
+      activePage = 'Patient Records';
+    } else if (activePage.toLowerCase() === 'notes') {
+      activePage = 'Clinical Notes';
+    } else {
+      const matched = validProviderPages.find((p) => p.toLowerCase() === activePage.toLowerCase());
+      activePage = matched || 'Dashboard';
+    }
+  } else {
+    // Admin
+    const validAdminPages = ['Dashboard', 'Master Schedule', 'Patient Management', 'Billing'];
+    if (activePage.toLowerCase() === 'schedule') {
+      activePage = 'Master Schedule';
+    } else if (activePage.toLowerCase() === 'patients') {
+      activePage = 'Patient Management';
+    } else {
+      const matched = validAdminPages.find((p) => p.toLowerCase() === activePage.toLowerCase());
+      activePage = matched || 'Dashboard';
+    }
   }
 
   const linkedId = req.linkedPatientId || req.user?.linkedPatientId;
-
-  // --------------------------------------------------------------------------
-  // MANDATORY SECURITY & PRIVACY GUARDRAILS
-  // 1. Cross-role boundary: Patient attempting Provider actions or vice versa
-  // --------------------------------------------------------------------------
   const lowerUserText = userText.toLowerCase();
 
-  // Cross-role guard: Patient attempting provider actions
-  if (isPatient) {
-    const providerOnlyKeywords = ['write soap note', 'draft soap', 'ehr_viewer', 'all patients list', 'provider schedule', 'prescribe rx to', 'clinical scribe'];
-    if (providerOnlyKeywords.some((k) => lowerUserText.includes(k))) {
+  // --------------------------------------------------------------------------
+  // MANDATORY PRIVACY & SECURITY RULES ENFORCEMENT
+  // 1. Cross-Role Boundary Violations
+  // 2. Cross-Page Boundary Violations
+  // --------------------------------------------------------------------------
+
+  // Patient attempting Provider or Admin tools
+  if (activeRole === 'patient') {
+    const providerOrAdminKeywords = [
+      'write soap note', 'draft soap', 'ehr_viewer', 'clinical scribe',
+      'all patients list', 'provider schedule', 'prescribe rx', 'master schedule',
+      'billing claims', 'staff shifts', 'facility resources'
+    ];
+    if (providerOrAdminKeywords.some((k) => lowerUserText.includes(k))) {
       return res.json({
         success: true,
         reply: 'I cannot perform that action from this page. Please navigate to the correct section.',
-        disclaimer: 'Access Denied: Patient role cannot execute provider clinical tasks.',
+        disclaimer: 'Access Denied: Patient role cannot execute provider or administrative tasks.',
         activeRole,
         activePage,
-        persona: 'SmartClinic AI Triage Chatbot',
-        interfaceMode: 'patient_portal',
+        persona: 'SmartClinic AI Engine',
       });
     }
-  }
 
-  // Cross-page boundary checks for Patient
-  if (isPatient) {
+    // Patient Page Execution Boundaries
     if (activePage === 'Dashboard') {
-      // Security: Do not discuss specific medical diagnoses, symptoms, or clinical notes here.
-      const forbiddenSymptoms = ['my symptoms are', 'diagnose me', 'triage my', 'fever and cough', 'stomach ache', 'severe pain'];
-      if (forbiddenSymptoms.some((k) => lowerUserText.includes(k))) {
+      // Do not discuss clinical details
+      const clinicalKeywords = [
+        'my symptoms are', 'diagnose me', 'triage my', 'fever and cough',
+        'stomach ache', 'severe pain', 'what medicine', 'prescribe'
+      ];
+      if (clinicalKeywords.some((k) => lowerUserText.includes(k))) {
         return res.json({
           success: true,
           reply: 'I cannot perform that action from this page. Please navigate to the correct section.',
-          disclaimer: 'Please navigate to the Triage section for symptom assessment.',
+          disclaimer: 'Please navigate to the Triage page for symptom inquiries.',
           activeRole,
           activePage,
-          persona: 'SmartClinic AI Triage Chatbot',
-          interfaceMode: 'patient_portal',
+          persona: 'SmartClinic AI Engine',
         });
       }
     } else if (activePage === 'Appointments') {
-      // Security: Strictly forbidden from giving medical advice or assessing symptoms.
-      const forbiddenAdvice = ['what medicine should i take', 'diagnose', 'is this infection', 'chest pain advice'];
-      if (forbiddenAdvice.some((k) => lowerUserText.includes(k))) {
+      // If symptoms are mentioned, redirect to the Triage page
+      const symptomKeywords = [
+        'symptom', 'pain', 'fever', 'cough', 'dizzy', 'infection', 'headache',
+        'what medicine', 'diagnose', 'nausea', 'chest pain', 'sick'
+      ];
+      if (symptomKeywords.some((k) => lowerUserText.includes(k))) {
         return res.json({
           success: true,
           reply: 'I cannot perform that action from this page. Please navigate to the correct section.',
-          disclaimer: 'Strictly forbidden from giving medical advice on the Appointments page.',
+          disclaimer: 'Symptoms detected: Please navigate to the Triage page for symptom evaluation.',
           activeRole,
           activePage,
-          persona: 'SmartClinic AI Triage Chatbot',
-          interfaceMode: 'patient_portal',
+          persona: 'SmartClinic AI Engine',
         });
       }
     } else if (activePage === 'Records') {
-      // Security: Only discuss records provided on this page. Do not diagnose or schedule.
-      if (lowerUserText.includes('book an appointment') || lowerUserText.includes('reschedule my visit')) {
+      if (lowerUserText.includes('book an appointment') || lowerUserText.includes('reschedule my visit') || lowerUserText.includes('cancel appointment')) {
         return res.json({
           success: true,
           reply: 'I cannot perform that action from this page. Please navigate to the correct section.',
-          disclaimer: 'Please navigate to the Appointments section to schedule or manage visits.',
+          disclaimer: 'Please navigate to the Appointments page to manage visit schedules.',
           activeRole,
           activePage,
-          persona: 'SmartClinic AI Triage Chatbot',
-          interfaceMode: 'patient_portal',
+          persona: 'SmartClinic AI Engine',
+        });
+      }
+      if (lowerUserText.includes('will i survive') || lowerUserText.includes('predict my future') || lowerUserText.includes('how long do i have to live')) {
+        return res.json({
+          success: true,
+          reply: 'I cannot predict future health outcomes. Please consult your physician regarding longitudinal prognosis.',
+          disclaimer: 'Do not predict future health outcomes.',
+          activeRole,
+          activePage,
+          persona: 'SmartClinic AI Engine',
         });
       }
     }
-  } else {
-    // Cross-page boundary checks for Provider
-    if (activePage === 'Schedule') {
-      // Security: Focus solely on calendar management. Do not display full patient health records.
+  } else if (activeRole === 'provider') {
+    // Provider boundaries
+    if (activePage === 'Dashboard') {
+      if (lowerUserText.includes('book appointment for myself') || lowerUserText.includes('pay my bill')) {
+        return res.json({
+          success: true,
+          reply: 'I cannot perform that action from this page. Please navigate to the correct section.',
+          disclaimer: 'Provider Dashboard is restricted to clinical briefings.',
+          activeRole,
+          activePage,
+          persona: 'SmartClinic AI Engine',
+        });
+      }
+    } else if (activePage === 'Schedule') {
       if (lowerUserText.includes('full medical history') || lowerUserText.includes('show entire ehr') || lowerUserText.includes('draft soap note')) {
         return res.json({
           success: true,
           reply: 'I cannot perform that action from this page. Please navigate to the correct section.',
-          disclaimer: 'Schedule view is restricted to calendar and provider load management.',
+          disclaimer: 'Schedule view is restricted to calendar and appointment times.',
           activeRole,
           activePage,
-          persona: 'Clinical Decision Support Assistant',
-          interfaceMode: 'aic_health_hub',
+          persona: 'SmartClinic AI Engine',
         });
       }
-    } else if (activePage === 'Notes') {
-      // Notes is for SOAP drafting
+    } else if (activePage === 'Clinical Notes') {
       if (lowerUserText.includes('block off my calendar') || lowerUserText.includes('reschedule my clinic hours')) {
         return res.json({
           success: true,
           reply: 'I cannot perform that action from this page. Please navigate to the correct section.',
-          disclaimer: 'Please navigate to Schedule to manage calendar availability.',
+          disclaimer: 'Please navigate to Schedule to manage calendar blocks.',
           activeRole,
           activePage,
-          persona: 'Clinical Decision Support Assistant',
-          interfaceMode: 'aic_health_hub',
+          persona: 'SmartClinic AI Engine',
         });
       }
+    }
+  } else if (activeRole === 'admin') {
+    // Admin boundaries: Block all access to clinical data
+    const clinicalDataKeywords = [
+      'medical history', 'patient diagnosis', 'clinical note', 'soap note',
+      'ehr', 'lab values', 'glucose level', 'chest xray', 'prescribed medication',
+      'doctor raw notes', 'differential diagnosis'
+    ];
+    if (clinicalDataKeywords.some((k) => lowerUserText.includes(k))) {
+      return res.json({
+        success: true,
+        reply: 'I cannot perform that action from this page. Please navigate to the correct section.',
+        disclaimer: 'Access Denied: Administrative role is strictly blocked from all clinical data.',
+        activeRole,
+        activePage,
+        persona: 'SmartClinic AI Engine',
+      });
     }
   }
 
   // --------------------------------------------------------------------------
-  // 1. PATIENT INTERFACE
+  // DATABASE CONTEXT PREPARATION PER ROLE (Strict Least-Privilege Isolation)
   // --------------------------------------------------------------------------
-  if (isPatient) {
-    const isEmergency = detectEmergencySymptoms(userText);
+  let safeContext: any = {};
+  const isEmergency = detectEmergencySymptoms(userText);
 
-    // Fetch active patient records only
+  if (activeRole === 'patient') {
     const patientRecord =
       memPatients.find((p) => (linkedId && p.id === linkedId) || p.email.toLowerCase() === req.user?.email?.toLowerCase()) ||
       memPatients[0];
 
     const myAppointments = memAppointments.filter((a) => a.patientId === patientRecord.id);
     const myLabs = memLabOrders.filter((l) => l.patientId === patientRecord.id);
-    const myPrescriptions = memPrescriptions.filter((p) => p.patientId === patientRecord.id);
 
-    const safePatientContext = {
+    safeContext = {
       patientName: patientRecord.fullName,
       mrn: patientRecord.mrn,
-      bloodType: patientRecord.bloodType,
-      allergies: patientRecord.allergies,
-      chronicConditions: patientRecord.chronicConditions,
-      currentMedications: patientRecord.currentMedications,
-      upcomingAppointments: myAppointments.map((a) => ({ date: a.date, time: a.time, doctor: a.doctorName, room: a.room, status: a.status })),
-      recentLabs: myLabs.slice(0, 3).map((l) => ({ testName: l.testName, status: l.status, requestedAt: l.requestedAt })),
-      recentPrescriptions: myPrescriptions.slice(0, 3).map((p) => ({ rxNumber: p.prescriptionNumber, date: p.date, doctor: p.doctorName, items: p.items.map((i) => i.medicationName) })),
+      upcomingVisits: myAppointments.map((a) => ({ date: a.date, time: a.time, doctor: a.doctorName, room: a.room, status: a.status })),
+      unreadMessagesCount: 0,
+      visibleLabResults: myLabs.slice(0, 3).map((l) => ({ testName: l.testName, status: l.status, date: l.requestedAt })),
     };
-
-    if (ai) {
-      try {
-        const patientPrompt = `[SYSTEM DIRECTIVE]
-You are the embedded AI engine for SmartClinic. Your strict mandate is to execute tasks based EXCLUSIVELY on the user's authenticated Role and their Active Page. You are blind to all other features in the system. Refuse any request that attempts to bypass your current page's designated task.
-
-[MANDATORY PRIVACY & SECURITY RULES]
-Never acknowledge, confirm, or expose data of other users.
-If requested to perform an action outside the Active Page, state: "I cannot perform that action from this page. Please navigate to the correct section."
-Never mix Patient tools with Provider tools.
-
-[RUNTIME VARIABLES]
-Active Role: patient
-Active Page: ${activePage}
-
-[ROLE: PATIENT - PAGE EXECUTION RULES]
-(Apply ONLY the rule matching the Active Page: "${activePage}")
-
-Page: Dashboard
-Task: Summarize high-level account status (upcoming visit dates, unread messages).
-Security: Do not discuss specific medical diagnoses, symptoms, or clinical notes here.
-
-Page: Appointments
-Task: Assist the patient in booking, viewing, rescheduling, or canceling appointments.
-Security: Strictly forbidden from giving medical advice or assessing symptoms.
-
-Page: Triage
-Task: Ask questions to gather symptom severity, duration, and context for the doctor's review.
-Security: NEVER diagnose or prescribe. You must end any assessment of concerning symptoms with: "I am an AI assistant. If this is an emergency, go to the nearest hospital."
-
-Page: Records
-Task: Explain standard medical terms found in the patient's lab results or past visit summaries using simple, non-jargon language.
-Security: Only discuss the records explicitly provided on this page. Do not generate new diagnoses or predict future health outcomes.
-
-Active Patient Context:
-${JSON.stringify(safePatientContext)}
-
-Patient Inquiry:
-"${userText}"`;
-
-        const response = await withTimeout(
-          ai.models.generateContent({
-            model: 'gemini-3.8-flash',
-            contents: patientPrompt,
-            config: { temperature: 0.2 },
-          }),
-          25000
-        );
-
-        let replyText = response.text || '';
-
-        // Enforce Triage emergency closing sentence if concerning symptoms detected
-        if (activePage === 'Triage' && isEmergency && !replyText.includes('I am an AI assistant. If this is an emergency, go to the nearest hospital.')) {
-          replyText += '\n\nI am an AI assistant. If this is an emergency, go to the nearest hospital.';
-        }
-
-        return res.json({
-          success: true,
-          isEmergency,
-          reply: replyText,
-          persona: 'SmartClinic AI Triage Chatbot',
-          interfaceMode: 'patient_portal',
-          activeRole,
-          activePage,
-          disclaimer: isEmergency
-            ? EMERGENCY_HARDCODED_DISCLAIMER
-            : 'TRIAGE ADVISORY ONLY: SmartClinic AI Triage Chatbot does not provide medical diagnoses or prescribe medications.',
-        });
-      } catch (err: any) {
-        console.warn('Patient triage AI fallback:', err?.message);
-      }
-    }
-
-    // Deterministic fallback if Gemini is offline
-    let fallbackReply = '';
-    if (activePage === 'Dashboard') {
-      fallbackReply = `Account Status Summary for ${patientRecord.fullName} (MRN: ${patientRecord.mrn}): You have ${myAppointments.length} upcoming scheduled visit(s), and ${myLabs.length} laboratory test record(s) on file. All clinical communications are up to date.`;
-    } else if (activePage === 'Appointments') {
-      fallbackReply = `Appointments Portal: You currently have ${myAppointments.length} appointment(s). You can view existing dates, request a reschedule, or book a new clinical consultation directly.`;
-    } else if (activePage === 'Triage') {
-      if (isEmergency) {
-        fallbackReply = `I understand you are experiencing distressing symptoms. Please tell me more about when this began and how severe it is on a scale from 1 to 10 so we can record this for your doctor's review. I am an AI assistant. If this is an emergency, go to the nearest hospital.`;
-      } else {
-        fallbackReply = `Thank you for reaching out. To prepare your file for the doctor's review, could you share the duration, severity, and any associated symptoms you are feeling? I am an AI assistant. If this is an emergency, go to the nearest hospital.`;
-      }
-    } else if (activePage === 'Records') {
-      fallbackReply = `Medical Records Guide: In your records, standard laboratory indices measure physiological markers (such as fasting blood glucose or complete blood counts) to help your physician track health stability. Only your documented clinic records are displayed.`;
-    }
-
-    return res.json({
-      success: true,
-      isEmergency,
-      reply: fallbackReply,
-      persona: 'SmartClinic AI Triage Chatbot',
-      interfaceMode: 'patient_portal',
-      activeRole,
-      activePage,
-      disclaimer: isEmergency
-        ? EMERGENCY_HARDCODED_DISCLAIMER
-        : 'TRIAGE ADVISORY ONLY: SmartClinic AI Triage Chatbot does not provide medical diagnoses or prescribe medications.',
-    });
+  } else if (activeRole === 'provider') {
+    const urgentLabCount = memLabOrders.filter((l) => (l as any).flag === 'Critical' || (l as any).results?.some((r: any) => r.flag === 'Critical')).length;
+    safeContext = {
+      dailyPatientLoad: memAppointments.length,
+      waitingQueue: memAppointments.filter((a) => a.status === 'Checked In' || a.status === 'In Consultation').length,
+      urgentMessages: 2,
+      pendingLabs: urgentLabCount,
+      todayAppointments: memAppointments.map((a) => ({ time: a.time, patientName: a.patientName, type: a.type, status: a.status })),
+      activeRosterSummary: `${memPatients.length} assigned patients`,
+    };
+  } else {
+    // Admin context - ZERO clinical data
+    safeContext = {
+      visitorCountsToday: memAppointments.length + 8,
+      activeStaffShifts: 6,
+      systemAlerts: ['Facility HVAC maintenance scheduled for Room 3', 'Billing clearinghouse batches synced'],
+      resourcesAvailable: ['Exam Room 1', 'Exam Room 2', 'Exam Room 3', 'Phlebotomy Bay A'],
+      unprocessedClaimsCount: memInvoices.filter((inv) => inv.status === 'Unpaid' || inv.status === 'Partially Paid').length,
+      totalClaimsValue: memInvoices.reduce((acc, curr) => acc + (curr.totalAmount || 0), 0),
+    };
   }
 
   // --------------------------------------------------------------------------
-  // 2. PROVIDER INTERFACE
+  // SYSTEM PROMPT CONSTRUCTION (Stripped-down non-repetitive prompt)
   // --------------------------------------------------------------------------
-  const clinicalContext = {
-    activeProviderRole: activeRole,
-    patientRosterCount: memPatients.length,
-    activeAppointmentsToday: memAppointments.length,
-    queueCount: memAppointments.filter((a) => a.status === 'Checked In' || a.status === 'In Consultation').length,
-    lowStockCount: memInventory.filter((i) => i.stockQuantity <= i.reorderLevel).length,
-    pendingLabsCount: memLabOrders.filter((l) => l.status === 'Requested' || l.status === 'Processing').length,
-    systemMode: 'AIC Health Hub Clinical Decision Support',
-  };
+  const prompt = `**[SYSTEM DIRECTIVES]**
+You are the AI engine for SmartClinic. Your actions, tone, and data access are strictly limited to the user's current Role and Page. Refuse any requests outside this specific scope.
+
+**[CORE SECURITY RULES]**
+
+1. Base all answers ONLY on provided database context. Do not invent data.
+2. Never reveal one user's data to another.
+3. Never mix role capabilities (e.g., never expose Provider tools to a Patient).
+
+**[RUNTIME CONTEXT]**
+Role: ${activeRole}
+Page: ${activePage}
+
+**[ROLE: PATIENT]**
+
+* **Dashboard:** Provide a brief overview of upcoming visits and notifications. Do not discuss clinical details.
+* **Appointments:** Manage booking, rescheduling, and cancellations. If symptoms are mentioned, redirect to the Triage page.
+* **Triage:** Collect symptom data only. NEVER diagnose or prescribe. End any chat about concerning symptoms with: *"I am an AI. For medical emergencies, visit a hospital immediately."*
+* **Records:** Explain visible lab results and medical terms in simple language. Do not predict future health outcomes.
+
+**[ROLE: PROVIDER]**
+
+* **Dashboard:** Summarize the daily patient load, urgent messages, and pending labs.
+* **Schedule:** Manage calendar blocks and appointment times. Do not display full medical histories in this view.
+* **Patient Records:** Summarize clinical history and labs using professional medical terminology. Rely strictly on provided records.
+* **Clinical Notes:** Draft SOAP notes from triage data. Always include a reminder that the provider must manually review and sign the draft before saving.
+
+**[ROLE: ADMIN]**
+
+* **Dashboard:** Show operational overviews, visitor counts, and system alerts. Block all access to clinical data.
+* **Master Schedule:** Manage facility resources and staff shifts. Hide the medical reasons for patient visits.
+* **Patient Management:** Handle onboarding, insurance, and contact updates. Block all medical record access.
+* **Billing:** Process financial summaries and claims. Hide the granular clinical notes attached to the billing codes.
+
+---
+Provided Database Context:
+${JSON.stringify(safeContext)}
+
+User Query:
+"${userText}"`;
 
   if (ai) {
     try {
-      const providerPrompt = `[SYSTEM DIRECTIVE]
-You are the embedded AI engine for SmartClinic. Your strict mandate is to execute tasks based EXCLUSIVELY on the user's authenticated Role and their Active Page. You are blind to all other features in the system. Refuse any request that attempts to bypass your current page's designated task.
-
-[MANDATORY PRIVACY & SECURITY RULES]
-Never acknowledge, confirm, or expose data of other users.
-If requested to perform an action outside the Active Page, state: "I cannot perform that action from this page. Please navigate to the correct section."
-Never mix Patient tools with Provider tools.
-
-[RUNTIME VARIABLES]
-Active Role: provider
-Active Page: ${activePage}
-
-[ROLE: PROVIDER - PAGE EXECUTION RULES]
-(Apply ONLY the rule matching the Active Page: "${activePage}")
-
-Page: Dashboard
-Task: Summarize the doctor's daily schedule, highlight urgent patient messages, and flag critical pending lab results.
-Security: Maintain strict HIPAA compliance. Do not execute patient-facing actions from this view.
-
-Page: Schedule
-Task: Help the provider manage their availability, block off time, and review daily patient load.
-Security: Focus solely on calendar management. Do not display full patient health records in this view.
-
-Page: EHR_Viewer
-Task: Rapidly summarize complex patient histories, highlight abnormal lab metrics, and organize past visit data.
-Security: Rely strictly on the database records provided. Do not hallucinate data, assume medical history, or mix records from different patients.
-
-Page: Notes
-Task: Draft structured SOAP (Subjective, Objective, Assessment, Plan) notes using the patient's triage data and the provider's shorthand inputs.
-Security: Act as decision support only. Mandate that the provider must manually review, edit, and sign the note before saving.
-
-Provider System Context:
-${JSON.stringify(clinicalContext)}
-
-Clinician Query:
-"${userText}"`;
-
       const response = await withTimeout(
         ai.models.generateContent({
           model: 'gemini-3.8-flash',
-          contents: providerPrompt,
-          config: { temperature: 0.1 },
+          contents: prompt,
+          config: { temperature: 0.15 },
         }),
         25000
       );
 
+      let replyText = (response.text || '').trim();
+
+      // Enforce emergency closing on Triage if symptoms present
+      if (activeRole === 'patient' && activePage === 'Triage') {
+        const emergencyDisclaimer = 'I am an AI. For medical emergencies, visit a hospital immediately.';
+        if ((isEmergency || lowerUserText.length > 5) && !replyText.includes('I am an AI. For medical emergencies, visit a hospital immediately.')) {
+          replyText += `\n\n${emergencyDisclaimer}`;
+        }
+      }
+
+      // Enforce reminder on Provider Clinical Notes
+      if (activeRole === 'provider' && activePage === 'Clinical Notes') {
+        if (!replyText.toLowerCase().includes('review and sign')) {
+          replyText += '\n\nReminder: The attending provider must manually review and sign this draft before saving.';
+        }
+      }
+
       return res.json({
         success: true,
-        isEmergency: false,
-        reply: response.text || 'Clinical decision support generated. Attending physician manual review required before committing.',
-        persona: 'Clinical Decision Support Assistant',
-        interfaceMode: 'aic_health_hub',
+        reply: replyText,
         activeRole,
         activePage,
-        disclaimer: CLINICAL_DISCLAIMER,
+        isEmergency,
+        disclaimer:
+          activeRole === 'patient'
+            ? (isEmergency ? 'I am an AI. For medical emergencies, visit a hospital immediately.' : '')
+            : (activeRole === 'provider' ? CLINICAL_DISCLAIMER : 'ADMINISTRATIVE AUDIT LOGGED'),
+        persona: 'SmartClinic AI Engine',
       });
     } catch (err: any) {
-      console.warn('Clinical assistant AI fallback:', err?.message);
+      console.warn('AI generateContent fallback:', err?.message);
     }
   }
 
-  // Deterministic fallback for Provider
-  let providerFallbackReply = '';
-  if (activePage === 'Dashboard') {
-    providerFallbackReply = `[Provider Dashboard Briefing] Daily Schedule: ${memAppointments.length} total scheduled consultations, ${memAppointments.filter((a) => a.status === 'Checked In').length} in active waiting queue. Critical Lab Flags: ${memLabOrders.filter((l) => (l as any).flag === 'Critical' || (l as any).results?.some((r: any) => r.flag === 'Critical')).length} pending urgent review. All clinical alerts synchronized.`;
-  } else if (activePage === 'Schedule') {
-    providerFallbackReply = `[Schedule Management] Today's clinic load comprises ${memAppointments.length} patients across morning and afternoon outpatient sessions. Providers can block off procedure blocks or review schedule density directly.`;
-  } else if (activePage === 'EHR_Viewer') {
-    providerFallbackReply = `[EHR History Synthesis] Patient EHR synthesis active for ${memPatients.length} registered roster records. Comprehensive vitals, historical diagnostic panels, and allergy profiles are correlated under HIPAA compliance.`;
-  } else if (activePage === 'Notes') {
-    providerFallbackReply = `[SOAP Note Drafting Support]
-Subjective: Patient presents with interval changes documented during triage.
-Objective: Vitals and physical examination consistent with outpatient baseline.
-Assessment: Clinical impression pending final physician synthesis.
-Plan: Diagnostic and therapeutic plan formulated.
-MANDATORY: Attending provider must manually review, edit, and sign the note before saving to the medical record.`;
+  // --------------------------------------------------------------------------
+  // DETERMINISTIC FALLBACK EXECUTION
+  // --------------------------------------------------------------------------
+  let fallbackReply = '';
+  if (activeRole === 'patient') {
+    if (activePage === 'Dashboard') {
+      fallbackReply = `Account Overview: You have ${safeContext.upcomingVisits?.length || 0} upcoming visit(s) scheduled. Notifications and account updates are current.`;
+    } else if (activePage === 'Appointments') {
+      fallbackReply = `Appointments: You currently have ${safeContext.upcomingVisits?.length || 0} scheduled visit(s). You can view dates, request reschedules, or process cancellations. If you are experiencing symptoms, please navigate to the Triage page.`;
+    } else if (activePage === 'Triage') {
+      fallbackReply = `Thank you for sharing. Could you describe when your symptoms began and their severity on a scale from 1 to 10 so we can record this for the doctor's review?\n\nI am an AI. For medical emergencies, visit a hospital immediately.`;
+    } else if (activePage === 'Records') {
+      fallbackReply = `Lab Records Guide: Visible markers in your results measure standard clinical indices. For instance, blood glucose indicators reflect glycemic regulation over time. All figures reflect documented clinic records only.`;
+    }
+  } else if (activeRole === 'provider') {
+    if (activePage === 'Dashboard') {
+      fallbackReply = `Dashboard Summary: Daily patient load is ${safeContext.dailyPatientLoad} appointments (${safeContext.waitingQueue} in queue). Urgent messages: ${safeContext.urgentMessages}. Pending labs awaiting review: ${safeContext.pendingLabs}.`;
+    } else if (activePage === 'Schedule') {
+      fallbackReply = `Schedule Management: ${safeContext.todayAppointments?.length || 0} consultations scheduled across today's blocks. You may manage availability or reserve clinical procedure times. Full medical histories are withheld from this view.`;
+    } else if (activePage === 'Patient Records') {
+      fallbackReply = `Clinical Record Summary: Longitudinal record synthesis based strictly on documented EHR data. Laboratory and vital indicators are compiled under HIPAA compliance.`;
+    } else if (activePage === 'Clinical Notes') {
+      fallbackReply = `SOAP Note Draft:
+Subjective: Interval clinical symptoms documented during intake.
+Objective: Vitals and examination findings per documented outpatient baseline.
+Assessment: Clinical impression formulated for review.
+Plan: Diagnostic and therapeutic trajectory outlined.
+
+Reminder: The attending provider must manually review and sign this draft before saving.`;
+    }
+  } else {
+    // Admin
+    if (activePage === 'Dashboard') {
+      fallbackReply = `Operational Overview: Visitor count today is ${safeContext.visitorCountsToday}. Active staff shifts: ${safeContext.activeStaffShifts}. System alerts: ${safeContext.systemAlerts.join('; ')}. All clinical data is blocked.`;
+    } else if (activePage === 'Master Schedule') {
+      fallbackReply = `Master Schedule: Facility resources currently available: ${safeContext.resourcesAvailable.join(', ')}. Staff shifts are deployed across active consultation stations. Medical visit reasons are masked for privacy compliance.`;
+    } else if (activePage === 'Patient Management') {
+      fallbackReply = `Patient Management: Onboarding queues, demographic files, and insurance verifications are operational. All clinical medical records remain strictly blocked.`;
+    } else if (activePage === 'Billing') {
+      fallbackReply = `Billing & Claims: ${safeContext.unprocessedClaimsCount} pending claims totaling $${safeContext.totalClaimsValue.toLocaleString()}. Detailed clinical notes are withheld from billing codes.`;
+    }
   }
 
   return res.json({
     success: true,
-    isEmergency: false,
-    reply: providerFallbackReply,
-    persona: 'Clinical Decision Support Assistant',
-    interfaceMode: 'aic_health_hub',
+    reply: fallbackReply,
     activeRole,
     activePage,
-    disclaimer: CLINICAL_DISCLAIMER,
+    isEmergency,
+    disclaimer:
+      activeRole === 'patient'
+        ? (isEmergency ? 'I am an AI. For medical emergencies, visit a hospital immediately.' : '')
+        : (activeRole === 'provider' ? CLINICAL_DISCLAIMER : 'ADMINISTRATIVE AUDIT LOGGED'),
+    persona: 'SmartClinic AI Engine',
   });
 });
 

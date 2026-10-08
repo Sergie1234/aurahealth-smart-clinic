@@ -163,11 +163,11 @@ export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatien
           <button
             onClick={() => setActiveTab('ai-assistant')}
             className="p-1.5 text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/30 hover:bg-teal-100 dark:hover:bg-teal-900/50 border border-teal-200/80 dark:border-teal-700/50 rounded-lg transition flex items-center gap-1 text-xs font-medium cursor-pointer"
-            title={activeRole === 'patient' ? 'AI Triage Chatbot' : 'AIC Health Hub Clinical Assistant'}
+            title={activeRole === 'patient' ? 'AI Triage' : 'SmartClinic AI Engine'}
           >
             <Sparkles className="w-3.5 h-3.5 text-teal-600" />
             <span className="hidden lg:inline text-[11px] font-semibold">
-              {activeRole === 'patient' ? 'AI Triage' : 'AIC Health Hub'}
+              {activeRole === 'patient' ? 'AI Triage' : 'AI Engine'}
             </span>
           </button>
 

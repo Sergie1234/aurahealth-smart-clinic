@@ -784,7 +784,7 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-teal-600" />
                 <div>
-                  <h3 className="font-bold text-slate-900 text-sm">AIC Health Hub — Clinical SOAP Draft</h3>
+                  <h3 className="font-bold text-slate-900 text-sm">Clinical Decision Support — SOAP Draft</h3>
                   <p className="text-[10px] text-slate-500">Automated medical scribe & differential suggestions • Physician review required</p>
                 </div>
               </div>
