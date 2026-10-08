@@ -17,9 +17,15 @@ const labelClass =
   'font-semibold text-slate-700 dark:text-slate-200 block mb-1 text-xs';
 
 export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClose }) => {
-  const { patients, users, addAppointment } = useClinic();
+  const { users, addAppointment, primaryRole, linkedPatientId, visiblePatients } = useClinic();
+  const patients = visiblePatients;
 
-  const [selectedPatId, setSelectedPatId] = useState(initialPatientId || patients[0]?.id || '');
+  const lockedPatientId =
+    primaryRole === 'patient' && linkedPatientId
+      ? linkedPatientId
+      : initialPatientId || patients[0]?.id || '';
+
+  const [selectedPatId, setSelectedPatId] = useState(lockedPatientId);
   const [selectedDocId, setSelectedDocId] = useState('usr-1');
   const [date, setDate] = useState('2026-10-06');
   const [time, setTime] = useState('14:30');
@@ -85,18 +91,29 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
         <form onSubmit={handleSubmit} className="p-4 space-y-3.5">
           <div>
             <label className={labelClass}>Patient Record *</label>
-            <select
-              required
-              value={selectedPatId}
-              onChange={(e) => setSelectedPatId(e.target.value)}
-              className={fieldClass}
-            >
-              {patients.map((p) => (
-                <option key={p.id} value={p.id} className="bg-white text-slate-900 dark:bg-slate-800 dark:text-slate-100">
-                  {p.fullName} (MRN: {p.mrn}) - {p.age}y {p.gender}
-                </option>
-              ))}
-            </select>
+            {primaryRole === 'patient' ? (
+              <div className={fieldClass + ' flex items-center justify-between'}>
+                <span>
+                  {patients.find((p) => p.id === selectedPatId)?.fullName || 'Your record'}
+                  {' '}
+                  (MRN: {patients.find((p) => p.id === selectedPatId)?.mrn || '—'})
+                </span>
+                <span className="text-[10px] font-bold uppercase text-teal-600 dark:text-teal-300">Locked to you</span>
+              </div>
+            ) : (
+              <select
+                required
+                value={selectedPatId}
+                onChange={(e) => setSelectedPatId(e.target.value)}
+                className={fieldClass}
+              >
+                {patients.map((p) => (
+                  <option key={p.id} value={p.id} className="bg-white text-slate-900 dark:bg-slate-800 dark:text-slate-100">
+                    {p.fullName} (MRN: {p.mrn}) - {p.age}y {p.gender}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div>
