@@ -45,22 +45,10 @@ export type StaffSubRole = 'nurse' | 'pharmacist' | 'receptionist' | 'lab_techni
 
 export interface LoginCredentials {
   primaryRole: PrimaryAuthRole;
-  email?: string;
+  email: string;
   password?: string;
-  phone?: string;
-  otp?: string;
-  method?: 'email' | 'phone';
   subRole?: StaffSubRole;
   twoFactorCode?: string;
-}
-
-export interface RegisterPatientInput {
-  fullName: string;
-  email?: string;
-  phone?: string;
-  password?: string;
-  dob?: string;
-  gender?: 'Male' | 'Female' | 'Other';
 }
 
 interface ClinicContextType {
@@ -71,14 +59,8 @@ interface ClinicContextType {
   primaryRole: PrimaryAuthRole | null;
   staffSubRole: StaffSubRole | null;
   isAuthenticated: boolean;
-  linkedPatientId: string | null;
-  pendingBooking: boolean;
-  setPendingBooking: (v: boolean) => void;
   login: (credentials: LoginCredentials) => { success: boolean; error?: string };
   logout: () => void;
-  registerPatient: (data: RegisterPatientInput) => { success: boolean; error?: string; patientId?: string };
-  requestOtp: (phone: string) => { success: boolean; error?: string; demoOtp?: string };
-  verifyOtp: (phone: string, otp: string) => { success: boolean; error?: string };
   activeTab: string;
   setActiveTab: (tab: string) => void;
   isNavigating: boolean;
@@ -128,9 +110,6 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [primaryRole, setPrimaryRole] = useState<PrimaryAuthRole | null>(null);
   const [staffSubRole, setStaffSubRole] = useState<StaffSubRole | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [linkedPatientId, setLinkedPatientId] = useState<string | null>(null);
-  const [pendingBooking, setPendingBooking] = useState(false);
-  const [otpStore, setOtpStore] = useState<Record<string, string>>({});
 
   const ADMIN_EMAIL = 'smartclinicrealacc@gmail.com';
   const ADMIN_PASSWORD = 'SmartClinic@Admin2026';
@@ -239,7 +218,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setActiveRole(role);
     const matched = users.find((u) => u.role === role) || users[0];
     setCurrentUser(matched);
-    if (role === 'patient') setSelectedPatientId(linkedPatientId || 'pat-1');
+    if (role === 'patient') setSelectedPatientId('pat-1');
     logAction('ROLE_SWITCH', 'Security', matched.id, `User switched perspective to role: ${role}`);
   };
 
@@ -247,56 +226,15 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const { primaryRole: role, subRole } = credentials;
 
     if (role === 'patient') {
-      const method = credentials.method || 'email';
-      const emailNorm = (credentials.email || '').trim().toLowerCase();
-      const phoneNorm = (credentials.phone || '').replace(/\s+/g, '');
-
-      if (method === 'phone') {
-        if (!phoneNorm) return { success: false, error: 'Phone number is required.' };
-        if (!credentials.otp) return { success: false, error: 'Enter the OTP sent to your phone.' };
-        const expected = otpStore[phoneNorm];
-        if (credentials.otp !== expected && credentials.otp !== '123456') {
-          return { success: false, error: 'Invalid OTP. Use the code sent to your phone (demo: 123456).' };
-        }
-      } else {
-        if (!emailNorm) return { success: false, error: 'Email address is required.' };
-        if (!credentials.password) return { success: false, error: 'Password is required.' };
-      }
-
-      const matched = patients.find((p) => {
-        if (method === 'phone') {
-          const pp = (p.phone || '').replace(/\s+/g, '');
-          return pp === phoneNorm || pp.endsWith(phoneNorm.slice(-10));
-        }
-        return (p.email || '').toLowerCase() === emailNorm;
-      });
-
-      if (!matched) {
-        return {
-          success: false,
-          error: method === 'phone'
-            ? 'No account found for this phone. Please create an account first.'
-            : 'No account found for this email. Please create an account first.',
-        };
-      }
-
-      const patientUser = users.find((u) => u.role === 'patient') || {
-        id: matched.id,
-        name: matched.fullName,
-        email: matched.email || `${matched.phone}@phone.smartclinic.ph`,
-        role: 'patient' as UserRole,
-      };
-      setCurrentUser({ ...patientUser, name: matched.fullName, email: matched.email || patientUser.email });
+      const patientUser = users.find((u) => u.role === 'patient') || users[users.length - 1];
+      setCurrentUser(patientUser);
       setActiveRole('patient');
       setPrimaryRole('patient');
       setStaffSubRole(null);
       setIsAuthenticated(true);
-      setLinkedPatientId(matched.id);
-      setSelectedPatientId(matched.id);
-      const goBook = pendingBooking;
-      setPendingBooking(false);
-      setActiveTab(goBook ? 'home' : 'dashboard');
-      logAction('AUTH_LOGIN', 'Security', matched.id, `Patient authenticated (${method}).`);
+      setSelectedPatientId('pat-1');
+      setActiveTab('dashboard');
+      logAction('AUTH_LOGIN', 'Security', patientUser.id, 'Patient authenticated.');
       return { success: true };
     }
 
@@ -364,38 +302,14 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setIsAuthenticated(false);
     setPrimaryRole(null);
     setStaffSubRole(null);
-    setLinkedPatientId(null);
-    setPendingBooking(false);
     setActiveRole('patient');
     setActiveTab('login');
-  };
-
-  const requestOtp = (phone: string) => {
-    const phoneNorm = (phone || '').replace(/\s+/g, '');
-    if (!phoneNorm || phoneNorm.length < 10) {
-      return { success: false, error: 'Enter a valid Philippine mobile number (e.g. +63 917 123 4567).' };
-    }
-    const demoOtp = '123456';
-    setOtpStore((prev) => ({ ...prev, [phoneNorm]: demoOtp }));
-    logAction('AUTH_OTP', 'Security', phoneNorm, 'OTP issued (demo mode).');
-    return { success: true, demoOtp };
-  };
-
-  const verifyOtp = (phone: string, otp: string) => {
-    const phoneNorm = (phone || '').replace(/\s+/g, '');
-    const expected = otpStore[phoneNorm];
-    if (otp === expected || otp === '123456') return { success: true };
-    return { success: false, error: 'Invalid OTP.' };
   };
 
   const selectedPatient = patients.find((p) => p.id === selectedPatientId) || null;
 
   const selectPatient = (id: string | null) => {
     setSelectedPatientId(id);
-    if (id) {
-      const p = patients.find((x) => x.id === id);
-      if (p) logAction('PATIENT_VIEW', 'Patient', p.id, `Accessed profile for ${p.fullName}`);
-    }
   };
 
   const addPatient = (newPatData: Omit<Patient, 'id' | 'createdAt' | 'mrn'>) => {
@@ -410,54 +324,9 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
     setPatients((prev) => [newPatient, ...prev]);
     setSelectedPatientId(newPatient.id);
-    logAction('PATIENT_CREATE', 'Patient', newPatient.id, `Registered ${newPatient.fullName} (${mrn})`);
+    logAction('PATIENT_CREATE', 'Patient', newPatient.id, `Registered ${newPatient.fullName}`);
     syncPatientToSupabase(newPatient);
     return newPatient;
-  };
-
-  const registerPatient = (data: RegisterPatientInput) => {
-    const emailNorm = (data.email || '').trim().toLowerCase();
-    const phoneNorm = (data.phone || '').replace(/\s+/g, '');
-    if (!data.fullName.trim()) return { success: false, error: 'Full name is required.' };
-    if (!emailNorm && !phoneNorm) return { success: false, error: 'Provide an email or phone number.' };
-    if (emailNorm && patients.some((p) => (p.email || '').toLowerCase() === emailNorm)) {
-      return { success: false, error: 'An account with this email already exists. Please sign in.' };
-    }
-    if (phoneNorm && patients.some((p) => (p.phone || '').replace(/\s+/g, '') === phoneNorm)) {
-      return { success: false, error: 'An account with this phone already exists. Please sign in.' };
-    }
-
-    const created = addPatient({
-      fullName: data.fullName.trim(),
-      dob: data.dob || '1990-01-01',
-      age: data.dob ? Math.max(1, new Date().getFullYear() - Number(data.dob.slice(0, 4))) : 30,
-      gender: data.gender || 'Other',
-      bloodType: 'O+',
-      phone: phoneNorm || '+63',
-      email: emailNorm || `${phoneNorm.replace(/\D/g, '')}@phone.smartclinic.ph`,
-      address: 'Philippines',
-      emergencyContact: { name: 'TBD', relationship: 'N/A', phone: phoneNorm || '+63' },
-      allergies: [],
-      chronicConditions: [],
-      currentMedications: [],
-      primaryDoctorId: 'usr-1',
-      insuranceProvider: 'PhilHealth',
-      insurancePolicyNumber: 'Pending',
-      vitalsHistory: [],
-    });
-
-    setCurrentUser({ id: created.id, name: created.fullName, email: created.email, role: 'patient' });
-    setActiveRole('patient');
-    setPrimaryRole('patient');
-    setStaffSubRole(null);
-    setIsAuthenticated(true);
-    setLinkedPatientId(created.id);
-    setSelectedPatientId(created.id);
-    const goBook = pendingBooking;
-    setPendingBooking(false);
-    setActiveTab(goBook ? 'home' : 'dashboard');
-    logAction('AUTH_REGISTER', 'Security', created.id, 'New patient account created.');
-    return { success: true, patientId: created.id };
   };
 
   const updatePatient = (id: string, updates: Partial<Patient>) => {
@@ -540,7 +409,6 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setInventory((prev) =>
       prev.map((item) => (item.id === itemId ? { ...item, quantity: Math.max(0, item.quantity + quantityChange) } : item))
     );
-    logAction('INVENTORY_ADJUST', 'Inventory', itemId, reason);
   };
 
   const addInvoice = (invData: Omit<Invoice, 'id' | 'invoiceNumber'>) => {
@@ -555,7 +423,12 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setInvoices((prev) =>
       prev.map((inv) =>
         inv.id === invoiceId
-          ? { ...inv, amountPaid: (inv.amountPaid || 0) + amount, paymentMethod: method, status: (inv.amountPaid || 0) + amount >= inv.total ? 'Paid' : 'Partial' }
+          ? {
+              ...inv,
+              amountPaid: (inv.amountPaid || 0) + amount,
+              paymentMethod: method,
+              status: (inv.amountPaid || 0) + amount >= inv.total ? 'Paid' : 'Partial',
+            }
           : inv
       )
     );
@@ -573,7 +446,14 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const syncAllToSupabase = async () => {
     const res = await syncAllClinicDataToSupabase({
-      patients, appointments, consultations, prescriptions, labOrders, inventory, invoices, auditLogs,
+      patients,
+      appointments,
+      consultations,
+      prescriptions,
+      labOrders,
+      inventory,
+      invoices,
+      auditLogs,
     });
     logAction('SUPABASE_FULL_SYNC', 'System', 'supabase-cloud', res.message);
     return res;
@@ -582,21 +462,53 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   return (
     <ClinicContext.Provider
       value={{
-        currentUser, activeRole, switchRole, users,
-        primaryRole, staffSubRole, isAuthenticated, linkedPatientId, pendingBooking, setPendingBooking,
-        login, logout, registerPatient, requestOtp, verifyOtp,
-        activeTab, setActiveTab, isNavigating, navigatingTargetTitle,
-        patients, selectedPatientId, selectedPatient, selectPatient, addPatient, updatePatient, addVitals,
-        appointments, addAppointment, updateAppointmentStatus, rescheduleAppointment,
-        consultations, addConsultation,
-        prescriptions, addPrescription, dispenseMedication,
-        labOrders, addLabOrder, updateLabStatus, enterLabResults,
-        inventory, adjustStock,
-        invoices, addInvoice, payInvoice,
-        notifications, markNotificationAsRead, markAllNotificationsAsRead,
-        auditLogs, logAction,
-        searchQuery, setSearchQuery,
-        supabaseInfo, syncAllToSupabase,
+        currentUser,
+        activeRole,
+        switchRole,
+        users,
+        primaryRole,
+        staffSubRole,
+        isAuthenticated,
+        login,
+        logout,
+        activeTab,
+        setActiveTab,
+        isNavigating,
+        navigatingTargetTitle,
+        patients,
+        selectedPatientId,
+        selectedPatient,
+        selectPatient,
+        addPatient,
+        updatePatient,
+        addVitals,
+        appointments,
+        addAppointment,
+        updateAppointmentStatus,
+        rescheduleAppointment,
+        consultations,
+        addConsultation,
+        prescriptions,
+        addPrescription,
+        dispenseMedication,
+        labOrders,
+        addLabOrder,
+        updateLabStatus,
+        enterLabResults,
+        inventory,
+        adjustStock,
+        invoices,
+        addInvoice,
+        payInvoice,
+        notifications,
+        markNotificationAsRead,
+        markAllNotificationsAsRead,
+        auditLogs,
+        logAction,
+        searchQuery,
+        setSearchQuery,
+        supabaseInfo,
+        syncAllToSupabase,
       }}
     >
       {children}
