@@ -100,7 +100,7 @@ const ai = apiKey
 const CLINICAL_DISCLAIMER =
   'DECISION SUPPORT ONLY: This AI output is strictly for clinical and operational reference and does NOT replace professional healthcare judgment, medical diagnosis, or prescribing authority.';
 
-function withTimeout<T>(promise: Promise<T>, ms = 25000): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, ms = 10000): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
   const timeoutPromise = new Promise<T>((_, reject) => {
     timer = setTimeout(() => reject(new Error(`AI request timeout after ${ms}ms`)), ms);
@@ -708,7 +708,7 @@ Respond ONLY with valid JSON having the following schema:
           contents: prompt,
           config: { responseMimeType: 'application/json', temperature: 0.1 },
         }),
-        25000
+        10000
       );
       const parsed = JSON.parse(response.text || '{}');
       return res.json({ success: true, data: parsed, disclaimer: CLINICAL_DISCLAIMER });
@@ -978,11 +978,12 @@ app.post('/api/ai/chat', async (req: AuthenticatedRequest, res: Response) => {
 
   if (activeRole === 'patient') {
     const patientRecord =
-      memPatients.find((p) => (linkedId && p.id === linkedId) || p.email.toLowerCase() === req.user?.email?.toLowerCase()) ||
-      memPatients[0];
+      memPatients.find((p) => (linkedId && p.id === linkedId) || (p.email && req.user?.email && p.email.toLowerCase() === req.user.email.toLowerCase())) ||
+      memPatients[0] ||
+      { id: 'pat-default', fullName: 'Elena Vargas', mrn: 'MRN-2026-0891' };
 
-    const myAppointments = memAppointments.filter((a) => a.patientId === patientRecord.id);
-    const myLabs = memLabOrders.filter((l) => l.patientId === patientRecord.id);
+    const myAppointments = memAppointments.filter((a) => patientRecord && a.patientId === patientRecord.id);
+    const myLabs = memLabOrders.filter((l) => patientRecord && l.patientId === patientRecord.id);
 
     safeContext = {
       patientName: patientRecord.fullName,
@@ -1065,7 +1066,7 @@ User Query:
           contents: prompt,
           config: { temperature: 0.15 },
         }),
-        25000
+        10000
       );
 
       let replyText = (response.text || '').trim();
