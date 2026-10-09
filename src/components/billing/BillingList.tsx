@@ -38,9 +38,11 @@ export const BillingList: React.FC = () => {
 
   const [viewReceipt, setViewReceipt] = useState<Invoice | null>(null);
 
+  const isPatient = activeRole === 'patient';
+
   const filteredInvoices = invoices.filter((inv) => {
     const matchesSearch =
-      inv.patientName.toLowerCase().includes(search.toLowerCase()) ||
+      (isPatient ? true : inv.patientName.toLowerCase().includes(search.toLowerCase())) &&
       inv.invoiceNumber.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'ALL' || inv.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -48,6 +50,11 @@ export const BillingList: React.FC = () => {
 
   const totalCollected = invoices.reduce((sum, i) => sum + i.paidAmount, 0);
   const totalOutstanding = invoices
+    .filter((i) => i.status !== 'Cancelled')
+    .reduce((sum, i) => sum + (i.totalAmount - i.paidAmount), 0);
+
+  const patientPaid = filteredInvoices.reduce((sum, i) => sum + i.paidAmount, 0);
+  const patientBalance = filteredInvoices
     .filter((i) => i.status !== 'Cancelled')
     .reduce((sum, i) => sum + (i.totalAmount - i.paidAmount), 0);
 
@@ -105,32 +112,65 @@ export const BillingList: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-6xl mx-auto text-xs font-sans pb-10">
       <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">Billing & Payment Invoices</h1>
-            <span className="text-xs bg-emerald-50 text-emerald-800 font-semibold px-2 py-0.5 rounded-full border border-emerald-200">
-              {formatPeso(totalCollected)} Collected
-            </span>
-            <span className="text-xs bg-amber-50 text-amber-800 font-semibold px-2 py-0.5 rounded-full border border-amber-200">
-              {formatPeso(totalOutstanding)} Outstanding
-            </span>
+            <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100">
+              {isPatient ? 'My Billing & Payment Statements' : 'Billing & Payment Invoices'}
+            </h1>
+            {isPatient ? (
+              <>
+                <span className="text-xs bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-semibold px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                  {formatPeso(patientPaid)} Total Paid
+                </span>
+                <span className="text-xs bg-amber-50 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-semibold px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                  {formatPeso(patientBalance)} Outstanding Balance
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-xs bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-semibold px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                  {formatPeso(totalCollected)} Collected
+                </span>
+                <span className="text-xs bg-amber-50 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-semibold px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                  {formatPeso(totalOutstanding)} Outstanding
+                </span>
+              </>
+            )}
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Fee reconciliation, insurance claim status, itemized receipts, and payment processing (PHP).
+            {isPatient
+              ? 'Specific Task: Review personal clinic statements, official receipts (OR), and online payment options (PHP).'
+              : 'Specific Task: Point of Service (POS) collection, PhilHealth Konsulta claims, and revenue reconciliation.'}
           </p>
         </div>
 
-        {activeRole !== 'patient' && (
+        {/* Generate Invoice: STRICTLY CONDITIONAL - NEVER rendered for Patient */}
+        {!isPatient && (
           <button
             onClick={() => setShowNewInvoice(true)}
-            className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-teal-700/20 cursor-pointer"
+            className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-teal-700/20 cursor-pointer self-start sm:self-auto"
           >
             <Plus className="w-4 h-4" />
             <span>Generate Invoice</span>
           </button>
         )}
+      </div>
+
+      {/* Security & Isolation Notice */}
+      <div className="p-3 bg-teal-50/60 dark:bg-teal-950/30 border border-teal-200/80 dark:border-teal-900/60 rounded-xl flex items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 text-teal-900 dark:text-teal-200">
+          <Receipt className="w-4 h-4 text-teal-600 shrink-0" />
+          <span>
+            {isPatient
+              ? 'Financial Privacy Enforced: You are viewing solely your verified billing transactions. Other patient records are strictly isolated.'
+              : 'Financial Audit Active: All invoice creations, discount overrides, and collections are timestamped.'}
+          </span>
+        </div>
+        <span className="font-mono text-[10px] bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-300 px-2 py-0.5 rounded font-bold">
+          FINANCIAL RLS
+        </span>
       </div>
 
       <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
@@ -236,6 +276,18 @@ export const BillingList: React.FC = () => {
                             className="px-2.5 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded font-semibold text-xs cursor-pointer shadow-2xs"
                           >
                             Collect Payment
+                          </button>
+                        )}
+
+                        {inv.status !== 'Paid' && isPatient && (
+                          <button
+                            onClick={() => {
+                              setPayingInvoice(inv);
+                              setPayAmount(inv.totalAmount - inv.paidAmount);
+                            }}
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-semibold text-xs cursor-pointer shadow-2xs"
+                          >
+                            Pay Online
                           </button>
                         )}
 

@@ -15,7 +15,10 @@ import {
   Plus,
   Trash2,
   CheckCircle2,
-  User
+  User,
+  ShieldAlert,
+  ShieldCheck,
+  Lock
 } from 'lucide-react';
 import { AIDisclaimerBanner } from '../common/AIDisclaimerBanner';
 import { aiService, SOAPResponse } from '../../services/aiService';
@@ -29,12 +32,39 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
   const {
     patients,
     currentUser,
+    activeRole,
     addConsultation,
     addPrescription,
     addLabOrder,
     setActiveTab,
     selectPatient,
   } = useClinic();
+
+  // STRICT ACCESS CONTROL: Patient role is strictly barred from Consultation Room
+  if (activeRole === 'patient') {
+    return (
+      <div className="max-w-xl mx-auto my-12 p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-center space-y-4 shadow-sm text-xs font-sans">
+        <div className="w-12 h-12 bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-center mx-auto">
+          <ShieldAlert className="w-6 h-6" />
+        </div>
+        <h2 className="text-base font-bold text-slate-900 dark:text-white">
+          Access Restricted — Clinical Consultation Suite
+        </h2>
+        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+          The Physician Consultation Room is reserved exclusively for attending healthcare providers.
+          To view your verified consultation summaries and vital signs, please visit the Medical Records (EMR) section.
+        </p>
+        <div>
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold cursor-pointer"
+          >
+            Return to Patient Portal
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const [selectedPatId, setSelectedPatId] = useState<string>(
     initialPatientId || patients[0]?.id || ''

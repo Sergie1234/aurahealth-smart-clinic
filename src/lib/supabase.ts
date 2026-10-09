@@ -565,3 +565,124 @@ export async function syncAllClinicDataToSupabase(data: {
     };
   }
 }
+
+// ==============================================================================
+// HARDCODED FRONTEND QUERY FILTERS (Strict Patient Data Isolation & Privacy)
+// ==============================================================================
+
+/**
+ * Strictly fetch appointments isolated to the authenticated patient's ID.
+ * Enforces .eq('patient_id', patientId) hard filter.
+ */
+export async function fetchIsolatedPatientAppointments(patientId: string) {
+  const client = getSupabaseClient();
+  if (!client || !patientId) return [];
+  try {
+    const { data, error } = await client
+      .from('appointments')
+      .select('*')
+      .eq('patient_id', patientId);
+    if (error) {
+      console.warn('Isolated appointments fetch error:', error.message);
+      return [];
+    }
+    return data || [];
+  } catch (err: any) {
+    console.warn('Isolated appointments query exception:', err?.message);
+    return [];
+  }
+}
+
+/**
+ * Strictly fetch medical record isolated to the authenticated patient's ID.
+ * Enforces .eq('id', patientId) hard filter.
+ */
+export async function fetchIsolatedPatientRecord(patientId: string) {
+  const client = getSupabaseClient();
+  if (!client || !patientId) return null;
+  try {
+    const { data, error } = await client
+      .from('patients')
+      .select('*')
+      .eq('id', patientId)
+      .single();
+    if (error) {
+      console.warn('Isolated patient record fetch error:', error.message);
+      return null;
+    }
+    return data || null;
+  } catch (err: any) {
+    console.warn('Isolated patient query exception:', err?.message);
+    return null;
+  }
+}
+
+/**
+ * Strictly fetch prescriptions isolated to the authenticated patient's ID.
+ * Enforces .eq('patient_id', patientId) hard filter.
+ */
+export async function fetchIsolatedPatientPrescriptions(patientId: string) {
+  const client = getSupabaseClient();
+  if (!client || !patientId) return [];
+  try {
+    const { data, error } = await client
+      .from('prescriptions')
+      .select('*')
+      .eq('patient_id', patientId);
+    if (error) {
+      console.warn('Isolated prescriptions fetch error:', error.message);
+      return [];
+    }
+    return data || [];
+  } catch (err: any) {
+    console.warn('Isolated prescriptions query exception:', err?.message);
+    return [];
+  }
+}
+
+/**
+ * Strictly fetch laboratory orders isolated to the authenticated patient's ID.
+ * Enforces .eq('patient_id', patientId) hard filter.
+ */
+export async function fetchIsolatedPatientLabOrders(patientId: string) {
+  const client = getSupabaseClient();
+  if (!client || !patientId) return [];
+  try {
+    const { data, error } = await client
+      .from('lab_orders')
+      .select('*')
+      .eq('patient_id', patientId);
+    if (error) {
+      console.warn('Isolated lab orders fetch error:', error.message);
+      return [];
+    }
+    return data || [];
+  } catch (err: any) {
+    console.warn('Isolated lab orders query exception:', err?.message);
+    return [];
+  }
+}
+
+/**
+ * Strictly fetch invoices isolated to the authenticated patient's ID.
+ * Enforces .eq('patient_id', patientId) hard filter.
+ */
+export async function fetchIsolatedPatientInvoices(patientId: string) {
+  const client = getSupabaseClient();
+  if (!client || !patientId) return [];
+  try {
+    const { data, error } = await client
+      .from('invoices')
+      .select('*')
+      .eq('patient_id', patientId);
+    if (error) {
+      console.warn('Isolated invoices fetch error:', error.message);
+      return [];
+    }
+    return data || [];
+  } catch (err: any) {
+    console.warn('Isolated invoices query exception:', err?.message);
+    return [];
+  }
+}
+

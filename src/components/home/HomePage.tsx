@@ -85,7 +85,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
 
           <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-slate-600 dark:text-slate-300">
             <a href="#services" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Services</a>
-            <a href="#doctors" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Our Doctors</a>
+            <a href="#specialties" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Clinical Specialties</a>
             <a href="#queue-status" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Live Queue</a>
             <a href="#portals" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Clinic Portals</a>
             <a href="#compliance" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Privacy & Standards</a>
@@ -228,19 +228,21 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
                 {/* Queue Snapshot Table */}
                 <div className="space-y-2 mt-4">
                   <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Recent Outpatient Queue
+                    Recent Outpatient Queue (Privacy Anonymized)
                   </div>
-                  {appointments.slice(0, 3).map((apt) => (
+                  {appointments.slice(0, 3).map((apt, idx) => (
                     <div
                       key={apt.id}
                       className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 text-xs"
                     >
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 px-1.5 py-0.5 rounded">
-                          {apt.queueNumber || 'Q-10'}
+                          {apt.queueNumber || `Q-${101 + idx}`}
                         </span>
                         <div>
-                          <div className="font-medium text-slate-800 dark:text-slate-200">{apt.patientName}</div>
+                          <div className="font-medium text-slate-800 dark:text-slate-200">
+                            Ticket #{apt.queueNumber || `Q-${101 + idx}`}
+                          </div>
                           <div className="text-[10px] text-slate-400">{apt.department} • {apt.time}</div>
                         </div>
                       </div>
@@ -379,47 +381,50 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
         </div>
       </section>
 
-      {/* Doctors Section */}
-      <section id="doctors" className="py-16 md:py-20 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
+      {/* Clinical Specialties & Medical Staff Section (No Doctor Pictures/Assets) */}
+      <section id="specialties" className="py-16 md:py-20 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto mb-14">
             <span className="text-xs font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
-              Medical Leadership
+              Clinical Leadership & Governance
             </span>
             <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white mt-1">
-              Meet Our Board-Certified Clinicians
+              Board-Certified Clinical Specialties
             </h2>
             <p className="text-slate-600 dark:text-slate-300 text-sm mt-3">
-              Compassionate, licensed healthcare professionals dedicated to personalized patient treatment.
+              Licensed healthcare professionals and outpatient specialists practicing under strict Philippine medical board and RA 10173 data privacy protocols.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
             {doctors.map((doc) => (
               <div
                 key={doc.id}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col sm:flex-row items-center gap-6 shadow-sm hover:shadow-md transition"
+                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5 shadow-sm hover:shadow-md transition"
               >
-                <img
-                  src={doc.avatar}
-                  alt={doc.name}
-                  className="w-24 h-24 rounded-full object-cover border-2 border-teal-500/30 shrink-0"
-                />
-                <div className="text-center sm:text-left space-y-1.5 flex-1">
-                  <div className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300">
-                    {doc.department}
+                <div className="w-14 h-14 rounded-2xl bg-teal-50 dark:bg-teal-950/80 border border-teal-200 dark:border-teal-800/60 flex items-center justify-center text-teal-600 dark:text-teal-400 shrink-0">
+                  <Stethoscope className="w-7 h-7" />
+                </div>
+                <div className="text-left space-y-1.5 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300">
+                      {doc.department}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                      <BadgeCheck className="w-3.5 h-3.5" /> Verified
+                    </span>
                   </div>
                   <h3 className="text-lg font-bold text-slate-900 dark:text-white">{doc.name}</h3>
                   <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">{doc.specialty}</p>
                   <div className="text-[11px] text-slate-400 font-mono">
-                    PRC License: {doc.licenseNumber || 'Verified Physician'}
+                    PRC License: {doc.licenseNumber || 'Active Clinical License'}
                   </div>
                   <div className="pt-2">
                     <button
                       onClick={onOpenBookAppointment}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 dark:text-teal-400 hover:text-teal-700 hover:underline"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 dark:text-teal-400 hover:text-teal-700 hover:underline cursor-pointer"
                     >
-                      <span>Book Consultation</span>
+                      <span>Book Outpatient Visit</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>

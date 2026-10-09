@@ -189,18 +189,86 @@ ALTER TABLE public.inventory_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
--- Anonymous/Authenticated Policies (Customizable in Supabase)
-CREATE POLICY "Public Read Access" ON public.patients FOR SELECT USING (true);
-CREATE POLICY "Public Insert Access" ON public.patients FOR INSERT WITH CHECK (true);
-CREATE POLICY "Public Update Access" ON public.patients FOR UPDATE USING (true);
+-- Strict Supabase Row Level Security (RLS) Policies (RA 10173 Compliant)
+-- 1. Patients Table Isolation: Patients can only view/update their own record
+CREATE POLICY "Patients: Clinicians View All" ON public.patients
+    FOR SELECT TO authenticated
+    USING (COALESCE(auth.jwt() ->> 'role', '') IN ('doctor', 'nurse', 'receptionist', 'admin'));
 
-CREATE POLICY "Appointments All Access" ON public.appointments FOR ALL USING (true);
-CREATE POLICY "Consultations All Access" ON public.consultations FOR ALL USING (true);
-CREATE POLICY "Prescriptions All Access" ON public.prescriptions FOR ALL USING (true);
-CREATE POLICY "Lab Orders All Access" ON public.lab_orders FOR ALL USING (true);
-CREATE POLICY "Inventory All Access" ON public.inventory_items FOR ALL USING (true);
-CREATE POLICY "Invoices All Access" ON public.invoices FOR ALL USING (true);
-CREATE POLICY "Audit Logs All Access" ON public.audit_logs FOR ALL USING (true);
+CREATE POLICY "Patients: Patient View Own Record" ON public.patients
+    FOR SELECT TO authenticated
+    USING (id = auth.uid() OR email = (auth.jwt() ->> 'email'));
+
+CREATE POLICY "Patients: Patient Update Own Record" ON public.patients
+    FOR UPDATE TO authenticated
+    USING (id = auth.uid() OR email = (auth.jwt() ->> 'email'));
+
+CREATE POLICY "Patients: Clinicians Manage Records" ON public.patients
+    FOR ALL TO authenticated
+    USING (COALESCE(auth.jwt() ->> 'role', '') IN ('doctor', 'nurse', 'receptionist', 'admin'));
+
+-- 2. Appointments Table Isolation: Patients can only view/manage appointments where patient_id matches
+CREATE POLICY "Appointments: Isolated Patient Access" ON public.appointments
+    FOR SELECT TO authenticated
+    USING (patient_id = auth.uid() OR COALESCE(auth.jwt() ->> 'role', '') IN ('doctor', 'nurse', 'receptionist', 'admin'));
+
+CREATE POLICY "Appointments: Patient Self-Book" ON public.appointments
+    FOR INSERT TO authenticated
+    WITH CHECK (patient_id = auth.uid() OR COALESCE(auth.jwt() ->> 'role', '') IN ('doctor', 'nurse', 'receptionist', 'admin'));
+
+CREATE POLICY "Appointments: Patient Update Own" ON public.appointments
+    FOR UPDATE TO authenticated
+    USING (patient_id = auth.uid() OR COALESCE(auth.jwt() ->> 'role', '') IN ('doctor', 'nurse', 'receptionist', 'admin'));
+
+-- 3. Consultations Table Isolation: Patients view only their own, clinicians manage
+CREATE POLICY "Consultations: Clinicians Manage" ON public.consultations
+    FOR ALL TO authenticated
+    USING (COALESCE(auth.jwt() ->> 'role', '') IN ('doctor', 'nurse', 'admin'));
+
+CREATE POLICY "Consultations: Patient View Own" ON public.consultations
+    FOR SELECT TO authenticated
+    USING (patient_id = auth.uid());
+
+-- 4. Prescriptions Table Isolation: Patients view only their own, doctor writes, pharmacist dispenses
+CREATE POLICY "Prescriptions: Patient View Own" ON public.prescriptions
+    FOR SELECT TO authenticated
+    USING (patient_id = auth.uid() OR COALESCE(auth.jwt() ->> 'role', '') IN ('doctor', 'pharmacist', 'nurse', 'admin'));
+
+CREATE POLICY "Prescriptions: Clinical Staff Manage" ON public.prescriptions
+    FOR ALL TO authenticated
+    USING (COALESCE(auth.jwt() ->> 'role', '') IN ('doctor', 'pharmacist', 'admin'));
+
+-- 5. Lab Orders Table Isolation: Patients view only their own, clinical staff manage
+CREATE POLICY "Lab Orders: Patient View Own" ON public.lab_orders
+    FOR SELECT TO authenticated
+    USING (patient_id = auth.uid() OR COALESCE(auth.jwt() ->> 'role', '') IN ('doctor', 'lab_technician', 'nurse', 'admin'));
+
+CREATE POLICY "Lab Orders: Staff Manage" ON public.lab_orders
+    FOR ALL TO authenticated
+    USING (COALESCE(auth.jwt() ->> 'role', '') IN ('doctor', 'lab_technician', 'admin'));
+
+-- 6. Inventory Items Table Isolation: Pharmacy & Doctor staff only, blocked for patients
+CREATE POLICY "Inventory: Staff Manage" ON public.inventory_items
+    FOR ALL TO authenticated
+    USING (COALESCE(auth.jwt() ->> 'role', '') IN ('doctor', 'pharmacist', 'admin'));
+
+-- 7. Invoices Table Isolation: Patients view only their own, staff manage
+CREATE POLICY "Invoices: Patient View Own" ON public.invoices
+    FOR SELECT TO authenticated
+    USING (patient_id = auth.uid() OR COALESCE(auth.jwt() ->> 'role', '') IN ('receptionist', 'admin'));
+
+CREATE POLICY "Invoices: Staff Manage" ON public.invoices
+    FOR ALL TO authenticated
+    USING (COALESCE(auth.jwt() ->> 'role', '') IN ('receptionist', 'admin'));
+
+-- 8. Audit Logs Table Isolation: Admin only
+CREATE POLICY "Audit Logs: Admin Only View" ON public.audit_logs
+    FOR SELECT TO authenticated
+    USING (COALESCE(auth.jwt() ->> 'role', '') = 'admin');
+
+CREATE POLICY "Audit Logs: System Insert" ON public.audit_logs
+    FOR INSERT TO authenticated
+    WITH CHECK (true);
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_patients_mrn ON public.patients(mrn);

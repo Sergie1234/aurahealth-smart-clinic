@@ -108,6 +108,19 @@ export const PatientDashboardView: React.FC<Props> = ({
 
       <EmergencyDisclaimerBanner />
 
+      {/* Specific Task & Privacy Directive Banner */}
+      <div className="p-3 bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 rounded-xl flex items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 text-teal-900 dark:text-teal-200">
+          <Heart className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+          <span>
+            Specific Task: Confidential Patient Health Portal — Real-time overview of your upcoming appointments, digital prescriptions, lab orders, and vital signs under Philippine RA 10173.
+          </span>
+        </div>
+        <span className="font-mono text-[10px] bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-300 px-2 py-0.5 rounded font-bold">
+          PATIENT ISOLATED
+        </span>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
@@ -141,7 +154,9 @@ export const PatientDashboardView: React.FC<Props> = ({
             <span>Documented Allergies</span>
             <AlertTriangle className="w-4 h-4 text-rose-500" />
           </div>
-          <p className="text-sm font-bold text-rose-700 truncate">{patient.allergies.join(', ')}</p>
+          <p className="text-sm font-bold text-rose-700 truncate">
+            {patient.allergies?.map((a: any) => typeof a === 'string' ? a : a.allergen).join(', ') || 'No known allergies'}
+          </p>
           <span className="text-[10px] text-rose-600 font-semibold">Medical Flagged</span>
         </div>
       </div>

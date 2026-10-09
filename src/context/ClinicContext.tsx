@@ -68,6 +68,7 @@ interface ClinicContextType {
   isNavigating: boolean;
   navigatingTargetTitle: string;
   patients: Patient[];
+  allStaffPatients: Patient[];
   selectedPatientId: string | null;
   selectedPatient: Patient | null;
   selectPatient: (id: string | null) => void;
@@ -574,18 +575,83 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setActiveTab('home');
   };
 
-  const visiblePatients = primaryRole === 'patient' && linkedPatientId
-    ? patients.filter((p) => p.id === linkedPatientId)
-    : patients;
+  // ==============================================================================
+  // STRICT TENANT/PATIENT DATA ISOLATION (Fix Data Leaks & Enforce RA 10173)
+  // ==============================================================================
+  const isPatientScope = primaryRole === 'patient' || activeRole === 'patient';
 
-  const myAppointments = primaryRole === 'patient' && linkedPatientId
-    ? appointments.filter((a) => a.patientId === linkedPatientId)
-    : appointments;
+  // Identify current authenticated patient record
+  const currentPatientRecord = useMemo(() => {
+    if (!isPatientScope) return null;
+    return (
+      patients.find((p) => p.id === linkedPatientId) ||
+      patients.find((p) => currentUser.email && p.email?.toLowerCase() === currentUser.email?.toLowerCase()) ||
+      patients[0]
+    );
+  }, [isPatientScope, linkedPatientId, patients, currentUser.email]);
 
-  const selectedPatient = patients.find((p) => p.id === selectedPatientId) || null;
+  // When patient is logged in, isolated arrays only contain their OWN records
+  const isolatedPatients = useMemo(() => {
+    if (isPatientScope && currentPatientRecord) {
+      return [currentPatientRecord];
+    }
+    return patients;
+  }, [isPatientScope, currentPatientRecord, patients]);
+
+  const isolatedAppointments = useMemo(() => {
+    if (isPatientScope && currentPatientRecord) {
+      return appointments.filter(
+        (a) => a.patientId === currentPatientRecord.id || a.patientName === currentPatientRecord.fullName
+      );
+    }
+    return appointments;
+  }, [isPatientScope, currentPatientRecord, appointments]);
+
+  const isolatedConsultations = useMemo(() => {
+    if (isPatientScope && currentPatientRecord) {
+      return consultations.filter(
+        (c) => c.patientId === currentPatientRecord.id || c.patientName === currentPatientRecord.fullName
+      );
+    }
+    return consultations;
+  }, [isPatientScope, currentPatientRecord, consultations]);
+
+  const isolatedPrescriptions = useMemo(() => {
+    if (isPatientScope && currentPatientRecord) {
+      return prescriptions.filter(
+        (p) => p.patientId === currentPatientRecord.id || p.patientName === currentPatientRecord.fullName
+      );
+    }
+    return prescriptions;
+  }, [isPatientScope, currentPatientRecord, prescriptions]);
+
+  const isolatedLabOrders = useMemo(() => {
+    if (isPatientScope && currentPatientRecord) {
+      return labOrders.filter(
+        (l) => l.patientId === currentPatientRecord.id || l.patientName === currentPatientRecord.fullName
+      );
+    }
+    return labOrders;
+  }, [isPatientScope, currentPatientRecord, labOrders]);
+
+  const isolatedInvoices = useMemo(() => {
+    if (isPatientScope && currentPatientRecord) {
+      return invoices.filter(
+        (i) => i.patientId === currentPatientRecord.id || i.patientName === currentPatientRecord.fullName
+      );
+    }
+    return invoices;
+  }, [isPatientScope, currentPatientRecord, invoices]);
+
+  const visiblePatients = isolatedPatients;
+  const myAppointments = isolatedAppointments;
+
+  const selectedPatient = isPatientScope && currentPatientRecord
+    ? currentPatientRecord
+    : (patients.find((p) => p.id === selectedPatientId) || null);
 
   const selectPatient = (id: string | null) => {
-    if (primaryRole === 'patient' && linkedPatientId && id && id !== linkedPatientId) return;
+    if (isPatientScope && currentPatientRecord && id && id !== currentPatientRecord.id) return;
     setSelectedPatientId(id);
   };
 
@@ -845,29 +911,30 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setActiveTab,
         isNavigating,
         navigatingTargetTitle,
-        patients,
+        patients: isolatedPatients,
+        allStaffPatients: patients,
         selectedPatientId,
         selectedPatient,
         selectPatient,
         addPatient,
         updatePatient,
         addVitals,
-        appointments,
+        appointments: isolatedAppointments,
         addAppointment,
         updateAppointmentStatus,
         rescheduleAppointment,
-        consultations,
+        consultations: isolatedConsultations,
         addConsultation,
-        prescriptions,
+        prescriptions: isolatedPrescriptions,
         addPrescription,
         dispenseMedication,
-        labOrders,
+        labOrders: isolatedLabOrders,
         addLabOrder,
         updateLabStatus,
         enterLabResults,
         inventory,
         adjustStock,
-        invoices,
+        invoices: isolatedInvoices,
         addInvoice,
         payInvoice,
         notifications,

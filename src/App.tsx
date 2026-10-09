@@ -99,6 +99,42 @@ const ClinicAppContent: React.FC = () => {
     }
   }, [isAuthenticated, pendingBook, pendingAction, primaryRole, setPendingAction, setActiveTab]);
 
+  // Strict Role Route & Tab Isolation Guard (Enforce RA 10173 and strip unauthorized modules)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const isPatient = activeRole === 'patient';
+    const isPharmacy = activeRole === 'pharmacist' || (activeRole as string) === 'pharmacy';
+
+    if (isPatient) {
+      const unauthorizedTabsForPatient = [
+        'patients',
+        'queue',
+        'consultations',
+        'inventory',
+        'reports',
+        'predictive-analytics',
+        'audit-logs',
+      ];
+      if (unauthorizedTabsForPatient.includes(activeTab)) {
+        setActiveTab(activeTab === 'patients' ? 'emr' : 'dashboard');
+      }
+    } else if (isPharmacy) {
+      const unauthorizedTabsForPharmacy = [
+        'queue',
+        'inventory',
+        'reports',
+        'patients',
+        'consultations',
+        'laboratory',
+        'billing',
+        'audit-logs',
+      ];
+      if (unauthorizedTabsForPharmacy.includes(activeTab)) {
+        setActiveTab('prescriptions');
+      }
+    }
+  }, [isAuthenticated, activeRole, activeTab, setActiveTab]);
+
   const handleStartConsultation = (patientId: string) => {
     setConsultPatientId(patientId);
     selectPatient(patientId);
@@ -167,9 +203,26 @@ const ClinicAppContent: React.FC = () => {
               {activeTab === 'dashboard' && primaryRole === 'admin' && (
                 <AdminDashboardView />
               )}
-              {(activeTab === 'patients' || activeTab === 'emr') && (
+              {activeTab === 'patients' && activeRole !== 'patient' && (
                 <PatientList
                   onSelectPatient={(id) => {
+                    selectPatient(id);
+                    setDetailPatient(patients.find((p) => p.id === id) || null);
+                  }}
+                  onOpenNewPatient={() => setShowNewPatient(true)}
+                  onOpenQR={(p) => setQrPatient(p)}
+                  onOpenAISummary={() => {}}
+                  onStartConsultation={handleStartConsultation}
+                  onBookAppointment={(id) => {
+                    selectPatient(id);
+                    openBookAppointment();
+                  }}
+                />
+              )}
+              {activeTab === 'emr' && (
+                <PatientList
+                  onSelectPatient={(id) => {
+                    if (activeRole === 'patient') return;
                     selectPatient(id);
                     setDetailPatient(patients.find((p) => p.id === id) || null);
                   }}
