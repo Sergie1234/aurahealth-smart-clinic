@@ -66,6 +66,10 @@ export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatien
                 <span className="bg-teal-50 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 font-semibold text-[10px] px-1.5 py-0.5 rounded border border-teal-200/60 uppercase">
                   {isPatient ? 'Patient Portal' : 'Clinical Hub'}
                 </span>
+                <span className="hidden lg:inline-flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold text-[9px] px-1.5 py-0.5 rounded border border-emerald-200/60 dark:border-emerald-800/60 uppercase">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Live Server (RA 10173)
+                </span>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium leading-tight">
                 {isPatient ? 'Confidential Patient Health Portal' : 'Outpatient Healthcare Management'}

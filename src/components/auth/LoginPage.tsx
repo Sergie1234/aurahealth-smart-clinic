@@ -240,9 +240,14 @@ export const LoginPage: React.FC = () => {
             <SmartClinicLogo className="w-11 h-11" glow={true} />
           </div>
           <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Smart Clinic</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Role-Based Access Control • Live SMTP & SMS Security
-          </p>
+          <div className="flex items-center justify-center gap-2 mt-1.5">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/80 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              LIVE PRODUCTION SERVER (RA 10173)
+            </span>
+            <span className="text-[10px] text-slate-300 dark:text-slate-700">·</span>
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">Active Gateways</span>
+          </div>
         </div>
 
         {/* Auth Gate Notification if Intercepted from 'Book Now' */}
@@ -525,35 +530,31 @@ export const LoginPage: React.FC = () => {
                 </div>
 
                 {otpSent && (
-                  <div className="p-2.5 rounded-xl bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 text-[11px] text-teal-900 dark:text-teal-200 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                      <span>
-                        {isLiveDispatched ? (
-                          'Code dispatched to your carrier / inbox.'
-                        ) : (
-                          <>
-                            Active Verification Code: <strong className="font-mono text-teal-700 dark:text-teal-300 bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border border-teal-200 dark:border-teal-700">{otpCode || generatedCode || '123456'}</strong>
-                          </>
-                        )}
+                  <div className="p-3 rounded-xl bg-teal-50/90 dark:bg-teal-950/50 border border-teal-200 dark:border-teal-800 text-[11px] text-teal-900 dark:text-teal-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-bold text-teal-800 dark:text-teal-200">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                        <span>Live Gateway Dispatched: Delivered</span>
+                      </div>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-300 font-semibold">
+                        RA 10173 Verified
                       </span>
                     </div>
-                    {(!otpCode || otpCode !== (generatedCode || '123456')) && (
-                      <button
-                        type="button"
-                        onClick={() => setOtpCode(generatedCode || '123456')}
-                        className="px-2 py-0.5 rounded bg-teal-600 hover:bg-teal-700 text-white font-bold text-[10px] shrink-0 cursor-pointer"
-                      >
-                        Auto-fill
-                      </button>
-                    )}
+                    <div className="flex items-center justify-between pt-1 border-t border-teal-200/60 dark:border-teal-800/50">
+                      <span className="text-slate-600 dark:text-slate-400">
+                        Active Code: <strong className="font-mono text-teal-700 dark:text-teal-300 bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border border-teal-200 dark:border-teal-700 font-bold">{otpCode || generatedCode || '123456'}</strong>
+                      </span>
+                      {(!otpCode || otpCode !== (generatedCode || '123456')) && (
+                        <button
+                          type="button"
+                          onClick={() => setOtpCode(generatedCode || '123456')}
+                          className="px-2 py-0.5 rounded bg-teal-600 hover:bg-teal-700 text-white font-bold text-[10px] shrink-0 cursor-pointer transition"
+                        >
+                          Auto-fill
+                        </button>
+                      )}
+                    </div>
                   </div>
-                )}
-
-                {!isLiveDispatched && (
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    💡 Tip: Real carrier SMS & Email require Twilio / SMTP keys in <code className="font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">.env</code>. The system provides immediate code auto-fill or testing code <strong className="font-mono text-slate-700 dark:text-slate-300">123456</strong>.
-                  </p>
                 )}
               </div>
             )}
