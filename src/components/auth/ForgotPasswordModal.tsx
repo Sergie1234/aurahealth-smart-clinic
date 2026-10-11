@@ -61,18 +61,13 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
         return;
       }
 
-      setChannel(data.channel || (cleanId.includes('@') ? 'email' : 'sms'));
-      if (data.code) {
-        setCode(data.code);
-      }
+      setChannel('email');
       setStep('confirm');
-      toastSuccess(`Password reset code sent to ${data.destination || cleanId}!`);
+      toastSuccess(`Password reset code sent to ${data.destination || cleanId}! Please check your email inbox.`);
     } catch {
       setLoading(false);
-      // Seamless offline / local fallback
-      setCode('123456');
-      setStep('confirm');
-      toastSuccess('Security reset code generated: 123456');
+      setError('Unable to reach server. Please check your internet connection.');
+      toastError('Unable to send password reset code.');
     }
   };
 

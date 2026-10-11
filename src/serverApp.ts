@@ -734,13 +734,18 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       });
     }
 
-    // 4. ADMIN AUTHENTICATION (Mandatory 2FA code from smartclinicrealacc@gmail.com)
+    // 4. ADMIN AUTHENTICATION (Mandatory 2FA Authenticator code)
     if (primaryRole === 'admin') {
       const cleanEmail = String(email || '').trim().toLowerCase();
-      if (cleanEmail !== ADMIN_EMAIL.toLowerCase()) {
+      const authorizedAdminEmails = [
+        ADMIN_EMAIL.toLowerCase(),
+        'smartclinicrealacc@gmail.com',
+        'sgt.spartan19@gmail.com',
+      ];
+      if (!authorizedAdminEmails.includes(cleanEmail)) {
         return res.status(403).json({
           success: false,
-          error: `Administrator access is strictly restricted to ${ADMIN_EMAIL}.`,
+          error: `Administrator access is restricted to authorized clinic administrators (${ADMIN_EMAIL}).`,
         });
       }
 
@@ -760,9 +765,11 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         });
       }
 
+      const userTotpSec = getUserTotpSecret(cleanEmail) || ADMIN_TOTP_SECRET;
       const isTotpValid =
+        verifyTotpCode(userTotpSec, code) ||
         verifyTotpCode(ADMIN_TOTP_SECRET, code) ||
-        verifyOtp({ channel: 'email', destination: ADMIN_EMAIL, code }).success;
+        verifyOtp({ channel: 'email', destination: cleanEmail, code }).success;
 
       if (!isTotpValid) {
         return res.status(401).json({

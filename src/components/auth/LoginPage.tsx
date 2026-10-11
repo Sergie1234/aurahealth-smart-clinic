@@ -63,7 +63,7 @@ export const LoginPage: React.FC = () => {
   // Quick-fill live Authenticator TOTP rolling code
   const handleQuickFillTotp = async () => {
     try {
-      const target = isAdmin ? 'smartclinicrealacc@gmail.com' : email.trim().toLowerCase() || 'patient@smartclinic.ph';
+      const target = isAdmin ? (email.trim().toLowerCase() || 'smartclinicrealacc@gmail.com') : email.trim().toLowerCase() || 'patient@smartclinic.ph';
       const res = await fetch(`/api/auth/2fa/code?email=${encodeURIComponent(target)}`);
       if (res.ok) {
         const data = await res.json();
@@ -80,12 +80,7 @@ export const LoginPage: React.FC = () => {
     } catch {
       // Fallback
     }
-    if (isAdmin) setTwoFactorCode('123456');
-    else {
-      setOtpCode('123456');
-      setOtpSent(true);
-    }
-    toastSuccess('Demo Authenticator code 123456 applied.');
+    toastInfo('Please check the 6-digit rolling code in your Authenticator app.');
   };
 
   // Send Patient OTP (Email) or Trigger Authenticator Setup
@@ -105,12 +100,14 @@ export const LoginPage: React.FC = () => {
     }
     const res = await requestEmailOtp(cleanEmail, mode === 'register' ? 'patient_register' : 'patient_login');
     setLoading(false);
-    const codeToUse = res.code || '123456';
-    setOtpCode(codeToUse);
-    setGeneratedCode(codeToUse);
+    if (!res.success && res.error) {
+      setError(res.error);
+      toastError(res.error);
+      return;
+    }
     setOtpSent(true);
     setIsLiveDispatched(Boolean(res.liveDispatched));
-    toastSuccess(`Verification code ${codeToUse} sent to ${cleanEmail}.`);
+    toastSuccess(`Verification code sent to ${cleanEmail}. Please check your inbox.`);
   };
 
   // Handle Form Submission
@@ -121,7 +118,12 @@ export const LoginPage: React.FC = () => {
 
     // Patient Validation
     if (isPatient) {
-      const finalCode = (method === 'authenticator' ? otpCode || '123456' : otpCode || generatedCode || '123456').trim();
+      const finalCode = (method === 'authenticator' ? otpCode : otpCode || generatedCode).trim();
+      if (!finalCode) {
+        setError(method === 'authenticator' ? 'Please enter the 6-digit code from your Authenticator app.' : 'Please enter the 6-digit verification code sent to your email.');
+        setLoading(false);
+        return;
+      }
 
       const res = await login({
         primaryRole: 'patient',
@@ -185,11 +187,16 @@ export const LoginPage: React.FC = () => {
 
     // Admin Login with 2FA
     if (isAdmin) {
-      const finalAdminCode = (twoFactorCode || generatedCode || '123456').trim();
+      const finalAdminCode = (twoFactorCode || generatedCode).trim();
+      if (!finalAdminCode) {
+        setError('Please enter the 6-digit code from your Authenticator app.');
+        setLoading(false);
+        return;
+      }
 
       const res = await login({
         primaryRole: 'admin',
-        email: 'smartclinicrealacc@gmail.com',
+        email: email.trim().toLowerCase() || 'smartclinicrealacc@gmail.com',
         password: password || 'SmartClinic@Admin2026',
         twoFactorCode: finalAdminCode,
       });
@@ -413,19 +420,18 @@ export const LoginPage: React.FC = () => {
                 <input
                   type="email"
                   required
-                  readOnly={isAdmin}
-                  value={isAdmin ? 'smartclinicrealacc@gmail.com' : email}
+                  value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={
-                    isDoctor
+                    isAdmin
+                      ? 'smartclinicrealacc@gmail.com'
+                      : isDoctor
                       ? 'maria.reyes@smartclinic.ph'
                       : isStaff
                       ? `${staffSubRole}@smartclinic.ph`
                       : 'you@example.com'
                   }
-                  className={`flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500 ${
-                    isAdmin ? 'bg-slate-50 dark:bg-slate-800/50 cursor-not-allowed font-medium' : ''
-                  }`}
+                  className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500 font-medium"
                 />
                 {isPatient && method === 'email' && (
                   <button
@@ -609,16 +615,7 @@ export const LoginPage: React.FC = () => {
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
                   <span>Google Authenticator • Microsoft Authenticator • Authy</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTwoFactorCode('123456');
-                      toastSuccess('Demo code 123456 applied.');
-                    }}
-                    className="font-mono text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
-                  >
-                    Universal Test: 123456
-                  </button>
+                  <span className="text-[10px] text-slate-400">RFC 6238 TOTP Standard</span>
                 </div>
               </div>
             )}
@@ -658,14 +655,14 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Quick Demo Accounts for Testing */}
+          {/* Quick System Role Switcher */}
           <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
             <div className="flex items-center justify-between mb-2">
               <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
-                1-Click Demo Accounts
+                Quick Role Credentials
               </p>
               <span className="text-[10px] font-medium text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 px-2 py-0.5 rounded-full border border-teal-200 dark:border-teal-800">
-                Universal Test Code: 123456
+                System Presets
               </span>
             </div>
             
@@ -678,15 +675,14 @@ export const LoginPage: React.FC = () => {
                   setMethod('email');
                   setEmail('elena.vargas@example.com');
                   setMode('login');
-                  setOtpSent(true);
-                  setOtpCode('123456');
-                  setGeneratedCode('123456');
+                  setOtpSent(false);
+                  setOtpCode('');
                 }}
                 className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
                 <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Patient</div>
                 <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">elena.vargas@example.com</div>
-                <div className="text-[9px] font-mono text-teal-600 dark:text-teal-400">Code: 123456</div>
+                <div className="text-[9px] text-teal-600 dark:text-teal-400 font-medium">Email Verification</div>
               </button>
 
               <button
@@ -701,7 +697,7 @@ export const LoginPage: React.FC = () => {
               >
                 <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Doctor (MD)</div>
                 <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">maria.reyes@smartclinic.ph</div>
-                <div className="text-[9px] font-mono text-teal-600 dark:text-teal-400">Pass: doctor123</div>
+                <div className="text-[9px] text-slate-400">Consultation Suite</div>
               </button>
 
               <button
@@ -717,7 +713,7 @@ export const LoginPage: React.FC = () => {
               >
                 <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Nurse Triage</div>
                 <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">ana.villanueva@smartclinic.ph</div>
-                <div className="text-[9px] font-mono text-teal-600 dark:text-teal-400">Pass: nurse123</div>
+                <div className="text-[9px] text-slate-400">Outpatient Intake</div>
               </button>
 
               <button
@@ -733,7 +729,7 @@ export const LoginPage: React.FC = () => {
               >
                 <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Pharmacist</div>
                 <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">pharmacy@smartclinic.ph</div>
-                <div className="text-[9px] font-mono text-teal-600 dark:text-teal-400">Pass: pharm123</div>
+                <div className="text-[9px] text-slate-400">Pharmacy & Dispense</div>
               </button>
 
               <button
@@ -749,7 +745,7 @@ export const LoginPage: React.FC = () => {
               >
                 <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Receptionist</div>
                 <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">reception@smartclinic.ph</div>
-                <div className="text-[9px] font-mono text-teal-600 dark:text-teal-400">Pass: reception123</div>
+                <div className="text-[9px] text-slate-400">Front Desk & Intake</div>
               </button>
 
               <button
@@ -759,18 +755,17 @@ export const LoginPage: React.FC = () => {
                   setPrimaryRole('admin');
                   setEmail('smartclinicrealacc@gmail.com');
                   setPassword('SmartClinic@Admin2026');
-                  setTwoFactorCode('123456');
-                  toastSuccess('Admin credentials and Authenticator 2FA test code auto-filled.');
+                  setTwoFactorCode('');
                 }}
                 className="p-2 rounded-xl border border-amber-300 dark:border-amber-700/60 bg-amber-50/50 dark:bg-amber-950/30 hover:border-amber-500 text-left transition cursor-pointer"
               >
-                <div className="text-[11px] font-bold text-amber-900 dark:text-amber-200">Admin (Authenticator)</div>
+                <div className="text-[11px] font-bold text-amber-900 dark:text-amber-200">Admin (2FA)</div>
                 <div className="text-[9px] text-amber-700 dark:text-amber-300 truncate">smartclinicrealacc@gmail.com</div>
-                <div className="text-[9px] font-mono text-amber-800 dark:text-amber-300">Code: Authenticator / 123456</div>
+                <div className="text-[9px] text-amber-800 dark:text-amber-300 font-semibold">Authenticator 2FA</div>
               </button>
             </div>
             <p className="text-[10px] text-center text-slate-400">
-              Click any demo account above to auto-fill the login form, then click the submit button.
+              Select a role to populate credentials, or enter your registered account above.
             </p>
           </div>
 

@@ -130,19 +130,11 @@ export class VerificationService {
   }): { success: boolean; error?: string; metadata?: Record<string, any> } {
     const inputCode = String(params.code || '').trim();
 
-    // Universal testing code bypass
-    if (inputCode === '123456' || inputCode === '000000') {
-      return { success: true };
-    }
-
     const key = this.getStoreKey(params.channel, params.destination, params.purpose);
     // Also check wildcard key if specific purpose key is not found
     const record = this.otpStore.get(key) || this.otpStore.get(this.getStoreKey(params.channel, params.destination));
 
     if (!record) {
-      if (/^\d{6}$/.test(inputCode)) {
-        return { success: true };
-      }
       return { success: false, error: 'No active verification code found. Please request a new code.' };
     }
 

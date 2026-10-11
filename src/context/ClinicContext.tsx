@@ -377,13 +377,9 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const verifyServerOtp = async (input: { channel: 'email' | 'sms'; destination: string; code: string }) => {
-    const cleanCode = String(input.code || '').trim();
-    if (cleanCode === '123456' || cleanCode === '000000') {
-      return { success: true };
-    }
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
       const res = await fetch('/api/auth/otp/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -393,13 +389,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       clearTimeout(timeoutId);
       const data = await res.json();
       if (!res.ok || !data.success) {
-        // Universal demo code fallback
-        if (cleanCode === '123456') return { success: true };
         return { success: false, error: data.error || 'OTP verification failed.' };
       }
       return { success: true };
     } catch {
-      return { success: true };
+      return { success: false, error: 'Network error verifying code. Please try again.' };
     }
   };
 

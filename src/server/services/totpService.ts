@@ -163,6 +163,7 @@ export const PATIENT_DEFAULT_TOTP_SECRET = 'SMARTCLINICPATIENTAUTH2026KEY';
 // In-memory store for user-specific TOTP secrets
 const userTotpSecrets = new Map<string, string>();
 userTotpSecrets.set('smartclinicrealacc@gmail.com', ADMIN_TOTP_SECRET);
+userTotpSecrets.set('sgt.spartan19@gmail.com', ADMIN_TOTP_SECRET);
 userTotpSecrets.set('elena.vargas@example.com', PATIENT_DEFAULT_TOTP_SECRET);
 
 export function getUserTotpSecret(identifier: string): string {

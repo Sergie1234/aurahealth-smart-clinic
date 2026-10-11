@@ -46,7 +46,8 @@ export class EmailService {
     const host = process.env.SMTP_HOST || 'smtp.gmail.com';
     const port = Number(process.env.SMTP_PORT || 465);
     const user = (process.env.SMTP_USER || process.env.SMTP_EMAIL || '').trim();
-    const pass = (process.env.SMTP_PASSWORD || process.env.SMTP_PASS || process.env.SMTP_APP_PASSWORD || '').trim();
+    const rawPass = (process.env.SMTP_PASSWORD || process.env.SMTP_PASS || process.env.SMTP_APP_PASSWORD || '').trim();
+    const pass = host.includes('gmail.com') ? rawPass.replace(/\s+/g, '') : rawPass;
     const secure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : port === 465;
 
     if (user && pass) {
@@ -57,10 +58,11 @@ export class EmailService {
           secure,
           auth: { user, pass },
           tls: { rejectUnauthorized: false },
-          connectionTimeout: 3000,
-          greetingTimeout: 3000,
+          connectionTimeout: 15000,
+          greetingTimeout: 15000,
         });
         this.isConfigured = true;
+        console.log(`[EmailService] Active real SMTP transporter initialized for ${user} on ${host}:${port}`);
       } catch (err: any) {
         console.warn('[EmailService] Failed to initialize SMTP transporter:', err?.message || err);
         this.autoSelfConfigure();
@@ -81,7 +83,7 @@ export class EmailService {
           user: testAccount.user,
           pass: testAccount.pass,
         },
-        connectionTimeout: 3000,
+        connectionTimeout: 10000,
       });
       this.isConfigured = true;
       console.log(`[EmailService] Auto-configured background SMTP for ${testAccount.user}`);
@@ -99,11 +101,11 @@ export class EmailService {
   public getStatus() {
     return {
       configured: this.isConfigured,
-      host: process.env.SMTP_HOST || 'smtp.ethereal.email',
-      port: Number(process.env.SMTP_PORT || 587),
-      user: process.env.SMTP_USER || 'auto-configured',
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: Number(process.env.SMTP_PORT || 465),
+      user: process.env.SMTP_USER || 'smartclinicrealacc@gmail.com',
       from: this.getFromAddress(),
-      secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : false,
+      secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : true,
     };
   }
 
@@ -133,7 +135,7 @@ export class EmailService {
         });
 
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('SMTP connection timeout')), 2500)
+          setTimeout(() => reject(new Error('SMTP connection timeout')), 15000)
         );
 
         const info = (await Promise.race([sendPromise, timeoutPromise])) as any;
@@ -143,7 +145,7 @@ export class EmailService {
         emailAuditLogs.unshift(logEntry);
         if (emailAuditLogs.length > 200) emailAuditLogs.pop();
 
-        console.log(`[EmailService] Live email dispatched to ${options.to} (ID: ${info.messageId})`);
+        console.log(`[EmailService] Real email dispatched to ${options.to} (ID: ${info.messageId})`);
         return { success: true, messageId: info.messageId, simulated: false };
       } catch (err: any) {
         console.warn(`[EmailService] SMTP send error to ${options.to}:`, err?.message || err);
