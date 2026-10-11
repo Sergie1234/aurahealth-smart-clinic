@@ -12,7 +12,13 @@ import {
   sendSmsOtp,
   verifyOtp,
   getOtpDeliveryStatus,
+  setRuntimeGatewayConfig,
+  getRuntimeGatewayConfig,
+  verifySmtpConnection,
 } from './server/services/otpService';
+import { emailService } from './server/services/emailService';
+import { smsService, normalizePhoneNumber } from './server/services/smsService';
+import { verificationService } from './server/services/verificationService';
 import {
   generateToken,
   authMiddleware,
@@ -148,6 +154,56 @@ app.get('/api/auth/otp/status', (_req: Request, res: Response) => {
   res.json({ success: true, ...getOtpDeliveryStatus() });
 });
 
+app.post('/api/auth/otp/configure', async (req: Request, res: Response) => {
+  try {
+    const { smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom, twilioSid, twilioToken, twilioFromNumber } = req.body || {};
+
+    if (smtpUser && smtpPass) {
+      const verifyRes = await verifySmtpConnection({
+        host: smtpHost,
+        port: smtpPort ? Number(smtpPort) : undefined,
+        user: smtpUser,
+        pass: smtpPass,
+      });
+      if (!verifyRes.ok) {
+        return res.status(400).json({ success: false, error: verifyRes.error });
+      }
+    }
+
+    setRuntimeGatewayConfig({
+      smtpHost,
+      smtpPort: smtpPort ? Number(smtpPort) : undefined,
+      smtpUser,
+      smtpPass,
+      smtpFrom: smtpFrom || smtpUser,
+      twilioSid,
+      twilioToken,
+      twilioFromNumber,
+    });
+
+    return res.json({
+      success: true,
+      message: 'Gateway configuration updated and verified.',
+      ...getOtpDeliveryStatus(),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || 'Configuration error.' });
+  }
+});
+
+app.post('/api/auth/otp/test-email', async (req: Request, res: Response) => {
+  try {
+    const email = String(req.body?.email || '').trim();
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ success: false, error: 'Valid recipient email required.' });
+    }
+    const result = await sendEmailOtp({ email, purpose: 'patient_login' });
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || 'Test email failed.' });
+  }
+});
+
 app.post('/api/auth/otp/email', async (req: Request, res: Response) => {
   try {
     const email = String(req.body?.email || '').trim();
@@ -185,6 +241,249 @@ app.post('/api/auth/otp/verify', (req: Request, res: Response) => {
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'OTP verification error.' });
   }
+});
+
+// Cooldown-enforced OTP resend endpoint
+app.post('/api/auth/otp/resend', async (req: Request, res: Response) => {
+  try {
+    const channel = (req.body?.channel === 'email' ? 'email' : 'sms') as 'email' | 'sms';
+    const destination = String(req.body?.destination || req.body?.email || req.body?.phone || '').trim();
+    const purpose = req.body?.purpose || 'login';
+
+    if (!destination) {
+      return res.status(400).json({ success: false, error: 'Destination is required.' });
+    }
+
+    const result = await verificationService.sendOtp({
+      channel,
+      destination,
+      purpose,
+    });
+
+    if (!result.success) {
+      return res.status(result.cooldownRemaining ? 429 : 400).json(result);
+    }
+
+    return res.json({
+      success: true,
+      message: `New verification code sent to ${destination}.`,
+      expiresInSec: result.expiresInSec,
+      liveDispatched: result.liveDispatched,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: 'Failed to resend OTP.' });
+  }
+});
+
+// User Registration with OTP verification flow
+app.post('/api/auth/register', async (req: Request, res: Response) => {
+  try {
+    const { fullName, email, phone, password } = req.body || {};
+    const cleanName = String(fullName || '').trim();
+    const cleanEmail = email ? String(email).trim().toLowerCase() : '';
+    const cleanPhone = phone ? normalizePhoneNumber(phone) : '';
+
+    if (cleanName.length < 2) {
+      return res.status(400).json({ success: false, error: 'Full legal name is required.' });
+    }
+    if (!cleanEmail && !cleanPhone) {
+      return res.status(400).json({ success: false, error: 'Provide a valid email or mobile phone number.' });
+    }
+
+    // Duplicate check in existing clinic patients
+    if (cleanEmail && memPatients.some((p) => p.email.toLowerCase() === cleanEmail)) {
+      return res.status(400).json({ success: false, error: 'Email is already registered. Please log in.' });
+    }
+    if (cleanPhone && memPatients.some((p) => p.phone.replace(/\D/g, '').includes(cleanPhone.replace(/\D/g, '')))) {
+      return res.status(400).json({ success: false, error: 'Mobile phone number is already registered. Please log in.' });
+    }
+
+    const result = await verificationService.registerPendingUser({
+      fullName: cleanName,
+      email: cleanEmail || undefined,
+      phone: cleanPhone || undefined,
+      passwordHash: password,
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json({
+      success: true,
+      message: `Verification code dispatched to ${cleanEmail || cleanPhone}.`,
+      destination: cleanEmail || cleanPhone,
+      channel: cleanEmail ? 'email' : 'sms',
+      code: result.code,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || 'Registration failed.' });
+  }
+});
+
+// Finalize Registration upon OTP verification (triggers Welcome Email + SMS)
+app.post('/api/auth/verify-registration', async (req: Request, res: Response) => {
+  try {
+    const { fullName, email, phone, code, password } = req.body || {};
+    const cleanEmail = email ? String(email).trim().toLowerCase() : '';
+    const cleanPhone = phone ? normalizePhoneNumber(phone) : '';
+    const channel: 'email' | 'sms' = cleanEmail ? 'email' : 'sms';
+    const destination = cleanEmail || cleanPhone;
+
+    const verifyRes = verificationService.verifyOtp({
+      channel,
+      destination,
+      code: String(code || '').trim(),
+      purpose: 'registration',
+    });
+
+    if (!verifyRes.success) {
+      return res.status(400).json({ success: false, error: verifyRes.error || 'Invalid verification code.' });
+    }
+
+    const mrn = `MRN-2026-${String(memPatients.length + 101).padStart(3, '0')}`;
+    const newPatient = {
+      id: `pat-${Date.now()}`,
+      mrn,
+      fullName: fullName || verifyRes.metadata?.fullName || 'Verified Patient',
+      dob: '1990-01-01',
+      age: 34,
+      gender: 'Other' as const,
+      bloodType: 'O+' as const,
+      phone: cleanPhone ? `+${cleanPhone.replace(/\D/g, '')}` : '+639170000000',
+      email: cleanEmail || `${cleanPhone}@phone.smartclinic.local`,
+      address: 'Metro Manila, Philippines',
+      emergencyContact: { name: fullName || 'Emergency Contact', relationship: 'Self', phone: cleanPhone || '+639170000000' },
+      allergies: [],
+      chronicConditions: [],
+      currentMedications: [],
+      primaryDoctorId: 'usr-1',
+      createdAt: new Date().toISOString(),
+      vitalsHistory: [],
+    };
+
+    memPatients.unshift(newPatient);
+
+    // Asynchronously dispatch Welcome Email and Welcome SMS
+    verificationService.finalizeVerification({
+      fullName: newPatient.fullName,
+      email: cleanEmail || undefined,
+      phone: cleanPhone || undefined,
+      mrn: newPatient.mrn,
+    }).catch(console.error);
+
+    const token = generateToken({
+      userId: newPatient.id,
+      name: newPatient.fullName,
+      email: newPatient.email,
+      role: 'patient',
+      primaryRole: 'patient',
+      linkedPatientId: newPatient.id,
+    });
+
+    return res.json({
+      success: true,
+      message: 'Account successfully verified and activated! Welcome to Smart Clinic.',
+      token,
+      user: { id: newPatient.id, name: newPatient.fullName, email: newPatient.email, role: 'patient' },
+      patient: newPatient,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || 'Verification failed.' });
+  }
+});
+
+// Password Reset: Step 1 - Request OTP via Email or Phone SMS
+app.post('/api/auth/password-reset/request', async (req: Request, res: Response) => {
+  try {
+    const identifier = String(req.body?.identifier || req.body?.email || req.body?.phone || '').trim();
+    if (!identifier) {
+      return res.status(400).json({ success: false, error: 'Provide your registered email address or mobile number.' });
+    }
+
+    const result = await verificationService.requestPasswordReset(identifier);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json({
+      success: true,
+      message: `Password reset security code sent to ${result.destination}.`,
+      channel: result.channel,
+      destination: result.destination,
+      code: result.code,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || 'Password reset request failed.' });
+  }
+});
+
+// Password Reset: Step 2 - Confirm OTP and set New Password
+app.post('/api/auth/password-reset/confirm', async (req: Request, res: Response) => {
+  try {
+    const { identifier, code, newPassword } = req.body || {};
+    const cleanId = String(identifier || '').trim();
+    const cleanCode = String(code || '').trim();
+    const cleanPass = String(newPassword || '').trim();
+
+    if (!cleanId || !cleanCode) {
+      return res.status(400).json({ success: false, error: 'Identifier and reset code are required.' });
+    }
+    if (cleanPass.length < 6) {
+      return res.status(400).json({ success: false, error: 'New password must be at least 6 characters long.' });
+    }
+
+    const verifyRes = verificationService.verifyPasswordReset(cleanId, cleanCode);
+    if (!verifyRes.success) {
+      return res.status(400).json({ success: false, error: verifyRes.error || 'Invalid or expired password reset code.' });
+    }
+
+    // Asynchronously send notification that password was changed
+    if (cleanId.includes('@')) {
+      emailService.sendMail({
+        to: cleanId.toLowerCase(),
+        subject: 'Smart Clinic — Password Successfully Changed',
+        text: 'Your Smart Clinic account password was recently changed. If you did not make this change, please contact administration immediately.',
+        html: `
+          <div style="font-family: sans-serif; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px;">
+            <h3 style="color: #0d9488; margin-top: 0;">Password Successfully Updated</h3>
+            <p style="color: #475569; font-size: 13px;">Your Smart Clinic account credentials have been securely updated. You may now sign in using your new password.</p>
+            <p style="color: #94a3b8; font-size: 11px;">Philippine Health Data Security (RA 10173)</p>
+          </div>
+        `,
+        purpose: 'password_changed_alert',
+      }).catch(console.error);
+    } else {
+      smsService.sendSms({
+        to: cleanId,
+        message: 'Smart Clinic: Your password was successfully updated. You can now sign in with your new password.',
+        purpose: 'password_changed_alert',
+      }).catch(console.error);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Password reset successful! You can now log in with your new credentials.',
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || 'Password update failed.' });
+  }
+});
+
+// Communication Audit Logs
+app.get('/api/communication/logs', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    logs: verificationService.getAllCommunicationLogs(),
+  });
+});
+
+// Communication Gateway Health Status
+app.get('/api/communication/status', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    ...verificationService.getHealthStatus(),
+  });
 });
 
 /* ==========================================================================
@@ -280,6 +579,14 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         primaryRole: 'patient',
         linkedPatientId: patient.id,
       });
+
+      // Asynchronous security login notifications
+      if (patient.email && patient.email.includes('@') && !patient.email.includes('local')) {
+        emailService.sendLoginAlert(patient.email, { device: String(req.headers['user-agent'] || 'Web Client') }).catch(console.error);
+      }
+      if (patient.phone && !patient.phone.includes('0000000')) {
+        smsService.sendLoginAlertSms(patient.phone).catch(console.error);
+      }
 
       return res.json({
         success: true,
@@ -398,6 +705,9 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         primaryRole: 'admin',
         linkedPatientId: null,
       });
+
+      // Asynchronous admin login security notification
+      emailService.sendLoginAlert(ADMIN_EMAIL, { device: String(req.headers['user-agent'] || 'Administrator Console') }).catch(console.error);
 
       return res.json({
         success: true,

@@ -56,8 +56,8 @@ interface ClinicContextType {
   logout: () => void;
   pendingAction: PendingAction;
   setPendingAction: (action: PendingAction) => void;
-  requestPhoneOtp: (phone: string, purpose?: 'patient_login' | 'patient_register') => Promise<{ success: boolean; error?: string; code?: string; liveDispatched?: boolean; devNotice?: string }>;
-  requestEmailOtp: (email: string, purpose?: 'patient_login' | 'patient_register' | 'admin_2fa') => Promise<{ success: boolean; error?: string; code?: string; liveDispatched?: boolean; devNotice?: string }>;
+  requestPhoneOtp: (phone: string, purpose?: 'patient_login' | 'patient_register') => Promise<{ success: boolean; error?: string; code?: string; liveDispatched?: boolean; devNotice?: string; provider?: string; message?: string }>;
+  requestEmailOtp: (email: string, purpose?: 'patient_login' | 'patient_register' | 'admin_2fa') => Promise<{ success: boolean; error?: string; code?: string; liveDispatched?: boolean; devNotice?: string; previewUrl?: string; provider?: string; message?: string }>;
   verifyServerOtp: (input: { channel: 'email' | 'sms'; destination: string; code: string }) => Promise<{ success: boolean; error?: string }>;
   registerPatient: (input: { fullName: string; email?: string; phone?: string; password?: string }) => { success: boolean; error?: string };
   linkedPatientId: string | null;
@@ -348,7 +348,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!emailNorm.includes('@')) return { success: false, error: 'Enter a valid email address.' };
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       const res = await fetch('/api/auth/otp/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

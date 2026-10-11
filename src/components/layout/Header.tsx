@@ -179,6 +179,7 @@ export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatien
             </button>
           )}
 
+
           {/* AI Assistant Navigation Button */}
           <button
             onClick={() => setActiveTab('ai-assistant')}
