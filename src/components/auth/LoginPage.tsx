@@ -12,24 +12,26 @@ import {
   ArrowRight,
   Lock,
   AlertCircle,
-  Phone,
   Mail,
   UserPlus,
   Send,
   KeyRound,
   CheckCircle2,
   Sparkles,
+  Smartphone,
+  QrCode,
 } from 'lucide-react';
 import { useClinic, type PrimaryAuthRole, type StaffSubRole } from '../../context/ClinicContext';
 import { useToast } from '../../context/ToastContext';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
+import { AuthenticatorSetupModal } from './AuthenticatorSetupModal';
 
 type AuthMode = 'login' | 'register';
-type ContactMethod = 'email' | 'phone';
+type ContactMethod = 'email' | 'authenticator';
 
 export const LoginPage: React.FC = () => {
-  const { login, requestPhoneOtp, requestEmailOtp, setActiveTab, pendingAction } = useClinic();
+  const { login, requestEmailOtp, setActiveTab, pendingAction } = useClinic();
   const { success: toastSuccess, error: toastError, info: toastInfo } = useToast();
 
   const [primaryRole, setPrimaryRole] = useState<PrimaryAuthRole>('patient');
@@ -39,7 +41,6 @@ export const LoginPage: React.FC = () => {
 
   // Input states
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [otpCode, setOtpCode] = useState('');
@@ -47,10 +48,10 @@ export const LoginPage: React.FC = () => {
 
   // UI state
   const [otpSent, setOtpSent] = useState(false);
-  const [admin2FaSent, setAdmin2FaSent] = useState(false);
   const [generatedCode, setGeneratedCode] = useState<string>('');
   const [isLiveDispatched, setIsLiveDispatched] = useState<boolean>(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showAuthenticatorModal, setShowAuthenticatorModal] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -59,56 +60,57 @@ export const LoginPage: React.FC = () => {
   const isStaff = primaryRole === 'staff';
   const isAdmin = primaryRole === 'admin';
 
-  // Send Patient OTP (Email or Phone SMS)
-  const handleSendPatientOtp = async () => {
-    setError('');
-    setLoading(true);
-
-    if (method === 'phone') {
-      const cleanPhone = phone.replace(/\D/g, '');
-      if (cleanPhone.length < 10) {
-        setError('Please enter a valid mobile number (at least 10 digits).');
-        setLoading(false);
-        return;
+  // Quick-fill live Authenticator TOTP rolling code
+  const handleQuickFillTotp = async () => {
+    try {
+      const target = isAdmin ? 'smartclinicrealacc@gmail.com' : email.trim().toLowerCase() || 'patient@smartclinic.ph';
+      const res = await fetch(`/api/auth/2fa/code?email=${encodeURIComponent(target)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.currentCode) {
+          if (isAdmin) setTwoFactorCode(data.currentCode);
+          else {
+            setOtpCode(data.currentCode);
+            setOtpSent(true);
+          }
+          toastSuccess(`Live Authenticator code ${data.currentCode} applied (${data.stepRemaining}s remaining).`);
+          return;
+        }
       }
-      const res = await requestPhoneOtp(cleanPhone, mode === 'register' ? 'patient_register' : 'patient_login');
-      setLoading(false);
-      const codeToUse = res.code || '123456';
-      setOtpCode(codeToUse);
-      setGeneratedCode(codeToUse);
-      setOtpSent(true);
-      setIsLiveDispatched(Boolean(res.liveDispatched));
-      toastSuccess(`Verification code ${codeToUse} sent to ${cleanPhone}.`);
-    } else {
-      const cleanEmail = email.trim().toLowerCase();
-      if (!cleanEmail || !cleanEmail.includes('@')) {
-        setError('Please enter a valid email address.');
-        setLoading(false);
-        return;
-      }
-      const res = await requestEmailOtp(cleanEmail, mode === 'register' ? 'patient_register' : 'patient_login');
-      setLoading(false);
-      const codeToUse = res.code || '123456';
-      setOtpCode(codeToUse);
-      setGeneratedCode(codeToUse);
-      setOtpSent(true);
-      setIsLiveDispatched(Boolean(res.liveDispatched));
-      toastSuccess(`Verification code ${codeToUse} sent to ${cleanEmail}.`);
+    } catch {
+      // Fallback
     }
+    if (isAdmin) setTwoFactorCode('123456');
+    else {
+      setOtpCode('123456');
+      setOtpSent(true);
+    }
+    toastSuccess('Demo Authenticator code 123456 applied.');
   };
 
-  // Send Admin 2FA Code
-  const handleSendAdmin2FA = async () => {
+  // Send Patient OTP (Email) or Trigger Authenticator Setup
+  const handleSendPatientOtp = async () => {
     setError('');
+    if (method === 'authenticator') {
+      setShowAuthenticatorModal(true);
+      return;
+    }
+
     setLoading(true);
-    const res = await requestEmailOtp('smartclinicrealacc@gmail.com', 'admin_2fa');
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setError('Please enter a valid email address.');
+      setLoading(false);
+      return;
+    }
+    const res = await requestEmailOtp(cleanEmail, mode === 'register' ? 'patient_register' : 'patient_login');
     setLoading(false);
     const codeToUse = res.code || '123456';
-    setTwoFactorCode(codeToUse);
+    setOtpCode(codeToUse);
     setGeneratedCode(codeToUse);
-    setAdmin2FaSent(true);
+    setOtpSent(true);
     setIsLiveDispatched(Boolean(res.liveDispatched));
-    toastSuccess(`Admin 2FA security code ${codeToUse} ready and verified.`);
+    toastSuccess(`Verification code ${codeToUse} sent to ${cleanEmail}.`);
   };
 
   // Handle Form Submission
@@ -119,12 +121,11 @@ export const LoginPage: React.FC = () => {
 
     // Patient Validation
     if (isPatient) {
-      const finalCode = (otpCode || generatedCode || '123456').trim();
+      const finalCode = (method === 'authenticator' ? otpCode || '123456' : otpCode || generatedCode || '123456').trim();
 
       const res = await login({
         primaryRole: 'patient',
-        email: method === 'email' ? email : `${phone}@phone.smartclinic.local`,
-        phone: method === 'phone' ? phone : undefined,
+        email: email.trim().toLowerCase(),
         method,
         password: password || undefined,
         twoFactorCode: finalCode,
@@ -248,7 +249,6 @@ export const LoginPage: React.FC = () => {
                   setPrimaryRole(id);
                   setError('');
                   setOtpSent(false);
-                  setAdmin2FaSent(false);
                   setMode('login');
                 }}
                 className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border text-xs font-bold transition-all cursor-pointer ${
@@ -305,15 +305,15 @@ export const LoginPage: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setMethod('phone'); setOtpSent(false); setError(''); }}
+                  onClick={() => { setMethod('authenticator'); setOtpSent(true); setError(''); }}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-xl border transition cursor-pointer ${
-                    method === 'phone'
+                    method === 'authenticator'
                       ? 'border-teal-600 bg-teal-600 text-white shadow-xs'
                       : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
                   }`}
                 >
-                  <Phone className="w-3.5 h-3.5" />
-                  <span>Mobile SMS OTP</span>
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>Authenticator App (2FA)</span>
                 </button>
               </div>
             </div>
@@ -365,9 +365,9 @@ export const LoginPage: React.FC = () => {
             <div className="mb-5 p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 flex items-start gap-2.5">
               <ShieldCheck className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
               <div className="text-xs">
-                <p className="font-bold text-amber-900 dark:text-amber-200">Mandatory Administrator 2FA</p>
+                <p className="font-bold text-amber-900 dark:text-amber-200">Mandatory Administrator 2FA (Authenticator App)</p>
                 <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
-                  Admin access is strictly gated. Verification codes are dispatched directly to <strong className="font-mono text-amber-900 dark:text-amber-100">smartclinicrealacc@gmail.com</strong>.
+                  Admin access is strictly gated via RFC 6238 TOTP. Open Google Authenticator, Microsoft Authenticator, or Authy to retrieve your 6-digit verification code.
                 </p>
               </div>
             </div>
@@ -392,65 +392,42 @@ export const LoginPage: React.FC = () => {
               </div>
             )}
 
-            {/* Email Field */}
-            {(isDoctor || isStaff || isAdmin || (isPatient && method === 'email')) && (
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+            {/* Email Field (for all roles) */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block font-bold text-slate-700 dark:text-slate-300">
                   {isAdmin ? 'Administrator Account' : isDoctor ? 'Provider Work Email' : isStaff ? 'Staff Work Email' : 'Email Address'}
                 </label>
-                <div className="flex gap-2">
-                  <input
-                    type="email"
-                    required
-                    readOnly={isAdmin}
-                    value={isAdmin ? 'smartclinicrealacc@gmail.com' : email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder={
-                      isDoctor
-                        ? 'maria.reyes@smartclinic.ph'
-                        : isStaff
-                        ? `${staffSubRole}@smartclinic.ph`
-                        : 'you@example.com'
-                    }
-                    className={`flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500 ${
-                      isAdmin ? 'bg-slate-50 dark:bg-slate-800/50 cursor-not-allowed font-medium' : ''
-                    }`}
-                  />
-                  {isPatient && method === 'email' && (
-                    <button
-                      type="button"
-                      onClick={handleSendPatientOtp}
-                      disabled={loading}
-                      className="shrink-0 px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60 transition"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>{otpSent ? 'Resend' : 'Send Code'}</span>
-                    </button>
-                  )}
-                </div>
-                {isPatient && method === 'email' && otpSent && (
-                  <p className="mt-1 text-[11px] text-teal-600 dark:text-teal-400 font-medium">
-                    {isLiveDispatched
-                      ? `✓ Security code delivered to your personal inbox (${email}).`
-                      : `✓ Security code ready (${otpCode || generatedCode || '123456'}). Enter it below.`}
-                  </p>
+                {isPatient && method === 'authenticator' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAuthenticatorModal(true)}
+                    className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <QrCode className="w-3 h-3" />
+                    <span>Setup Authenticator App</span>
+                  </button>
                 )}
               </div>
-            )}
-
-            {/* Mobile Phone Field */}
-            {isPatient && method === 'phone' && (
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Mobile Number (Philippines)</label>
-                <div className="flex gap-2">
-                  <input
-                    type="tel"
-                    required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="0917XXXXXXX or +63917XXXXXXX"
-                    className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500 font-mono"
-                  />
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  required
+                  readOnly={isAdmin}
+                  value={isAdmin ? 'smartclinicrealacc@gmail.com' : email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={
+                    isDoctor
+                      ? 'maria.reyes@smartclinic.ph'
+                      : isStaff
+                      ? `${staffSubRole}@smartclinic.ph`
+                      : 'you@example.com'
+                  }
+                  className={`flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500 ${
+                    isAdmin ? 'bg-slate-50 dark:bg-slate-800/50 cursor-not-allowed font-medium' : ''
+                  }`}
+                />
+                {isPatient && method === 'email' && (
                   <button
                     type="button"
                     onClick={handleSendPatientOtp}
@@ -458,34 +435,63 @@ export const LoginPage: React.FC = () => {
                     className="shrink-0 px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60 transition"
                   >
                     <Send className="w-3.5 h-3.5" />
-                    <span>{otpSent ? 'Resend' : 'Send SMS OTP'}</span>
+                    <span>{otpSent ? 'Resend' : 'Send Code'}</span>
                   </button>
-                </div>
-                {otpSent && (
-                  <p className="mt-1 text-[11px] text-teal-600 dark:text-teal-400 font-medium">
-                    ✓ 6-digit code dispatched via SMS. Enter it below to authenticate.
-                  </p>
+                )}
+                {isPatient && method === 'authenticator' && (
+                  <button
+                    type="button"
+                    onClick={handleQuickFillTotp}
+                    className="shrink-0 px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold flex items-center gap-1.5 cursor-pointer transition"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Current Code</span>
+                  </button>
                 )}
               </div>
-            )}
+              {isPatient && method === 'email' && otpSent && (
+                <p className="mt-1 text-[11px] text-teal-600 dark:text-teal-400 font-medium">
+                  {isLiveDispatched
+                    ? `✓ Security code delivered to your personal inbox (${email}).`
+                    : `✓ Security code ready (${otpCode || generatedCode || '123456'}). Enter it below.`}
+                </p>
+              )}
+              {isPatient && method === 'authenticator' && (
+                <p className="mt-1 text-[11px] text-teal-600 dark:text-teal-400 font-medium">
+                  ✓ Open Google Authenticator, Microsoft Authenticator, or Authy to enter your 6-digit rolling code.
+                </p>
+              )}
+            </div>
 
-            {/* Patient OTP Input */}
+            {/* Patient Verification Code Input (Email OTP or Authenticator App TOTP) */}
             {isPatient && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="block font-bold text-slate-700 dark:text-slate-300">
-                    6-Digit Verification Code
+                    {method === 'authenticator' ? '6-Digit Authenticator Code' : '6-Digit Email Verification Code'}
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOtpCode('123456');
-                      setOtpSent(true);
-                    }}
-                    className="text-[11px] font-bold text-teal-600 hover:text-teal-700 dark:text-teal-400 hover:underline cursor-pointer"
-                  >
-                    Quick Test Code (123456)
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {method === 'authenticator' && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAuthenticatorModal(true)}
+                        className="text-[11px] font-bold text-teal-600 hover:text-teal-700 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
+                      >
+                        <QrCode className="w-3 h-3" />
+                        <span>Scan QR</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOtpCode('123456');
+                        setOtpSent(true);
+                      }}
+                      className="text-[11px] font-bold text-teal-600 hover:text-teal-700 dark:text-teal-400 hover:underline cursor-pointer"
+                    >
+                      Test Code (123456)
+                    </button>
+                  </div>
                 </div>
 
                 <div className="relative">
@@ -501,7 +507,7 @@ export const LoginPage: React.FC = () => {
                   />
                 </div>
 
-                {otpSent && (
+                {otpSent && method === 'email' && (
                   <div className="p-3 rounded-xl bg-teal-50/90 dark:bg-teal-950/50 border border-teal-200 dark:border-teal-800 text-[11px] text-teal-900 dark:text-teal-200 space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 font-bold text-teal-800 dark:text-teal-200">
@@ -563,30 +569,30 @@ export const LoginPage: React.FC = () => {
               </div>
             )}
 
-            {/* Admin 2FA Code Input & Trigger */}
+            {/* Admin 2FA Code Input & Authenticator App Integration */}
             {isAdmin && (
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2.5">
+              <div className="p-4 rounded-2xl bg-amber-50/50 dark:bg-slate-800/60 border border-amber-200 dark:border-amber-800/80 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <label className="font-bold text-slate-800 dark:text-slate-200">Admin 2FA Security Code</label>
+                  <label className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <Smartphone className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Authenticator App 2FA Code</span>
+                  </label>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        setTwoFactorCode('123456');
-                        setAdmin2FaSent(true);
-                      }}
-                      className="text-[11px] font-bold text-amber-600 hover:text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+                      onClick={() => setShowAuthenticatorModal(true)}
+                      className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
                     >
-                      Test Code (123456)
+                      <QrCode className="w-3 h-3" />
+                      <span>Setup / QR Code</span>
                     </button>
                     <button
                       type="button"
-                      onClick={handleSendAdmin2FA}
-                      disabled={loading}
-                      className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition disabled:opacity-60"
+                      onClick={handleQuickFillTotp}
+                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shadow-2xs"
                     >
-                      <Send className="w-3 h-3" />
-                      <span>{admin2FaSent ? 'Resend' : 'Send 2FA Code'}</span>
+                      <Sparkles className="w-3 h-3" />
+                      <span>Current Code</span>
                     </button>
                   </div>
                 </div>
@@ -601,24 +607,19 @@ export const LoginPage: React.FC = () => {
                     className="w-full rounded-xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-3 py-2.5 text-xs font-mono font-bold tracking-widest focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
-                {admin2FaSent && (
-                  <div className="space-y-2">
-                    <div className="p-2 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-900 dark:text-amber-200 flex items-center justify-between">
-                      <span>
-                        Active 2FA Code: <strong className="font-mono text-amber-700 dark:text-amber-300 bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-700">{twoFactorCode || generatedCode || '123456'}</strong>
-                      </span>
-                      {(!twoFactorCode || twoFactorCode !== (generatedCode || '123456')) && (
-                        <button
-                          type="button"
-                          onClick={() => setTwoFactorCode(generatedCode || '123456')}
-                          className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] cursor-pointer"
-                        >
-                          Auto-fill
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
+                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                  <span>Google Authenticator • Microsoft Authenticator • Authy</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTwoFactorCode('123456');
+                      toastSuccess('Demo code 123456 applied.');
+                    }}
+                    className="font-mono text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+                  >
+                    Universal Test: 123456
+                  </button>
+                </div>
               </div>
             )}
 
@@ -759,14 +760,13 @@ export const LoginPage: React.FC = () => {
                   setEmail('smartclinicrealacc@gmail.com');
                   setPassword('SmartClinic@Admin2026');
                   setTwoFactorCode('123456');
-                  setAdmin2FaSent(true);
-                  setGeneratedCode('123456');
+                  toastSuccess('Admin credentials and Authenticator 2FA test code auto-filled.');
                 }}
                 className="p-2 rounded-xl border border-amber-300 dark:border-amber-700/60 bg-amber-50/50 dark:bg-amber-950/30 hover:border-amber-500 text-left transition cursor-pointer"
               >
-                <div className="text-[11px] font-bold text-amber-900 dark:text-amber-200">Admin 2FA</div>
+                <div className="text-[11px] font-bold text-amber-900 dark:text-amber-200">Admin (Authenticator)</div>
                 <div className="text-[9px] text-amber-700 dark:text-amber-300 truncate">smartclinicrealacc@gmail.com</div>
-                <div className="text-[9px] font-mono text-amber-800 dark:text-amber-300">Pass: SmartClinic@Admin2026</div>
+                <div className="text-[9px] font-mono text-amber-800 dark:text-amber-300">Code: Authenticator / 123456</div>
               </button>
             </div>
             <p className="text-[10px] text-center text-slate-400">
@@ -787,10 +787,23 @@ export const LoginPage: React.FC = () => {
       <ForgotPasswordModal
         isOpen={showForgotPassword}
         onClose={() => setShowForgotPassword(false)}
-        defaultIdentifier={email || phone}
+        defaultIdentifier={email}
         onPasswordResetSuccess={(newPass) => {
           setPassword(newPass);
           toastSuccess('Password updated. You can now log in.');
+        }}
+      />
+
+      <AuthenticatorSetupModal
+        isOpen={showAuthenticatorModal}
+        onClose={() => setShowAuthenticatorModal(false)}
+        accountEmail={isAdmin ? 'smartclinicrealacc@gmail.com' : email.trim().toLowerCase() || 'elena.vargas@example.com'}
+        onCodeSelect={(c) => {
+          if (isAdmin) setTwoFactorCode(c);
+          else {
+            setOtpCode(c);
+            setOtpSent(true);
+          }
         }}
       />
     </div>

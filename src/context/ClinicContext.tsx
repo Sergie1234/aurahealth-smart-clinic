@@ -26,7 +26,7 @@ export interface LoginCredentials {
   subRole?: StaffSubRole;
   twoFactorCode?: string;
   phone?: string;
-  method?: 'email' | 'phone';
+  method?: 'email' | 'phone' | 'authenticator';
   fullName?: string;
   isRegister?: boolean;
 }

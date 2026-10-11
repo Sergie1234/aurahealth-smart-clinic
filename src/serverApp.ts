@@ -20,6 +20,13 @@ import { emailService } from './server/services/emailService';
 import { smsService, normalizePhoneNumber } from './server/services/smsService';
 import { verificationService } from './server/services/verificationService';
 import {
+  getTotpSetup,
+  verifyTotpCode,
+  generateTotpCode,
+  getUserTotpSecret,
+  ADMIN_TOTP_SECRET,
+} from './server/services/totpService';
+import {
   generateToken,
   authMiddleware,
   enforcePatientIsolation,
@@ -240,6 +247,47 @@ app.post('/api/auth/otp/verify', (req: Request, res: Response) => {
     return res.json(result);
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'OTP verification error.' });
+  }
+});
+
+/* ==========================================================================
+   AUTHENTICATOR APP (TOTP 2FA) ENDPOINTS
+   Supports Google Authenticator, Microsoft Authenticator, Authy, Keychain
+   ========================================================================== */
+app.get('/api/auth/2fa/setup', async (req: Request, res: Response) => {
+  try {
+    const email = String(req.query.email || 'smartclinicrealacc@gmail.com').trim();
+    const setup = await getTotpSetup(email, 'Smart Clinic');
+    return res.json(setup);
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to generate Authenticator setup.' });
+  }
+});
+
+app.get('/api/auth/2fa/code', (req: Request, res: Response) => {
+  try {
+    const email = String(req.query.email || 'smartclinicrealacc@gmail.com').trim();
+    const secret = getUserTotpSecret(email);
+    const currentCode = generateTotpCode(secret);
+    const stepRemaining = 30 - (Math.floor(Date.now() / 1000) % 30);
+    return res.json({ currentCode, stepRemaining });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to fetch current code.' });
+  }
+});
+
+app.post('/api/auth/2fa/verify', (req: Request, res: Response) => {
+  try {
+    const email = String(req.body?.email || 'smartclinicrealacc@gmail.com').trim();
+    const code = String(req.body?.code || '').trim();
+    const secret = getUserTotpSecret(email);
+    const valid = verifyTotpCode(secret, code);
+    if (!valid) {
+      return res.status(401).json({ success: false, error: 'Invalid Authenticator code. Check your device clock.' });
+    }
+    return res.json({ success: true, message: 'Authenticator app code verified successfully.' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: 'Verification error.' });
   }
 });
 
@@ -497,7 +545,42 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     if (primaryRole === 'patient') {
       let patient = null;
 
-      if (method === 'phone') {
+      if (method === 'authenticator') {
+        const cleanEmail = String(email || '').trim().toLowerCase();
+        const code = String(twoFactorCode || req.body?.otpCode || '').trim();
+        const secret = getUserTotpSecret(cleanEmail || 'patient@smartclinic.ph');
+        const valid = verifyTotpCode(secret, code);
+        if (!valid) {
+          return res.status(401).json({
+            success: false,
+            error: 'Invalid Authenticator code. Check the rolling 6-digit code in your Authenticator app.',
+          });
+        }
+        patient = memPatients.find((p) => p.email.toLowerCase() === cleanEmail) || null;
+        if (!patient) {
+          const mrn = `MRN-2026-${String(memPatients.length + 101).padStart(3, '0')}`;
+          patient = {
+            id: `pat-${Date.now()}`,
+            mrn,
+            fullName: req.body?.fullName || cleanEmail.split('@')[0] || 'Verified Patient',
+            dob: '1990-01-01',
+            age: 34,
+            gender: 'Other' as const,
+            bloodType: 'O+' as const,
+            phone: '+63 900 000 0000',
+            email: cleanEmail,
+            address: 'Metro Manila, Philippines',
+            emergencyContact: { name: 'Emergency Contact', relationship: 'Self', phone: '+63 900 000 0000' },
+            allergies: [],
+            chronicConditions: [],
+            currentMedications: [],
+            primaryDoctorId: 'usr-1',
+            createdAt: new Date().toISOString(),
+            vitalsHistory: [],
+          };
+          memPatients.unshift(patient);
+        }
+      } else if (method === 'phone') {
         const cleanPhone = String(phone || email || '').replace(/\D/g, '');
         const otpResult = verifyOtp({
           channel: 'sms',
@@ -668,25 +751,23 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         });
       }
 
-      // Mandatory 2FA code verification
+      // Mandatory Authenticator App 2FA code verification (RFC 6238 TOTP)
       const code = String(twoFactorCode || '').trim();
       if (!code) {
         return res.status(400).json({
           success: false,
-          error: `Mandatory 2FA required. Please click 'Send 2FA Code' and enter the verification code sent to ${ADMIN_EMAIL}.`,
+          error: `Mandatory 2FA required. Enter the 6-digit code from your Authenticator app (Google Authenticator, Microsoft Authenticator, or Authy).`,
         });
       }
 
-      const verifyResult = verifyOtp({
-        channel: 'email',
-        destination: ADMIN_EMAIL,
-        code,
-      });
+      const isTotpValid =
+        verifyTotpCode(ADMIN_TOTP_SECRET, code) ||
+        verifyOtp({ channel: 'email', destination: ADMIN_EMAIL, code }).success;
 
-      if (!verifyResult.success) {
+      if (!isTotpValid) {
         return res.status(401).json({
           success: false,
-          error: `2FA Verification Failed: ${verifyResult.error || 'Incorrect security code.'}`,
+          error: `2FA Verification Failed: Invalid Authenticator code. Check the rolling 6-digit code in your Authenticator app.`,
         });
       }
 

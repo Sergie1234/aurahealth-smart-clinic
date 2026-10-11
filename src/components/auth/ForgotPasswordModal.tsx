@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Mail,
-  Smartphone,
   ShieldCheck,
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
@@ -42,7 +41,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     setError('');
     const cleanId = identifier.trim();
     if (!cleanId) {
-      setError('Please enter your registered email address or mobile phone number.');
+      setError('Please enter your registered email address.');
       return;
     }
 
@@ -145,12 +144,12 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
           </div>
           <div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              {step === 'request' ? 'Reset Account Password' : 'Enter Reset Code'}
+              {step === 'request' ? 'Reset Account Password' : 'Enter Verification Code'}
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {step === 'request'
-                ? 'Send a secure one-time code via Email or SMS'
-                : `Verification code dispatched to ${identifier}`}
+                ? 'Send a security code to your registered email or use Authenticator'
+                : `Verification code for ${identifier}`}
             </p>
           </div>
         </div>
@@ -166,38 +165,47 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
           <form onSubmit={handleRequestReset} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Email Address or Philippine Mobile Number
+                Registered Email Address
               </label>
               <div className="relative">
                 <input
-                  type="text"
+                  type="email"
                   required
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="name@example.com or 0917XXXXXXX"
+                  placeholder="name@example.com"
                   className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500"
                 />
               </div>
               <p className="mt-1.5 text-[11px] text-slate-400">
-                A 6-digit security code will be sent via SMTP or Twilio SMS carrier.
+                A 6-digit security code will be sent to your inbox. You can also enter your Authenticator app code directly.
               </p>
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-teal-600/20 transition cursor-pointer disabled:opacity-60"
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span>{loading ? 'Dispatching Security Code…' : 'Send Reset Code'}</span>
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setStep('confirm')}
+                className="flex-1 py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                Have Authenticator Code
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-2 py-2.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-teal-600/20 transition cursor-pointer disabled:opacity-60"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>{loading ? 'Sending Code…' : 'Send Email Code'}</span>
+              </button>
+            </div>
           </form>
         ) : (
           <form onSubmit={handleConfirmReset} className="space-y-4">
             <div className="p-3 rounded-xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200/80 dark:border-teal-800 text-xs text-teal-900 dark:text-teal-200 flex items-center justify-between">
               <div className="flex items-center gap-1.5 font-medium">
-                {channel === 'email' ? <Mail className="w-4 h-4 text-teal-600" /> : <Smartphone className="w-4 h-4 text-teal-600" />}
-                <span>Dispatched to {identifier}</span>
+                <Mail className="w-4 h-4 text-teal-600" />
+                <span>Reset code for {identifier}</span>
               </div>
               <button
                 type="button"
