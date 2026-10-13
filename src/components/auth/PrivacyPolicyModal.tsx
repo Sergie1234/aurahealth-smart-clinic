@@ -164,7 +164,7 @@ export const PrivacyPolicyModal: React.FC<Props> = ({ isOpen, onClose, onAgree }
             </strong>
             <p>
               Smart Clinic Outpatient Health Management System<br />
-              Email: <span className="font-mono text-teal-600 dark:text-teal-400 font-bold">dpo@smartclinic.ph</span> • Tel: (02) 8123-4567<br />
+              Email: <span className="font-mono text-teal-600 dark:text-teal-400 font-bold">smartclinicrealacc@gmail.com</span> • Tel: <span className="font-semibold text-teal-600 dark:text-teal-400">Globe +639154050623</span><br />
               National Privacy Commission Registration No: NPC-REG-2026-PH-0084
             </p>
           </div>

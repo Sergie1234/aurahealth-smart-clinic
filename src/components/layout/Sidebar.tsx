@@ -61,11 +61,10 @@ export const Sidebar: React.FC = () => {
     },
     {
       id: 'queue',
-      label: 'Live Queue & Triage',
+      label: 'Live Queue & Waiting Room',
       icon: Layers,
       badge: waitingCount > 0 ? waitingCount : undefined,
-      // Strictly restricted: NEVER accessible to Patient or Pharmacy
-      roles: ['admin', 'doctor', 'nurse', 'receptionist'],
+      roles: ['admin', 'doctor', 'nurse', 'receptionist', 'patient'],
     },
     {
       id: 'consultations',
@@ -135,8 +134,10 @@ export const Sidebar: React.FC = () => {
 
   // Apply strict security filter: strip out forbidden modules
   const visibleItems = navItems.filter((item) => {
-    // Hard constraint: Strip out 'queue', 'inventory', and 'reports' for Patient or Pharmacy
-    if ((isPatient || isPharmacy) && (item.id === 'queue' || item.id === 'inventory' || item.id === 'reports')) {
+    if (isPatient && (item.id === 'inventory' || item.id === 'reports' || item.id === 'consultations')) {
+      return false;
+    }
+    if (isPharmacy && (item.id === 'queue' || item.id === 'inventory' || item.id === 'reports')) {
       return false;
     }
     return item.roles.includes(activeRole);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import {
   Layers,
@@ -9,241 +9,785 @@ import {
   AlertCircle,
   CheckCircle2,
   Volume2,
-  ShieldAlert,
+  VolumeX,
   ShieldCheck,
-  Lock
+  ShieldAlert,
+  Sparkles,
+  Phone,
+  Mail,
+  MapPin,
+  Activity,
+  User,
+  Plus,
+  RefreshCw,
+  Radio,
+  ArrowRight,
+  Maximize2,
+  X
 } from 'lucide-react';
+import type { Appointment } from '../../types/clinic';
 
 interface Props {
   onStartConsultation: (patientId: string) => void;
+}
+
+// Web Audio API Hospital Broadcast 2-tone Ding-Dong Chime
+function playHospitalBroadcastChime() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const now = ctx.currentTime;
+
+    // High Tone (E5 - 659.25 Hz)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(659.25, now);
+    gain1.gain.setValueAtTime(0.25, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.6);
+
+    // Low Tone (C5 - 523.25 Hz)
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(523.25, now + 0.28);
+    gain2.gain.setValueAtTime(0.25, now + 0.28);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.1);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.28);
+    osc2.stop(now + 1.1);
+  } catch (err) {
+    console.warn('Audio broadcast chime notice:', err);
+  }
+}
+
+// Real Voice Announcement using SpeechSynthesis
+function announceTicketVoice(ticket: string, name: string, room: string) {
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    try {
+      window.speechSynthesis.cancel(); // Stop any pending speech
+      const text = `Ticket number ${ticket}. ${name}. Please proceed to ${room}.`;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.92;
+      utterance.pitch = 1.0;
+      utterance.lang = 'en-PH'; // Philippine English accent fallback
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('Voice announcement exception:', e);
+    }
+  }
 }
 
 export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
   const {
     appointments,
     updateAppointmentStatus,
+    addAppointment,
     activeRole,
+    currentUser,
+    linkedPatientId,
+    patients,
     selectPatient,
     setActiveTab,
+    isAuthenticated,
   } = useClinic();
 
-  const [lastCalled, setLastCalled] = useState<string | null>(null);
+  // Philippine Standard Time Clock (UTC+8)
+  const [currentTime, setCurrentTime] = useState<string>('');
+  const [currentDate, setCurrentDate] = useState<string>('');
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [lastCalledAnnouncement, setLastCalledAnnouncement] = useState<{
+    ticket: string;
+    patientName: string;
+    room: string;
+    doctorName: string;
+    department: string;
+    timestamp: string;
+  } | null>(null);
 
-  // STRICT ACCESS CONTROL: Patient and Pharmacy roles are strictly unauthorized for Live Queue
-  if (activeRole === 'patient' || activeRole === 'pharmacist' || (activeRole as string) === 'pharmacy') {
-    return (
-      <div className="max-w-xl mx-auto my-12 p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-center space-y-4 shadow-sm text-xs font-sans">
-        <div className="w-12 h-12 bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-center mx-auto">
-          <ShieldAlert className="w-6 h-6" />
-        </div>
-        <h2 className="text-base font-bold text-slate-900 dark:text-white">
-          Access Restricted — Module Not Authorized
-        </h2>
-        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-          The Live Queue and waiting room display is restricted to authorized outpatient reception and triage personnel.
-          In accordance with RA 10173 and clinic security protocols, access is strictly blocked for your role.
-        </p>
-        <div>
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold cursor-pointer"
-          >
-            Return to Authorized Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Self-Service Check-In Modal
+  const [showCheckInModal, setShowCheckInModal] = useState<boolean>(false);
+  const [checkInName, setCheckInName] = useState<string>('');
+  const [checkInPhone, setCheckInPhone] = useState<string>('');
+  const [checkInDepartment, setCheckInDepartment] = useState<string>('Internal Medicine');
+  const [checkInReason, setCheckInReason] = useState<string>('General Consultation & Vitals Triage');
+  const [recentCheckedInTicket, setRecentCheckedInTicket] = useState<string | null>(null);
 
-  // Today's active queue
-  const queueList = appointments.filter(
-    (a) => a.date === '2026-10-06' && a.status !== 'Cancelled' && a.status !== 'Completed'
+  // Live Auto-Refresh ticker
+  const [livePulse, setLivePulse] = useState<number>(0);
+
+  // Live ticking PST clock effect
+  useEffect(() => {
+    const updatePstClock = () => {
+      const now = new Date();
+      setCurrentTime(
+        now.toLocaleTimeString('en-US', {
+          timeZone: 'Asia/Manila',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        })
+      );
+      setCurrentDate(
+        now.toLocaleDateString('en-US', {
+          timeZone: 'Asia/Manila',
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+        })
+      );
+    };
+    updatePstClock();
+    const interval = setInterval(updatePstClock, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Periodic simulated live pulse
+  useEffect(() => {
+    const pulseTimer = setInterval(() => {
+      setLivePulse((p) => p + 1);
+    }, 5000);
+    return () => clearInterval(pulseTimer);
+  }, []);
+
+  // Active Queue: include current day or all active visits in outpatient clinic
+  const todayStr = new Date().toISOString().split('T')[0];
+  const activeQueueList = appointments.filter(
+    (a) =>
+      a.status !== 'Cancelled' &&
+      a.status !== 'Completed' &&
+      (a.date === todayStr || a.date === '2026-10-06' || a.status === 'Checked In' || a.status === 'In Consultation')
   );
 
-  const checkedInCount = queueList.filter((a) => a.status === 'Checked In').length;
-  const inConsultCount = queueList.filter((a) => a.status === 'In Consultation').length;
+  const checkedInList = activeQueueList.filter((a) => a.status === 'Checked In');
+  const inConsultList = activeQueueList.filter((a) => a.status === 'In Consultation');
+  const scheduledUpcoming = activeQueueList.filter(
+    (a) => a.status === 'Scheduled' || a.status === 'Confirmed'
+  );
+  const completedTodayCount = appointments.filter(
+    (a) => a.status === 'Completed' && (a.date === todayStr || a.date === '2026-10-06')
+  ).length;
 
-  const handleCallPatient = (apt: typeof appointments[0]) => {
-    setLastCalled(`Ticket ${apt.queueNumber}: ${apt.patientName} please proceed to ${apt.room || 'Room 302'}`);
+  // Determine current active serving ticket for the big screen
+  const currentServingTicket = inConsultList[0] || null;
+
+  // Current user's patient ticket if authenticated as patient
+  const patientTicket =
+    activeRole === 'patient'
+      ? appointments.find(
+          (a) =>
+            (a.patientId === linkedPatientId || (currentUser?.name && a.patientName === currentUser.name)) &&
+            a.status !== 'Completed' &&
+            a.status !== 'Cancelled'
+        )
+      : null;
+
+  const isStaffOrDoctor =
+    isAuthenticated &&
+    (activeRole === 'doctor' ||
+      activeRole === 'nurse' ||
+      activeRole === 'receptionist' ||
+      activeRole === 'admin');
+
+  // Trigger calling action
+  const handleCallPatient = (apt: Appointment) => {
+    const room = apt.room || 'Room 302 (Consultation Suite)';
+    const announcement = {
+      ticket: apt.queueNumber || 'Q-101',
+      patientName: apt.patientName,
+      room,
+      doctorName: apt.doctorName || 'Dr. Maria Cristina Reyes, MD',
+      department: apt.department || 'Outpatient Medicine',
+      timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    setLastCalledAnnouncement(announcement);
     updateAppointmentStatus(apt.id, 'In Consultation');
+
+    if (soundEnabled) {
+      playHospitalBroadcastChime();
+      // Delay speech slightly to follow the chime
+      setTimeout(() => {
+        announceTicketVoice(announcement.ticket, announcement.patientName, announcement.room);
+      }, 700);
+    }
+  };
+
+  const handleTestBroadcastChime = () => {
+    playHospitalBroadcastChime();
+    setTimeout(() => {
+      announceTicketVoice('A-102', 'Liam Gabriel Torres', 'Room 302');
+    }, 700);
+    setLastCalledAnnouncement({
+      ticket: 'A-102',
+      patientName: 'Liam Gabriel Torres',
+      room: 'Room 302',
+      doctorName: 'Dr. Maria Cristina Reyes, MD',
+      department: 'Internal Medicine',
+      timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    });
+  };
+
+  // Submit Self-Service Check-In
+  const handleSelfCheckIn = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!checkInName.trim()) return;
+
+    const patientId = `pat-${Date.now()}`;
+    const cleanPhone = checkInPhone.trim() || '+639154050623';
+    const newApt = addAppointment({
+      patientId,
+      patientName: checkInName.trim(),
+      patientMrn: `MRN-2026-${String(patients.length + 101).padStart(3, '0')}`,
+      doctorId: 'usr-1',
+      doctorName: 'Dr. Maria Cristina Reyes, MD',
+      department: checkInDepartment,
+      date: todayStr,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+      durationMinutes: 30,
+      reason: checkInReason,
+      status: 'Checked In',
+      type: 'In-Person',
+      room: 'Waiting Room B',
+      notes: `Self-service kiosk check-in • Contact: ${cleanPhone}`,
+    });
+
+    const ticketNumber = newApt.queueNumber || 'Q-105';
+    setRecentCheckedInTicket(ticketNumber);
+    if (soundEnabled) playHospitalBroadcastChime();
+
+    setTimeout(() => {
+      setShowCheckInModal(false);
+      setCheckInName('');
+      setCheckInPhone('');
+    }, 2500);
   };
 
   return (
-    <div className="space-y-4 max-w-6xl mx-auto text-xs font-sans pb-10">
-      {/* Header and Queue Metrics */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">Live Waiting Room & Queue</h1>
-            <span className="text-xs bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-semibold px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
-              {checkedInCount} Patients Waiting
+    <div className="space-y-6 max-w-7xl mx-auto text-xs font-sans pb-16">
+      {/* Top Banner: Service Coverage & Official Clinic Contacts */}
+      <div className="p-3.5 bg-gradient-to-r from-teal-900 via-slate-900 to-cyan-950 text-white rounded-2xl border border-teal-800/80 shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="relative flex h-3 w-3">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+          </span>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-sm tracking-tight text-white">
+                Live Outpatient Clinic Operation
+              </span>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                ACTIVE LIVE
+              </span>
+            </div>
+            <p className="text-[11px] text-teal-200/90 mt-0.5 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-emerald-400" />
+                Service Coverage: <strong className="text-white">Philippines Only</strong>
+              </span>
+              <span>•</span>
+              <span className="inline-flex items-center gap-1">
+                <Phone className="w-3 h-3 text-emerald-400" />
+                Globe: <strong className="text-white">+639154050623</strong>
+              </span>
+              <span>•</span>
+              <span className="inline-flex items-center gap-1">
+                <Mail className="w-3 h-3 text-emerald-400" />
+                Email: <strong className="text-white">smartclinicrealacc@gmail.com</strong>
+              </span>
+            </p>
+          </div>
+        </div>
+
+        {/* Real Live PST Clock */}
+        <div className="flex items-center gap-3 self-end md:self-auto bg-black/40 px-3.5 py-2 rounded-xl border border-teal-700/40 font-mono">
+          <Clock className="w-4 h-4 text-teal-400 animate-spin-slow" />
+          <div className="text-right">
+            <div className="text-xs font-black text-emerald-300 tracking-wider">
+              {currentTime || 'Loading PST...'}
+            </div>
+            <div className="text-[9px] text-slate-300 font-sans">
+              Philippine Standard Time (PST)
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Big Screen Header & Calling Display */}
+      <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-teal-100 dark:bg-teal-950 flex items-center justify-center text-teal-600 dark:text-teal-400 font-bold">
+                <Radio className="w-4 h-4 animate-pulse" />
+              </div>
+              <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                Outpatient Waiting Room & Queue Board
+              </h1>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Real-time outpatient patient flow, triage vitals processing, room calling broadcast, and clinical consultation progression.
+            </p>
+          </div>
+
+          {/* Action Toolbar */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Audio Broadcast Toggle */}
+            <button
+              type="button"
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                soundEnabled
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
+              }`}
+              title="Toggle Hospital Broadcast Chime Sound"
+            >
+              {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-600" /> : <VolumeX className="w-3.5 h-3.5" />}
+              <span>{soundEnabled ? 'Broadcast Audio On' : 'Muted'}</span>
+            </button>
+
+            {/* Test Chime Button */}
+            <button
+              type="button"
+              onClick={handleTestBroadcastChime}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition cursor-pointer"
+            >
+              <BellRing className="w-3.5 h-3.5 text-teal-600" />
+              <span>Test Public Chime</span>
+            </button>
+
+            {/* Self-Service Check-in Button */}
+            <button
+              type="button"
+              onClick={() => setShowCheckInModal(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Get Queue Ticket / Check-In</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Real-Time Operational Metrics Bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+          <div className="p-3.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/40">
+            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px] mb-1">
+              <span>Waiting in Triage</span>
+              <Clock className="w-3.5 h-3.5 text-amber-600" />
+            </div>
+            <div className="text-2xl font-black text-amber-700 dark:text-amber-300 font-mono">
+              {checkedInList.length}
+            </div>
+            <span className="text-[10px] text-amber-600/80 dark:text-amber-400">Patients in lobby</span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-900/40">
+            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px] mb-1">
+              <span>In Consultation</span>
+              <Stethoscope className="w-3.5 h-3.5 text-blue-600" />
+            </div>
+            <div className="text-2xl font-black text-blue-700 dark:text-blue-300 font-mono">
+              {inConsultList.length}
+            </div>
+            <span className="text-[10px] text-blue-600/80 dark:text-blue-400">Physicians active</span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-900/40">
+            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px] mb-1">
+              <span>Completed Today</span>
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            </div>
+            <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300 font-mono">
+              {completedTodayCount}
+            </div>
+            <span className="text-[10px] text-emerald-600/80 dark:text-emerald-400">Consults finished</span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-900/40">
+            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-[11px] mb-1">
+              <span>Average Wait Time</span>
+              <Activity className="w-3.5 h-3.5 text-purple-600" />
+            </div>
+            <div className="text-2xl font-black text-purple-700 dark:text-purple-300 font-mono">
+              12 <span className="text-xs font-normal">mins</span>
+            </div>
+            <span className="text-[10px] text-purple-600/80 dark:text-purple-400">Optimal clinic throughput</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Patient's Own Live Ticket Card (if authenticated as Patient) */}
+      {patientTicket && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-teal-500/10 via-emerald-500/10 to-teal-500/10 border-2 border-teal-500/40 dark:border-teal-500/30 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3.5">
+            <span className="w-12 h-12 rounded-xl bg-teal-600 text-white font-mono font-black text-lg flex items-center justify-center shadow-md">
+              {patientTicket.queueNumber || 'Q-101'}
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] uppercase tracking-wider font-extrabold text-teal-800 dark:text-teal-300">
+                  Your Live Queue Ticket
+                </span>
+                <span className="text-[10px] bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 font-bold px-2 py-0.5 rounded-full">
+                  {patientTicket.status}
+                </span>
+              </div>
+              <h3 className="font-bold text-slate-900 dark:text-white text-sm">
+                {patientTicket.patientName} • {patientTicket.department}
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Attending Physician: {patientTicket.doctorName} • Designated Area: {patientTicket.room || 'Waiting Room B'}
+              </p>
+            </div>
+          </div>
+
+          <div className="text-right self-end sm:self-auto">
+            <span className="text-[10px] text-slate-400 block font-medium">Estimated Call</span>
+            <span className="text-base font-black text-teal-700 dark:text-teal-300 font-mono">
+              ~ {patientTicket.status === 'In Consultation' ? 'Now In Room' : 'Next in line (approx 5-8 min)'}
             </span>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Specific Task: Real-time outpatient reception queue, triage prioritization, room calling broadcast, and consultation progression.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 text-xs">
-          <div className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded-lg border border-blue-200 dark:border-blue-800 font-semibold">
-            {inConsultCount} In Consultation
-          </div>
-        </div>
-      </div>
-
-      {/* Audit & Security Banner */}
-      <div className="p-3 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-          <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
-          <span>Triage Access Active: Patient arrival and room calling are tracked with automated queue number logs.</span>
-        </div>
-        <span className="font-mono text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded font-bold">
-          TRIAGE ACCESS
-        </span>
-      </div>
-
-      {/* Broadcast Calling Banner if triggered */}
-      {lastCalled && (
-        <div className="bg-teal-600 text-white p-4 rounded-xl shadow-md flex items-center justify-between animate-in slide-in-from-top-2 duration-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-              <Volume2 className="w-5 h-5 text-white animate-pulse" />
-            </div>
-            <div>
-              <span className="text-[10px] uppercase font-bold tracking-wider text-teal-200 block">
-                Public Announcement Active
-              </span>
-              <span className="font-bold text-sm">{lastCalled}</span>
-            </div>
-          </div>
-          <button
-            onClick={() => setLastCalled(null)}
-            className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-semibold cursor-pointer"
-          >
-            Dismiss
-          </button>
         </div>
       )}
 
-      {/* Live Queue Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Waiting to be called */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs p-4 space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-500" />
-              <h2 className="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wide">
-                Checked-In & Waiting ({checkedInCount})
-              </h2>
+      {/* Hospital Public Calling Banner / Announcement Chime */}
+      {lastCalledAnnouncement && (
+        <div className="bg-gradient-to-r from-teal-700 to-cyan-800 text-white p-4 sm:p-5 rounded-2xl shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in slide-in-from-top-3 duration-300 border border-teal-600/80">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+              <Volume2 className="w-6 h-6 text-white animate-pulse" />
             </div>
-            <span className="text-[10px] text-slate-400">Order of Arrival</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase font-black tracking-widest text-emerald-300 bg-black/30 px-2 py-0.5 rounded-full">
+                  PUBLIC CALLING ANNOUNCEMENT
+                </span>
+                <span className="text-[10px] text-teal-200 font-mono">
+                  {lastCalledAnnouncement.timestamp}
+                </span>
+              </div>
+              <div className="text-lg font-black text-white mt-1">
+                Ticket #{lastCalledAnnouncement.ticket} — {lastCalledAnnouncement.patientName}
+              </div>
+              <div className="text-xs text-teal-100 font-medium">
+                Please proceed immediately to <strong>{lastCalledAnnouncement.room}</strong> ({lastCalledAnnouncement.doctorName})
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-2 max-h-[500px] overflow-y-auto">
-            {queueList
-              .filter((a) => a.status === 'Checked In')
-              .map((apt) => (
-                <div
-                  key={apt.id}
-                  className="p-3 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 flex items-center justify-between gap-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 font-extrabold flex items-center justify-center font-mono text-sm shrink-0">
-                      {apt.queueNumber}
-                    </span>
-                    <div>
-                      <h3 className="font-bold text-slate-900 dark:text-white text-xs">{apt.patientName}</h3>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        {apt.department} • Dr. {apt.doctorName}
-                      </p>
-                      <span className="text-[10px] text-slate-400 font-mono">Arrived: {apt.time}</span>
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={handleTestBroadcastChime}
+              className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-xl text-xs font-bold cursor-pointer transition"
+            >
+              Repeat Chime
+            </button>
+            <button
+              type="button"
+              onClick={() => setLastCalledAnnouncement(null)}
+              className="px-3 py-1.5 bg-black/30 hover:bg-black/40 rounded-xl text-xs font-bold cursor-pointer transition"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Grid: Waiting vs In Consultation Rooms */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Column: Waiting in Lobby & Triage (7 cols) */}
+        <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-5 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-500" />
+              <h2 className="font-extrabold text-slate-900 dark:text-white text-sm uppercase tracking-wide">
+                Waiting for Room Call ({checkedInList.length})
+              </h2>
+            </div>
+            <span className="text-[11px] text-slate-400 font-medium">Order of Triage Arrival</span>
+          </div>
+
+          <div className="space-y-2.5 max-h-[580px] overflow-y-auto pr-1">
+            {checkedInList.map((apt, idx) => (
+              <div
+                key={apt.id}
+                className="p-3.5 rounded-xl bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 flex items-center justify-between gap-3 hover:border-amber-300 transition"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-11 h-11 rounded-xl bg-amber-100 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200 font-black flex items-center justify-center font-mono text-base shrink-0 shadow-xs">
+                    {apt.queueNumber || `A-${101 + idx}`}
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
+                        {apt.patientName}
+                      </h3>
+                      <span className="text-[10px] bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full font-semibold">
+                        Waiting #{idx + 1}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      {apt.department} • Dr. {apt.doctorName}
+                    </p>
+                    <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
+                      <span className="font-mono">Arrived: {apt.time}</span>
+                      <span>•</span>
+                      <span>Location: {apt.room || 'Waiting Room B'}</span>
                     </div>
                   </div>
+                </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
+                  {isStaffOrDoctor && (
                     <button
+                      type="button"
                       onClick={() => handleCallPatient(apt)}
-                      className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer shadow-xs"
+                      className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
                     >
                       <BellRing className="w-3.5 h-3.5" />
-                      <span>Call Next</span>
+                      <span>Call Ticket</span>
                     </button>
-                  </div>
+                  )}
+                  {!isStaffOrDoctor && (
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      Queue #{idx + 1}
+                    </span>
+                  )}
                 </div>
-              ))}
+              </div>
+            ))}
 
-            {checkedInCount === 0 && (
-              <div className="p-8 text-center text-slate-400 text-xs">
-                Waiting room is currently clear.
+            {checkedInList.length === 0 && (
+              <div className="p-12 text-center text-slate-400 space-y-2">
+                <Clock className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-700 stroke-1" />
+                <p className="text-xs font-medium">Outpatient lobby is currently clear.</p>
+                <p className="text-[11px] text-slate-400">
+                  Click "Get Queue Ticket / Check-In" above to check in a patient.
+                </p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Currently in Consultation */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs p-4 space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+        {/* Right Column: Currently In Consultation Rooms (5 cols) */}
+        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-5 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
               <Stethoscope className="w-4 h-4 text-blue-500" />
-              <h2 className="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wide">
-                In Consultation Rooms ({inConsultCount})
+              <h2 className="font-extrabold text-slate-900 dark:text-white text-sm uppercase tracking-wide">
+                Consultation Rooms ({inConsultList.length})
               </h2>
             </div>
-            <span className="text-[10px] text-slate-400">Active Consults</span>
+            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Now Serving
+            </span>
           </div>
 
-          <div className="space-y-2 max-h-[500px] overflow-y-auto">
-            {queueList
-              .filter((a) => a.status === 'In Consultation')
-              .map((apt) => (
-                <div
-                  key={apt.id}
-                  className="p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/40 flex items-center justify-between gap-3"
-                >
+          <div className="space-y-3 max-h-[580px] overflow-y-auto pr-1">
+            {inConsultList.map((apt) => (
+              <div
+                key={apt.id}
+                className="p-4 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/80 dark:border-blue-900/50 space-y-3"
+              >
+                <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <span className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 font-extrabold flex items-center justify-center font-mono text-sm shrink-0">
-                      {apt.queueNumber}
+                    <span className="w-12 h-12 rounded-xl bg-blue-600 text-white font-mono font-black text-base flex items-center justify-center shadow-md shrink-0">
+                      {apt.queueNumber || 'A-101'}
                     </span>
                     <div>
-                      <h3 className="font-bold text-slate-900 dark:text-white text-xs">{apt.patientName}</h3>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] bg-blue-100 dark:bg-blue-900/80 text-blue-800 dark:text-blue-200 font-extrabold px-2 py-0.5 rounded-full">
+                          {apt.room || 'Room 302'}
+                        </span>
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                          Active Consult
+                        </span>
+                      </div>
+                      <h3 className="font-bold text-slate-900 dark:text-white text-sm mt-0.5">
+                        {apt.patientName}
+                      </h3>
                       <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        {apt.department} • Room {apt.room || '302'}
+                        {apt.department} • Dr. {apt.doctorName}
                       </p>
-                      <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium">Physician Active</span>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {activeRole === 'doctor' && (
-                      <button
-                        onClick={() => {
-                          selectPatient(apt.patientId);
-                          onStartConsultation(apt.patientId);
-                        }}
-                        className="px-2.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer"
-                      >
-                        <Stethoscope className="w-3.5 h-3.5" />
-                        <span>Open SOAP</span>
-                      </button>
-                    )}
-                    <button
-                      onClick={() => updateAppointmentStatus(apt.id, 'Completed')}
-                      className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold cursor-pointer"
-                    >
-                      Complete
-                    </button>
-                  </div>
                 </div>
-              ))}
 
-            {inConsultCount === 0 && (
-              <div className="p-8 text-center text-slate-400 text-xs">
-                No active doctor consultations at this moment.
+                {/* Staff Actions */}
+                <div className="pt-2 border-t border-blue-100 dark:border-blue-900/40 flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Time: {apt.time}
+                  </span>
+
+                  {isStaffOrDoctor && (
+                    <div className="flex items-center gap-1.5">
+                      {activeRole === 'doctor' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            selectPatient(apt.patientId);
+                            onStartConsultation(apt.patientId);
+                          }}
+                          className="px-2.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition shadow-xs"
+                        >
+                          <Stethoscope className="w-3.5 h-3.5" />
+                          <span>SOAP Notes</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => updateAppointmentStatus(apt.id, 'Completed')}
+                        className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer transition shadow-xs"
+                      >
+                        Complete Consult
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {inConsultList.length === 0 && (
+              <div className="p-12 text-center text-slate-400 space-y-2">
+                <Stethoscope className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-700 stroke-1" />
+                <p className="text-xs font-medium">No physicians currently in consultation.</p>
+                <p className="text-[11px] text-slate-400">
+                  Call the next patient from the waiting list to begin consultation.
+                </p>
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Self-Service Kiosk / Queue Ticket Modal */}
+      {showCheckInModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl p-6 relative">
+            <button
+              type="button"
+              onClick={() => setShowCheckInModal(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-xl cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-center mb-5">
+              <div className="w-12 h-12 rounded-2xl bg-teal-100 dark:bg-teal-950 text-teal-600 dark:text-teal-400 flex items-center justify-center mx-auto mb-2 font-bold shadow-xs">
+                <Layers className="w-6 h-6" />
+              </div>
+              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
+                Self-Service Queue Check-In
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Outpatient Reception Kiosk • Service Coverage: Philippines Only
+              </p>
+            </div>
+
+            {recentCheckedInTicket ? (
+              <div className="p-6 rounded-2xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-center space-y-3 animate-in zoom-in-95">
+                <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                  Check-In Confirmed! Your Ticket is:
+                </h3>
+                <div className="text-4xl font-black font-mono text-teal-700 dark:text-teal-300 tracking-wider">
+                  #{recentCheckedInTicket}
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  Please take a seat in <strong>Waiting Room B</strong>. Watch the live display and listen for the broadcast chime when called.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleSelfCheckIn} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Patient Full Legal Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={checkInName}
+                    onChange={(e) => setCheckInName(e.target.value)}
+                    placeholder="e.g., Juan Dela Cruz"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-teal-500 outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Philippine Mobile Phone
+                  </label>
+                  <input
+                    type="tel"
+                    value={checkInPhone}
+                    onChange={(e) => setCheckInPhone(e.target.value)}
+                    placeholder="+63 915 405 0623"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-teal-500 outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Clinical Department / Service
+                  </label>
+                  <select
+                    value={checkInDepartment}
+                    onChange={(e) => setCheckInDepartment(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-teal-500 outline-hidden"
+                  >
+                    <option value="Internal Medicine">Internal Medicine & Endocrinology</option>
+                    <option value="Cardiology">Cardiology & Cardiovascular Clinic</option>
+                    <option value="Pediatrics">General Pediatrics & Immunization</option>
+                    <option value="Family Medicine">Family Medicine & Preventive Health</option>
+                    <option value="Urgent Care">Urgent Outpatient Triage</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Reason for Consultation
+                  </label>
+                  <input
+                    type="text"
+                    value={checkInReason}
+                    onChange={(e) => setCheckInReason(e.target.value)}
+                    placeholder="e.g., Routine Follow-up, Fever, Cough, BP check"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-teal-500 outline-hidden"
+                  />
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowCheckInModal(false)}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white rounded-xl shadow-xs transition cursor-pointer"
+                  >
+                    Generate Live Ticket
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

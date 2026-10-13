@@ -60,7 +60,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
             </span>
             <span className="hidden md:inline">|</span>
             <span className="flex items-center gap-1">
-              <Phone className="w-3.5 h-3.5" /> Emergency Hotline: (02) 8888-7627 (SMART)
+              <Phone className="w-3.5 h-3.5" /> Emergency Hotline: Globe +639154050623
             </span>
           </div>
         </div>
@@ -86,7 +86,17 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
           <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-slate-600 dark:text-slate-300">
             <a href="#services" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Services</a>
             <a href="#specialties" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Clinical Specialties</a>
-            <a href="#queue-status" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Live Queue</a>
+            <button
+              type="button"
+              onClick={() => setActiveTab('queue')}
+              className="hover:text-teal-600 dark:hover:text-teal-400 transition cursor-pointer flex items-center gap-1.5 font-semibold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/60 px-3 py-1 rounded-full border border-teal-200 dark:border-teal-800"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span>Live Queue</span>
+            </button>
             <a href="#portals" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Clinic Portals</a>
             <a href="#compliance" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Privacy & Standards</a>
           </nav>
@@ -103,6 +113,14 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
               </button>
             ) : (
               <>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('queue')}
+                  className="lg:hidden inline-flex items-center gap-1.5 px-2.5 py-2 text-xs font-semibold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/70 border border-teal-200 dark:border-teal-800 rounded-lg hover:bg-teal-100 transition cursor-pointer"
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>Queue</span>
+                </button>
                 <button
                   onClick={() => setActiveTab('login')}
                   className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
@@ -262,10 +280,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
                 <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
                   <span className="text-slate-500 dark:text-slate-400">Total Registered Today: {totalToday}</span>
                   <button
-                    onClick={() => setActiveTab('login')}
-                    className="text-teal-600 dark:text-teal-400 font-semibold hover:underline flex items-center gap-1"
+                    onClick={() => setActiveTab('queue')}
+                    className="text-teal-600 dark:text-teal-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
                   >
-                    <span>View Full Live Queue</span>
+                    <span>View Full Live Queue & Operations</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -600,15 +618,15 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
             </div>
 
             <div>
-              <h5 className="font-bold text-slate-800 dark:text-slate-200 mb-2.5">Clinic Location</h5>
-              <p className="text-xs flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-teal-600" /> Metro Manila Healthcare Hub</p>
-              <p className="text-xs mt-1">Quezon City & Makati Satellite Clinics</p>
+              <h5 className="font-bold text-slate-800 dark:text-slate-200 mb-2.5">Service Coverage</h5>
+              <p className="text-xs flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-teal-600" /> Philippines Only</p>
+              <p className="text-xs mt-1">Nationwide Outpatient Telehealth & Clinic Network</p>
             </div>
 
             <div>
               <h5 className="font-bold text-slate-800 dark:text-slate-200 mb-2.5">Contact</h5>
-              <p className="text-xs flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-teal-600" /> Trunkline: (02) 8888-7627 (SMART)</p>
-              <p className="text-xs mt-1">Email: contact@smartclinic.ph</p>
+              <p className="text-xs flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-teal-600" /> Globe: +639154050623</p>
+              <p className="text-xs mt-1">Email: smartclinicrealacc@gmail.com</p>
             </div>
           </div>
 
