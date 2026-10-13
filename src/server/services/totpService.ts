@@ -150,7 +150,7 @@ export async function generateQrCodeDataUrl(otpAuthUrl: string): Promise<string>
     margin: 2,
     scale: 6,
     color: {
-      dark: '#0f766e',
+      dark: '#000000',
       light: '#ffffff',
     },
   });
@@ -181,21 +181,41 @@ export function setUserTotpSecret(identifier: string, secret: string) {
   userTotpSecrets.set(identifier.trim().toLowerCase(), secret.trim());
 }
 
+export function isDemoAccount(identifier?: string): boolean {
+  if (!identifier) return false;
+  const clean = identifier.trim().toLowerCase();
+  const demoAccounts = [
+    'admin@smartclinic.ph',
+    'demo@smartclinic.ph',
+    'demo@patient.com',
+    'patient@smartclinic.ph',
+    'elena.vargas@example.com',
+    'maria.reyes@smartclinic.ph',
+    'ana.villanueva@smartclinic.ph',
+    'pharmacy@smartclinic.ph',
+    'reception@smartclinic.ph',
+  ];
+  return demoAccounts.includes(clean) || clean.includes('demo') || clean.includes('test@');
+}
+
 /**
- * Gets setup package (secret, URL, QR Code, current code, seconds remaining)
+ * Gets setup package (secret, URL, QR Code)
+ * CRITICAL SECURITY: Live currentCode is strictly restricted to demo accounts.
+ * Production accounts must retrieve rolling TOTP codes from their mobile Authenticator app.
  */
 export async function getTotpSetup(accountName: string, issuer: string = 'Smart Clinic') {
   const secret = getUserTotpSecret(accountName);
   const otpAuthUrl = buildOtpAuthUrl({ accountName, issuer, secret });
   const qrCodeDataUrl = await generateQrCodeDataUrl(otpAuthUrl);
-  const currentCode = generateTotpCode(secret);
+  const isDemo = isDemoAccount(accountName);
+  const currentCode = isDemo ? generateTotpCode(secret) : undefined;
   const stepRemaining = 30 - (Math.floor(Date.now() / 1000) % 30);
 
   return {
     secret,
     otpAuthUrl,
     qrCodeDataUrl,
-    currentCode,
+    ...(isDemo ? { currentCode, isDemo: true } : { isDemo: false }),
     stepRemaining,
   };
 }

@@ -121,7 +121,7 @@ export const PatientList: React.FC<Props> = ({
         </div>
 
         {/* Patient Profile Snapshot */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="space-y-1">
             <span className="text-[10px] text-slate-400 uppercase font-semibold">Full Legal Name</span>
             <div className="text-sm font-bold text-slate-900 dark:text-white">{currentPatient.fullName}</div>
@@ -142,6 +142,13 @@ export const PatientList: React.FC<Props> = ({
             <span className="text-[10px] text-slate-400 uppercase font-semibold">Contact & Phone</span>
             <div className="text-xs text-slate-700 dark:text-slate-300">{currentPatient.phone}</div>
             <div className="text-[11px] text-slate-500">{currentPatient.email}</div>
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-[10px] text-slate-400 uppercase font-semibold">Residential Address</span>
+            <div className="text-xs text-slate-800 dark:text-slate-200 font-medium line-clamp-2" title={currentPatient.address}>
+              {currentPatient.address}
+            </div>
           </div>
 
           <div className="space-y-1">

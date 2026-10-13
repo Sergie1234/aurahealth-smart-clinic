@@ -12,44 +12,68 @@ import {
   ArrowRight,
   Lock,
   AlertCircle,
-  Mail,
   UserPlus,
-  Send,
   KeyRound,
   CheckCircle2,
-  Sparkles,
   Smartphone,
   QrCode,
+  Calendar,
+  MapPin,
+  Phone,
+  Heart,
+  AlertTriangle,
+  UserCheck,
+  Eye,
+  EyeOff,
+  FileText,
+  Scale,
 } from 'lucide-react';
 import { useClinic, type PrimaryAuthRole, type StaffSubRole } from '../../context/ClinicContext';
 import { useToast } from '../../context/ToastContext';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
 import { AuthenticatorSetupModal } from './AuthenticatorSetupModal';
+import { PrivacyPolicyModal } from './PrivacyPolicyModal';
 
 type AuthMode = 'login' | 'register';
-type ContactMethod = 'email' | 'authenticator';
 
 export const LoginPage: React.FC = () => {
-  const { login, requestEmailOtp, setActiveTab, pendingAction } = useClinic();
-  const { success: toastSuccess, error: toastError, info: toastInfo } = useToast();
+  const { login, setActiveTab, pendingAction } = useClinic();
+  const { success: toastSuccess, error: toastError } = useToast();
 
   const [primaryRole, setPrimaryRole] = useState<PrimaryAuthRole>('patient');
   const [staffSubRole, setStaffSubRole] = useState<StaffSubRole>('nurse');
   const [mode, setMode] = useState<AuthMode>('login');
-  const [method, setMethod] = useState<ContactMethod>('email');
 
-  // Input states
+  // Basic Credentials
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [otpCode, setOtpCode] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [enablePatient2Fa, setEnablePatient2Fa] = useState(false);
+
+  // Patient Intake EMR Demographics
+  const [dob, setDob] = useState('1995-05-15');
+  const [age, setAge] = useState<number>(31);
+  const [gender, setGender] = useState<'Male' | 'Female' | 'Other'>('Female');
+  const [bloodType, setBloodType] = useState<'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-'>('O+');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+
+  // Emergency Contact & Clinical History
+  const [emergencyContactName, setEmergencyContactName] = useState('');
+  const [emergencyContactRelation, setEmergencyContactRelation] = useState('Family');
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
+  const [allergies, setAllergies] = useState('');
+  const [chronicConditions, setChronicConditions] = useState('');
 
   // UI state
-  const [otpSent, setOtpSent] = useState(false);
-  const [generatedCode, setGeneratedCode] = useState<string>('');
-  const [isLiveDispatched, setIsLiveDispatched] = useState<boolean>(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showRegisterConfirmPassword, setShowRegisterConfirmPassword] = useState(false);
+  const [hasAgreedPrivacy, setHasAgreedPrivacy] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showAuthenticatorModal, setShowAuthenticatorModal] = useState(false);
   const [error, setError] = useState('');
@@ -60,54 +84,21 @@ export const LoginPage: React.FC = () => {
   const isStaff = primaryRole === 'staff';
   const isAdmin = primaryRole === 'admin';
 
-  // Quick-fill live Authenticator TOTP rolling code
-  const handleQuickFillTotp = async () => {
-    try {
-      const target = isAdmin ? (email.trim().toLowerCase() || 'smartclinicrealacc@gmail.com') : email.trim().toLowerCase() || 'patient@smartclinic.ph';
-      const res = await fetch(`/api/auth/2fa/code?email=${encodeURIComponent(target)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.currentCode) {
-          if (isAdmin) setTwoFactorCode(data.currentCode);
-          else {
-            setOtpCode(data.currentCode);
-            setOtpSent(true);
-          }
-          toastSuccess(`Live Authenticator code ${data.currentCode} applied (${data.stepRemaining}s remaining).`);
-          return;
-        }
+  // Compute age dynamically when DOB changes
+  const handleDobChange = (newDob: string) => {
+    setDob(newDob);
+    if (newDob) {
+      const birth = new Date(newDob);
+      const today = new Date();
+      let calculatedAge = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+        calculatedAge--;
       }
-    } catch {
-      // Fallback
+      if (!isNaN(calculatedAge) && calculatedAge >= 0) {
+        setAge(calculatedAge);
+      }
     }
-    toastInfo('Please check the 6-digit rolling code in your Authenticator app.');
-  };
-
-  // Send Patient OTP (Email) or Trigger Authenticator Setup
-  const handleSendPatientOtp = async () => {
-    setError('');
-    if (method === 'authenticator') {
-      setShowAuthenticatorModal(true);
-      return;
-    }
-
-    setLoading(true);
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      setError('Please enter a valid email address.');
-      setLoading(false);
-      return;
-    }
-    const res = await requestEmailOtp(cleanEmail, mode === 'register' ? 'patient_register' : 'patient_login');
-    setLoading(false);
-    if (!res.success && res.error) {
-      setError(res.error);
-      toastError(res.error);
-      return;
-    }
-    setOtpSent(true);
-    setIsLiveDispatched(Boolean(res.liveDispatched));
-    toastSuccess(`Verification code sent to ${cleanEmail}. Please check your inbox.`);
   };
 
   // Handle Form Submission
@@ -116,29 +107,113 @@ export const LoginPage: React.FC = () => {
     setError('');
     setLoading(true);
 
-    // Patient Validation
+    // Patient Validation & Flow
     if (isPatient) {
-      const finalCode = (method === 'authenticator' ? otpCode : otpCode || generatedCode).trim();
-      if (!finalCode) {
-        setError(method === 'authenticator' ? 'Please enter the 6-digit code from your Authenticator app.' : 'Please enter the 6-digit verification code sent to your email.');
+      const cleanEmail = email.trim().toLowerCase();
+
+      // REGISTRATION MODE: Full Patient Demographics & Clinical Chart
+      if (mode === 'register') {
+        const cleanName = fullName.trim();
+        if (cleanName.length < 2) {
+          setError('Please enter your full legal name.');
+          setLoading(false);
+          return;
+        }
+        if (!dob) {
+          setError('Please select your date of birth.');
+          setLoading(false);
+          return;
+        }
+        if (!address.trim()) {
+          setError('Please enter your residential home address.');
+          setLoading(false);
+          return;
+        }
+        if (!cleanEmail || !cleanEmail.includes('@')) {
+          setError('Please enter a valid email address.');
+          setLoading(false);
+          return;
+        }
+        if (!password || password.length < 6) {
+          setError('Password must be at least 6 characters.');
+          setLoading(false);
+          return;
+        }
+        if (password !== confirmPassword) {
+          setError('Passwords do not match. Please verify your password confirmation.');
+          setLoading(false);
+          return;
+        }
+        if (!hasAgreedPrivacy) {
+          setError('Please review and accept the Patient Medical Privacy Policy & Consent Agreement (RA 10173) before creating your account.');
+          setLoading(false);
+          return;
+        }
+
+        const res = await login({
+          primaryRole: 'patient',
+          fullName: cleanName,
+          email: cleanEmail,
+          phone: phone.trim(),
+          password,
+          dob,
+          age,
+          gender,
+          bloodType,
+          address: address.trim(),
+          emergencyContactName: emergencyContactName.trim(),
+          emergencyContactRelation: emergencyContactRelation.trim(),
+          emergencyContactPhone: emergencyContactPhone.trim(),
+          allergies: allergies.trim(),
+          chronicConditions: chronicConditions.trim(),
+          isRegister: true,
+        });
+
+        setLoading(false);
+        if (!res.success) {
+          setError(res.error || 'Patient registration failed.');
+          toastError(res.error || 'Patient registration failed.');
+          return;
+        }
+
+        toastSuccess(
+          pendingAction === 'book'
+            ? 'Account created! Redirecting directly to appointment booking...'
+            : `Welcome to Smart Clinic, ${cleanName}! EMR created and account active.`
+        );
+        return;
+      }
+
+      // LOGIN MODE: Email + Password (with optional Authenticator 2FA)
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        setError('Please enter your registered email address.');
+        setLoading(false);
+        return;
+      }
+      if (!password) {
+        setError('Please enter your account password.');
+        setLoading(false);
+        return;
+      }
+
+      if (enablePatient2Fa && (!twoFactorCode || twoFactorCode.trim().length < 6)) {
+        setError('Please enter the 6-digit code from your Authenticator app.');
         setLoading(false);
         return;
       }
 
       const res = await login({
         primaryRole: 'patient',
-        email: email.trim().toLowerCase(),
-        method,
-        password: password || undefined,
-        twoFactorCode: finalCode,
-        fullName: mode === 'register' ? fullName : undefined,
-        isRegister: mode === 'register',
+        email: cleanEmail,
+        password,
+        twoFactorCode: enablePatient2Fa ? twoFactorCode.trim() : undefined,
+        isRegister: false,
       });
 
       setLoading(false);
       if (!res.success) {
-        setError(res.error || 'Patient verification failed.');
-        toastError(res.error || 'Patient verification failed.');
+        setError(res.error || 'Invalid email or password.');
+        toastError(res.error || 'Invalid email or password.');
         return;
       }
 
@@ -187,7 +262,7 @@ export const LoginPage: React.FC = () => {
 
     // Admin Login with 2FA
     if (isAdmin) {
-      const finalAdminCode = (twoFactorCode || generatedCode).trim();
+      const finalAdminCode = twoFactorCode.trim();
       if (!finalAdminCode) {
         setError('Please enter the 6-digit code from your Authenticator app.');
         setLoading(false);
@@ -213,7 +288,7 @@ export const LoginPage: React.FC = () => {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-12 bg-gradient-to-b from-teal-50/40 via-slate-50 to-white dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 font-sans">
-      <div className="w-full max-w-lg">
+      <div className={`w-full ${isPatient && mode === 'register' ? 'max-w-2xl' : 'max-w-lg'} transition-all`}>
         {/* Header / Brand */}
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white dark:bg-slate-900 shadow-xl border border-teal-100 dark:border-teal-900/50 mb-3.5">
@@ -231,7 +306,7 @@ export const LoginPage: React.FC = () => {
         {/* Auth Gate Notification if Intercepted from 'Book Now' */}
         {pendingAction === 'book' && (
           <div className="mb-4 p-3.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-200 text-xs flex items-center gap-2.5 animate-in fade-in duration-200">
-            <Sparkles className="w-4 h-4 text-teal-600 shrink-0" />
+            <UserCheck className="w-4 h-4 text-teal-600 shrink-0" />
             <span>
               <strong>Appointment Booking Gate:</strong> Please sign in or create an account to finalize your outpatient reservation. You will be redirected immediately.
             </span>
@@ -255,7 +330,6 @@ export const LoginPage: React.FC = () => {
                 onClick={() => {
                   setPrimaryRole(id);
                   setError('');
-                  setOtpSent(false);
                   setMode('login');
                 }}
                 className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border text-xs font-bold transition-all cursor-pointer ${
@@ -287,40 +361,13 @@ export const LoginPage: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setMode('register'); setError(''); setOtpSent(false); }}
+                  onClick={() => { setMode('register'); setError(''); }}
                   className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer ${
                     mode === 'register' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
                   <UserPlus className="w-3.5 h-3.5" />
                   Create Account
-                </button>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => { setMethod('email'); setOtpSent(false); setError(''); }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-xl border transition cursor-pointer ${
-                    method === 'email'
-                      ? 'border-teal-600 bg-teal-600 text-white shadow-xs'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
-                  }`}
-                >
-                  <Mail className="w-3.5 h-3.5" />
-                  <span>Email Verification</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setMethod('authenticator'); setOtpSent(true); setError(''); }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-xl border transition cursor-pointer ${
-                    method === 'authenticator'
-                      ? 'border-teal-600 bg-teal-600 text-white shadow-xs'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
-                  }`}
-                >
-                  <Smartphone className="w-3.5 h-3.5" />
-                  <span>Authenticator App (2FA)</span>
                 </button>
               </div>
             </div>
@@ -384,205 +431,471 @@ export const LoginPage: React.FC = () => {
           {/* AUTHENTICATION FORM */}
           {/* ========================================================================= */}
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-            {/* Full Name for Patient Registration */}
-            {isPatient && mode === 'register' && (
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Full Legal Name</label>
-                <input
-                  type="text"
-                  required
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="e.g. Elena Vargas"
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500"
-                />
-              </div>
-            )}
+            {/* PATIENT REGISTRATION: COMPREHENSIVE EMR INTAKE */}
+            {isPatient && mode === 'register' ? (
+              <div className="space-y-4">
+                {/* 1. Demographics */}
+                <div className="p-3.5 rounded-2xl bg-teal-50/50 dark:bg-slate-800/40 border border-teal-100 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center gap-1.5 font-bold text-teal-800 dark:text-teal-300 text-xs">
+                    <UserRound className="w-3.5 h-3.5" />
+                    <span>Personal Demographics (EMR Intake)</span>
+                  </div>
 
-            {/* Email Field (for all roles) */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block font-bold text-slate-700 dark:text-slate-300">
-                  {isAdmin ? 'Administrator Account' : isDoctor ? 'Provider Work Email' : isStaff ? 'Staff Work Email' : 'Email Address'}
-                </label>
-                {isPatient && method === 'authenticator' && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAuthenticatorModal(true)}
-                    className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 cursor-pointer"
-                  >
-                    <QrCode className="w-3 h-3" />
-                    <span>Setup Authenticator App</span>
-                  </button>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder={
-                    isAdmin
-                      ? 'smartclinicrealacc@gmail.com'
-                      : isDoctor
-                      ? 'maria.reyes@smartclinic.ph'
-                      : isStaff
-                      ? `${staffSubRole}@smartclinic.ph`
-                      : 'you@example.com'
-                  }
-                  className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500 font-medium"
-                />
-                {isPatient && method === 'email' && (
-                  <button
-                    type="button"
-                    onClick={handleSendPatientOtp}
-                    disabled={loading}
-                    className="shrink-0 px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60 transition"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>{otpSent ? 'Resend' : 'Send Code'}</span>
-                  </button>
-                )}
-                {isPatient && method === 'authenticator' && (
-                  <button
-                    type="button"
-                    onClick={handleQuickFillTotp}
-                    className="shrink-0 px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold flex items-center gap-1.5 cursor-pointer transition"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Current Code</span>
-                  </button>
-                )}
-              </div>
-              {isPatient && method === 'email' && otpSent && (
-                <p className="mt-1 text-[11px] text-teal-600 dark:text-teal-400 font-medium">
-                  ✓ Security verification code dispatched to your email ({email}). Please check your inbox.
-                </p>
-              )}
-              {isPatient && method === 'authenticator' && (
-                <p className="mt-1 text-[11px] text-teal-600 dark:text-teal-400 font-medium">
-                  ✓ Open Google Authenticator, Microsoft Authenticator, or Authy to enter your 6-digit rolling code.
-                </p>
-              )}
-            </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Full Legal Name <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="e.g. Maria Angela Santos"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500 font-medium"
+                    />
+                  </div>
 
-            {/* Patient Verification Code Input (Email OTP or Authenticator App TOTP) */}
-            {isPatient && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block font-bold text-slate-700 dark:text-slate-300">
-                    {method === 'authenticator' ? '6-Digit Authenticator Code' : '6-Digit Email Verification Code'}
-                  </label>
-                  {method === 'authenticator' && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAuthenticatorModal(true)}
-                      className="text-[11px] font-bold text-teal-600 hover:text-teal-700 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
-                    >
-                      <QrCode className="w-3 h-3" />
-                      <span>Scan QR / Setup</span>
-                    </button>
-                  )}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="col-span-2">
+                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Date of Birth <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                        <input
+                          type="date"
+                          required
+                          value={dob}
+                          onChange={(e) => handleDobChange(e.target.value)}
+                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-8 pr-2.5 py-2 text-xs focus:ring-2 focus:ring-teal-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Age</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={125}
+                        value={age}
+                        onChange={(e) => setAge(Number(e.target.value))}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500 font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Gender</label>
+                      <select
+                        value={gender}
+                        onChange={(e) => setGender(e.target.value as any)}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-2 text-xs focus:ring-2 focus:ring-teal-500 font-medium"
+                      >
+                        <option value="Female">Female</option>
+                        <option value="Male">Male</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Blood Group</label>
+                      <select
+                        value={bloodType}
+                        onChange={(e) => setBloodType(e.target.value as any)}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500 font-bold"
+                      >
+                        <option value="O+">O Positive (O+)</option>
+                        <option value="A+">A Positive (A+)</option>
+                        <option value="B+">B Positive (B+)</option>
+                        <option value="AB+">AB Positive (AB+)</option>
+                        <option value="O-">O Negative (O-)</option>
+                        <option value="A-">A Negative (A-)</option>
+                        <option value="B-">B Negative (B-)</option>
+                        <option value="AB-">AB Negative (AB-)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Mobile Phone</label>
+                      <div className="relative">
+                        <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                        <input
+                          type="tel"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          placeholder="e.g. +63 917 123 4567"
+                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-8 pr-2.5 py-2 text-xs focus:ring-2 focus:ring-teal-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Complete Residential Address <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <MapPin className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        required
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        placeholder="Street, Barangay, City, Province (e.g. 14 Emerald Ave, San Antonio, Pasig City)"
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-8 pr-3 py-2 text-xs focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div className="relative">
-                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                {/* 2. Emergency Contact & Clinical Flags */}
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200 text-xs">
+                    <Heart className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Emergency Contact & Clinical Background</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div>
+                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Emergency Contact</label>
+                      <input
+                        type="text"
+                        value={emergencyContactName}
+                        onChange={(e) => setEmergencyContactName(e.target.value)}
+                        placeholder="Contact Full Name"
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Relationship</label>
+                      <select
+                        value={emergencyContactRelation}
+                        onChange={(e) => setEmergencyContactRelation(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500"
+                      >
+                        <option value="Spouse">Spouse</option>
+                        <option value="Parent">Parent</option>
+                        <option value="Sibling">Sibling</option>
+                        <option value="Child">Child</option>
+                        <option value="Guardian">Guardian</option>
+                        <option value="Family">Other Family</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Emergency Phone</label>
+                      <input
+                        type="tel"
+                        value={emergencyContactPhone}
+                        onChange={(e) => setEmergencyContactPhone(e.target.value)}
+                        placeholder="e.g. 0918 000 0000"
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3 text-amber-500" />
+                        <span>Known Allergies</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={allergies}
+                        onChange={(e) => setAllergies(e.target.value)}
+                        placeholder="e.g. Penicillin, Seafood, or None"
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Existing Chronic Conditions
+                      </label>
+                      <input
+                        type="text"
+                        value={chronicConditions}
+                        onChange={(e) => setChronicConditions(e.target.value)}
+                        placeholder="e.g. Hypertension, Asthma, or None"
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Account Credentials */}
+                <div className="p-3.5 rounded-2xl bg-teal-50/30 dark:bg-slate-800/40 border border-teal-100 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center gap-1.5 font-bold text-teal-800 dark:text-teal-300 text-xs">
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Portal Credentials</span>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Email Address <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="your.email@example.com"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500 font-medium"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-bold text-slate-700 dark:text-slate-300">
+                          Password (min. 6 chars) <span className="text-rose-500">*</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                          className="flex items-center gap-1 text-[11px] font-medium text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
+                        >
+                          {showRegisterPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          <span>{showRegisterPassword ? 'Hide' : 'See Password'}</span>
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                        <input
+                          type={showRegisterPassword ? 'text' : 'password'}
+                          required
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-8 pr-8 py-2 text-xs focus:ring-2 focus:ring-teal-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-bold text-slate-700 dark:text-slate-300">
+                          Confirm Password <span className="text-rose-500">*</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowRegisterConfirmPassword(!showRegisterConfirmPassword)}
+                          className="flex items-center gap-1 text-[11px] font-medium text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
+                        >
+                          {showRegisterConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          <span>{showRegisterConfirmPassword ? 'Hide' : 'See Password'}</span>
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                        <input
+                          type={showRegisterConfirmPassword ? 'text' : 'password'}
+                          required
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-8 pr-8 py-2 text-xs focus:ring-2 focus:ring-teal-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Philippine Medical Data Privacy Consent (RA 10173) */}
+                  <div className="p-3.5 rounded-2xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 space-y-2.5">
+                    <div className="flex items-start gap-2.5">
+                      <input
+                        type="checkbox"
+                        id="privacyConsent"
+                        required
+                        checked={hasAgreedPrivacy}
+                        onChange={(e) => setHasAgreedPrivacy(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 rounded border-teal-300 text-teal-600 focus:ring-teal-500 cursor-pointer accent-teal-600 shrink-0"
+                      />
+                      <label htmlFor="privacyConsent" className="text-[11px] text-teal-900 dark:text-teal-200 leading-relaxed cursor-pointer select-none">
+                        I have read, understood, and accept the <strong>Smart Clinic Patient Data Privacy Policy</strong> and consent to the secure processing of my medical and health records in accordance with <strong>Republic Act No. 10173 (Philippine Data Privacy Act of 2012)</strong>.
+                      </label>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pt-1.5 border-t border-teal-100 dark:border-teal-900/60 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => setShowPrivacyModal(true)}
+                        className="text-teal-700 dark:text-teal-300 font-bold hover:underline flex items-center gap-1.5 cursor-pointer text-left"
+                      >
+                        <Scale className="w-3.5 h-3.5 text-teal-600" />
+                        <span>Read Full Philippine Medical Privacy Standards & Data Charter</span>
+                      </button>
+                      <span className="text-[10px] text-teal-600/80 dark:text-teal-400/80 font-mono">
+                        PBKDF2 Salted Hashing & Tenant Isolation
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 text-[11px] text-teal-800 dark:text-teal-200 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                    <span>Your official Medical Record Number (MRN) and EMR chart will be generated instantly.</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* STANDARD LOGIN FORM (Patient Sign In, Doctor, Staff, Admin) */
+              <div className="space-y-4">
+                {/* Email Field */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700 dark:text-slate-300">
+                      {isAdmin ? 'Administrator Account' : isDoctor ? 'Provider Work Email' : isStaff ? 'Staff Work Email' : 'Email Address'}
+                    </label>
+                  </div>
                   <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value)}
-                    placeholder={method === 'authenticator' ? 'e.g. 6-digit app code' : 'Enter 6-digit code from email'}
-                    className="w-full rounded-xl border border-teal-400 dark:border-teal-700 bg-teal-50/20 dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-3 py-2.5 text-xs font-mono font-bold tracking-widest focus:ring-2 focus:ring-teal-500"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder={
+                      isAdmin
+                        ? 'smartclinicrealacc@gmail.com'
+                        : isDoctor
+                        ? 'maria.reyes@smartclinic.ph'
+                        : isStaff
+                        ? `${staffSubRole}@smartclinic.ph`
+                        : 'you@example.com'
+                    }
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500 font-medium"
                   />
                 </div>
 
-                {otpSent && method === 'email' && (
-                  <div className="p-3 rounded-xl bg-teal-50/90 dark:bg-teal-950/50 border border-teal-200 dark:border-teal-800 text-[11px] text-teal-900 dark:text-teal-200 flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 font-medium">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
-                      <span>Check your email inbox for the 6-digit code. Valid for 10 minutes.</span>
+                {/* Password Field */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700 dark:text-slate-300">
+                      {isDoctor
+                        ? 'Provider Password / License Pass'
+                        : isAdmin
+                        ? 'Administrator Master Password'
+                        : 'Account Password'}
+                    </label>
+                    <div className="flex items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setShowLoginPassword(!showLoginPassword)}
+                        className="flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 cursor-pointer"
+                      >
+                        {showLoginPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        <span>{showLoginPassword ? 'Hide' : 'See Password'}</span>
+                      </button>
+                      {/* Forgot password is ONLY rendered in login mode */}
+                      {!isAdmin && mode === 'login' && (
+                        <button
+                          type="button"
+                          onClick={() => setShowForgotPassword(true)}
+                          className="text-[11px] font-medium text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
+                        >
+                          Forgot password?
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type={showLoginPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={isAdmin ? 'SmartClinic@Admin2026' : '••••••••'}
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-10 py-2.5 text-xs focus:ring-2 focus:ring-teal-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLoginPassword(!showLoginPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                      title={showLoginPassword ? 'Hide Password' : 'See Password'}
+                    >
+                      {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Optional Patient Authenticator 2FA Toggle for Login */}
+                {isPatient && mode === 'login' && (
+                  <div>
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setEnablePatient2Fa(!enablePatient2Fa)}
+                        className="text-[11px] font-semibold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <Smartphone className="w-3 h-3" />
+                        <span>{enablePatient2Fa ? '✕ Disable Authenticator 2FA' : '+ Sign in with Authenticator App (2FA)'}</span>
+                      </button>
+                      {enablePatient2Fa && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAuthenticatorModal(true)}
+                          className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
+                        >
+                          <QrCode className="w-3 h-3" />
+                          <span>Setup / QR Code</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {enablePatient2Fa && (
+                      <div className="mt-2.5 p-3 rounded-2xl bg-teal-50/60 dark:bg-slate-800/60 border border-teal-200 dark:border-teal-800 space-y-2">
+                        <label className="block font-bold text-slate-800 dark:text-slate-200">
+                          6-Digit Authenticator App Code
+                        </label>
+                        <div className="relative">
+                          <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <input
+                            type="text"
+                            maxLength={6}
+                            value={twoFactorCode}
+                            onChange={(e) => setTwoFactorCode(e.target.value)}
+                            placeholder="Enter 6-digit rolling code"
+                            className="w-full rounded-xl border border-teal-300 dark:border-teal-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-3 py-2 text-xs font-mono font-bold tracking-widest focus:ring-2 focus:ring-teal-500"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Admin 2FA Code Input & Authenticator App Integration */}
+                {isAdmin && (
+                  <div className="p-4 rounded-2xl bg-amber-50/50 dark:bg-slate-800/60 border border-amber-200 dark:border-amber-800/80 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                        <Smartphone className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Authenticator App 2FA Code</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowAuthenticatorModal(true)}
+                        className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
+                      >
+                        <QrCode className="w-3 h-3" />
+                        <span>Setup / QR Code</span>
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        maxLength={6}
+                        value={twoFactorCode}
+                        onChange={(e) => setTwoFactorCode(e.target.value)}
+                        placeholder="Enter 6-digit rolling code from phone"
+                        className="w-full rounded-xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-3 py-2.5 text-xs font-mono font-bold tracking-widest focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                      <span>Google Authenticator • Microsoft Authenticator • Authy</span>
+                      <span className="text-[10px] text-slate-400">RFC 6238 TOTP Standard</span>
                     </div>
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* Password Field (for Doctor, Staff, Admin, or Patient Registration) */}
-            {(isDoctor || isStaff || isAdmin || (isPatient && mode === 'register')) && (
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block font-bold text-slate-700 dark:text-slate-300">
-                    {isDoctor ? 'Provider Password / License Pass' : isAdmin ? 'Administrator Master Password' : 'Password'}
-                  </label>
-                  {!isAdmin && (
-                    <button
-                      type="button"
-                      onClick={() => setShowForgotPassword(true)}
-                      className="text-[11px] font-medium text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
-                    >
-                      Forgot password?
-                    </button>
-                  )}
-                </div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={isAdmin ? 'SmartClinic@Admin2026' : '••••••••'}
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Admin 2FA Code Input & Authenticator App Integration */}
-            {isAdmin && (
-              <div className="p-4 rounded-2xl bg-amber-50/50 dark:bg-slate-800/60 border border-amber-200 dark:border-amber-800/80 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                    <Smartphone className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Authenticator App 2FA Code</span>
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowAuthenticatorModal(true)}
-                      className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
-                    >
-                      <QrCode className="w-3 h-3" />
-                      <span>Setup / QR Code</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleQuickFillTotp}
-                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shadow-2xs"
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      <span>Current Code</span>
-                    </button>
-                  </div>
-                </div>
-                <div className="relative">
-                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={twoFactorCode}
-                    onChange={(e) => setTwoFactorCode(e.target.value)}
-                    placeholder="Enter 6-digit code (e.g. 123456)"
-                    className="w-full rounded-xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-3 py-2.5 text-xs font-mono font-bold tracking-widest focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-                  <span>Google Authenticator • Microsoft Authenticator • Authy</span>
-                  <span className="text-[10px] text-slate-400">RFC 6238 TOTP Standard</span>
-                </div>
               </div>
             )}
 
@@ -601,12 +914,12 @@ export const LoginPage: React.FC = () => {
               className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-lg shadow-teal-600/25 transition cursor-pointer disabled:opacity-60"
             >
               {loading ? (
-                <span>Verifying credentials…</span>
+                <span>Processing...</span>
               ) : (
                 <>
                   <span>
                     {isPatient && mode === 'register'
-                      ? 'Complete Patient Registration'
+                      ? 'Create Patient Account & Register EMR'
                       : isDoctor
                       ? 'Enter Consultation Suite'
                       : isStaff
@@ -619,6 +932,38 @@ export const LoginPage: React.FC = () => {
                 </>
               )}
             </button>
+
+            {isPatient && mode === 'register' && (
+              <div className="pt-2 text-center text-xs text-slate-500 dark:text-slate-400">
+                Already registered with Smart Clinic?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('login');
+                    setError('');
+                  }}
+                  className="font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
+                >
+                  Sign In to Health Portal
+                </button>
+              </div>
+            )}
+
+            {isPatient && mode === 'login' && (
+              <div className="pt-2 text-center text-xs text-slate-500 dark:text-slate-400">
+                New outpatient?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('register');
+                    setError('');
+                  }}
+                  className="font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
+                >
+                  Create Patient Account (Full EMR Intake)
+                </button>
+              </div>
+            )}
           </form>
 
           {/* Quick System Role Switcher */}
@@ -638,17 +983,17 @@ export const LoginPage: React.FC = () => {
                 onClick={() => {
                   setError('');
                   setPrimaryRole('patient');
-                  setMethod('email');
                   setEmail('elena.vargas@example.com');
+                  setPassword('patient123');
                   setMode('login');
-                  setOtpSent(false);
-                  setOtpCode('');
+                  setEnablePatient2Fa(false);
+                  setTwoFactorCode('');
                 }}
                 className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
                 <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Patient</div>
                 <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">elena.vargas@example.com</div>
-                <div className="text-[9px] text-teal-600 dark:text-teal-400 font-medium">Email Verification</div>
+                <div className="text-[9px] text-teal-600 dark:text-teal-400 font-medium">Password Login</div>
               </button>
 
               <button
@@ -759,12 +1104,14 @@ export const LoginPage: React.FC = () => {
         isOpen={showAuthenticatorModal}
         onClose={() => setShowAuthenticatorModal(false)}
         accountEmail={isAdmin ? 'smartclinicrealacc@gmail.com' : email.trim().toLowerCase() || 'elena.vargas@example.com'}
-        onCodeSelect={(c) => {
-          if (isAdmin) setTwoFactorCode(c);
-          else {
-            setOtpCode(c);
-            setOtpSent(true);
-          }
+      />
+
+      <PrivacyPolicyModal
+        isOpen={showPrivacyModal}
+        onClose={() => setShowPrivacyModal(false)}
+        onAgree={() => {
+          setHasAgreedPrivacy(true);
+          toastSuccess('Agreed to Philippine Medical Privacy Policy (RA 10173).');
         }}
       />
     </div>

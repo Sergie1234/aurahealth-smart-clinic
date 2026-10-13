@@ -27,7 +27,6 @@ export async function fetchTotpSetup(accountName: string) {
     secret: 'KNWWC4TUINWGS3TJMNAWI3LJNZFWK6JS',
     otpAuthUrl: `otpauth://totp/Smart%20Clinic:${encodeURIComponent(accountName)}?secret=KNWWC4TUINWGS3TJMNAWI3LJNZFWK6JS&issuer=Smart%20Clinic`,
     qrCodeDataUrl: '',
-    currentCode: '',
     stepRemaining: getTotpRemainingSeconds(),
   };
 }

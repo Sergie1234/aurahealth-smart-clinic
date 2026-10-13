@@ -25,7 +25,14 @@ import {
   generateTotpCode,
   getUserTotpSecret,
   ADMIN_TOTP_SECRET,
+  isDemoAccount,
 } from './server/services/totpService';
+import {
+  registerUserCredentials,
+  verifyUserPassword,
+  checkAccountLockout,
+  resetUserPassword,
+} from './server/services/passwordSecurityService';
 import {
   generateToken,
   authMiddleware,
@@ -88,12 +95,15 @@ let memInvoices = [...INITIAL_INVOICES];
 let memAuditLogs = [...INITIAL_AUDIT_LOGS];
 
 // Supabase cloud integration check
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const supabaseUrl =
+  process.env.SUPABASE_URL ||
+  process.env.VITE_SUPABASE_URL ||
+  'https://oqakutwoeixccadsgaii.supabase.co';
 const supabaseKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
   process.env.VITE_SUPABASE_ANON_KEY ||
-  '';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9xYWt1dHdvZWl4Y2NhZHNnYWlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzNDAxNTcsImV4cCI6MjEwNjkxNjE1N30.eGe7VsfW7BrJkTOZcTITEeiCItxyoxyv_hNTYlgErf4';
 const isSupabaseLive = Boolean(
   supabaseUrl &&
     supabaseKey &&
@@ -217,6 +227,10 @@ app.post('/api/auth/otp/email', async (req: Request, res: Response) => {
     const purpose = (req.body?.purpose || 'patient_login') as any;
     const result = await sendEmailOtp({ email, purpose });
     if (!result.success) return res.status(400).json(result);
+    // Security: never return verification code in response body for non-demo accounts
+    if (!isDemoAccount(email)) {
+      delete (result as any).code;
+    }
     return res.json(result);
   } catch (err: any) {
     console.error('[auth/otp/email]', err?.message);
@@ -230,6 +244,8 @@ app.post('/api/auth/otp/sms', async (req: Request, res: Response) => {
     const purpose = (req.body?.purpose || 'patient_login') as any;
     const result = await sendSmsOtp({ phone, purpose });
     if (!result.success) return res.status(400).json(result);
+    // Security: strip code for production SMS
+    delete (result as any).code;
     return res.json(result);
   } catch (err: any) {
     console.error('[auth/otp/sms]', err?.message);
@@ -266,7 +282,13 @@ app.get('/api/auth/2fa/setup', async (req: Request, res: Response) => {
 
 app.get('/api/auth/2fa/code', (req: Request, res: Response) => {
   try {
-    const email = String(req.query.email || 'smartclinicrealacc@gmail.com').trim();
+    const email = String(req.query.email || '').trim().toLowerCase();
+    // Security: Live preview is strictly blocked globally for non-demo accounts
+    if (!isDemoAccount(email)) {
+      return res.status(403).json({
+        error: 'Live Authenticator rolling code preview is disabled globally for production accounts. Please read the rolling 6-digit code directly from your mobile Authenticator app.',
+      });
+    }
     const secret = getUserTotpSecret(email);
     const currentCode = generateTotpCode(secret);
     const stepRemaining = 30 - (Math.floor(Date.now() / 1000) % 30);
@@ -324,9 +346,25 @@ app.post('/api/auth/otp/resend', async (req: Request, res: Response) => {
 });
 
 // User Registration with OTP verification flow
+// User Registration with email, password, and instant account provisioning
 app.post('/api/auth/register', async (req: Request, res: Response) => {
   try {
-    const { fullName, email, phone, password } = req.body || {};
+    const {
+      fullName,
+      email,
+      phone,
+      password,
+      dob,
+      age: inputAge,
+      gender,
+      bloodType,
+      address,
+      emergencyContactName,
+      emergencyContactRelation,
+      emergencyContactPhone,
+      allergies,
+      chronicConditions,
+    } = req.body || {};
     const cleanName = String(fullName || '').trim();
     const cleanEmail = email ? String(email).trim().toLowerCase() : '';
     const cleanPhone = phone ? normalizePhoneNumber(phone) : '';
@@ -335,7 +373,10 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Full legal name is required.' });
     }
     if (!cleanEmail && !cleanPhone) {
-      return res.status(400).json({ success: false, error: 'Provide a valid email or mobile phone number.' });
+      return res.status(400).json({ success: false, error: 'Provide a valid email address.' });
+    }
+    if (!password || String(password).length < 6) {
+      return res.status(400).json({ success: false, error: 'Password must be at least 6 characters.' });
     }
 
     // Duplicate check in existing clinic patients
@@ -346,23 +387,108 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Mobile phone number is already registered. Please log in.' });
     }
 
-    const result = await verificationService.registerPendingUser({
-      fullName: cleanName,
-      email: cleanEmail || undefined,
-      phone: cleanPhone || undefined,
-      passwordHash: password,
-    });
+    const mrn = `MRN-2026-${String(memPatients.length + 101).padStart(3, '0')}`;
+    const calculatedAge = inputAge ? Number(inputAge) : dob ? Math.max(0, new Date().getFullYear() - new Date(dob).getFullYear()) : 30;
+    
+    // Parse allergies list
+    const parsedAllergies = allergies
+      ? String(allergies)
+          .split(',')
+          .map((a, idx) => ({ id: `alg-${idx}`, allergen: a.trim(), severity: 'moderate' as const, reaction: 'Documented' }))
+          .filter((a) => a.allergen && a.allergen.toLowerCase() !== 'none')
+      : [];
 
-    if (!result.success) {
-      return res.status(400).json(result);
+    // Parse chronic conditions
+    const parsedConditions = chronicConditions
+      ? String(chronicConditions)
+          .split(',')
+          .map((c) => c.trim())
+          .filter((c) => c && c.toLowerCase() !== 'none')
+      : [];
+
+    const newPatient = {
+      id: `pat-${Date.now()}`,
+      mrn,
+      fullName: cleanName,
+      dob: dob || '1995-05-15',
+      age: calculatedAge,
+      gender: (['Male', 'Female', 'Other'].includes(gender) ? gender : 'Female') as any,
+      bloodType: (bloodType || 'O+') as any,
+      phone: cleanPhone || '+63 917 123 4567',
+      email: cleanEmail || `${cleanPhone}@phone.smartclinic.local`,
+      address: address || 'Metro Manila, Philippines',
+      emergencyContact: {
+        name: emergencyContactName || 'Emergency Contact',
+        relationship: emergencyContactRelation || 'Family',
+        phone: emergencyContactPhone || cleanPhone || '+63 917 000 0000',
+      },
+      allergies: parsedAllergies,
+      chronicConditions: parsedConditions,
+      currentMedications: [],
+      primaryDoctorId: 'usr-1',
+      createdAt: new Date().toISOString(),
+      vitalsHistory: [],
+    };
+
+    memPatients.unshift(newPatient);
+
+    // Cryptographic PBKDF2 Password Hashing with Salt
+    if (cleanEmail && password) {
+      registerUserCredentials(cleanEmail, String(password), 'patient');
     }
+
+    // Asynchronously dispatch Welcome Email via real Google SMTP
+    if (cleanEmail) {
+      emailService.sendWelcomeEmail(cleanEmail, cleanName, mrn).catch(console.error);
+    }
+
+    // Direct asynchronous Supabase persistence
+    if (supabaseServer) {
+      Promise.resolve(
+        supabaseServer
+          .from('patients')
+          .upsert(
+            {
+              mrn: newPatient.mrn,
+              full_name: newPatient.fullName,
+              dob: newPatient.dob,
+              age: newPatient.age,
+              gender: newPatient.gender,
+              blood_type: newPatient.bloodType,
+              phone: newPatient.phone,
+              email: newPatient.email,
+              address: newPatient.address,
+              emergency_contact: newPatient.emergencyContact,
+              allergies: newPatient.allergies,
+              chronic_conditions: newPatient.chronicConditions,
+              current_medications: newPatient.currentMedications,
+              primary_doctor_id: newPatient.primaryDoctorId,
+              vitals_history: newPatient.vitalsHistory,
+            },
+            { onConflict: 'mrn' }
+          )
+      )
+        .then((res: any) => {
+          if (res?.error) console.warn('[Supabase] Auto-sync patient notice:', res.error.message);
+        })
+        .catch((err: any) => console.warn('[Supabase] Auto-sync error:', err));
+    }
+
+    const token = generateToken({
+      userId: newPatient.id,
+      name: newPatient.fullName,
+      email: newPatient.email,
+      role: 'patient',
+      primaryRole: 'patient',
+      linkedPatientId: newPatient.id,
+    });
 
     return res.json({
       success: true,
-      message: `Verification code dispatched to ${cleanEmail || cleanPhone}.`,
-      destination: cleanEmail || cleanPhone,
-      channel: cleanEmail ? 'email' : 'sms',
-      code: result.code,
+      message: 'Account registered successfully! Welcome to Smart Clinic.',
+      token,
+      user: { id: newPatient.id, name: newPatient.fullName, email: newPatient.email, role: 'patient' },
+      patient: newPatient,
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err?.message || 'Registration failed.' });
@@ -485,6 +611,9 @@ app.post('/api/auth/password-reset/confirm', async (req: Request, res: Response)
     if (!verifyRes.success) {
       return res.status(400).json({ success: false, error: verifyRes.error || 'Invalid or expired password reset code.' });
     }
+
+    // Cryptographic PBKDF2 Password Update with New Salt
+    resetUserPassword(cleanId, cleanPass);
 
     // Asynchronously send notification that password was changed
     if (cleanId.includes('@')) {
@@ -618,14 +747,32 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       } else {
         // Email + OTP or Email + Password
         const cleanEmail = String(email || '').trim().toLowerCase();
+
+        // 1. Check account lockout & verify password using PBKDF2 salted cryptographic hashes
+        if (password) {
+          const pwCheck = verifyUserPassword(cleanEmail, String(password));
+          if (!pwCheck.success) {
+            return res.status(pwCheck.isLocked ? 429 : 401).json({
+              success: false,
+              error: pwCheck.error || 'Invalid email or password.',
+              remainingAttempts: pwCheck.remainingAttempts,
+            });
+          }
+        }
+
         if (twoFactorCode || req.body?.otpCode) {
+          const codeToVerify = String(twoFactorCode || req.body?.otpCode || '').trim();
           const otpResult = verifyOtp({
             channel: 'email',
             destination: cleanEmail,
-            code: String(twoFactorCode || req.body?.otpCode || '').trim(),
+            code: codeToVerify,
           });
           if (!otpResult.success) {
-            return res.status(401).json({ success: false, error: otpResult.error || 'Invalid Email OTP.' });
+            const secret = getUserTotpSecret(cleanEmail);
+            const isTotp = verifyTotpCode(secret, codeToVerify);
+            if (!isTotp) {
+              return res.status(401).json({ success: false, error: 'Invalid 2FA code. Please check your Authenticator app.' });
+            }
           }
         }
         patient = memPatients.find((p) => p.email.toLowerCase() === cleanEmail) || null;
@@ -684,6 +831,17 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       const cleanEmail = String(email || '').trim().toLowerCase();
       const doctor = INITIAL_USERS.find((u) => u.role === 'doctor' && (u.email.toLowerCase() === cleanEmail || cleanEmail.includes('doctor') || cleanEmail.includes('reyes') || cleanEmail.includes('santos'))) || INITIAL_USERS[0];
 
+      if (password) {
+        const pwCheck = verifyUserPassword(doctor.email, String(password));
+        if (!pwCheck.success) {
+          return res.status(pwCheck.isLocked ? 429 : 401).json({
+            success: false,
+            error: pwCheck.error || 'Doctor credentials failed.',
+            remainingAttempts: pwCheck.remainingAttempts,
+          });
+        }
+      }
+
       const token = generateToken({
         userId: doctor.id,
         name: doctor.name,
@@ -717,6 +875,17 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         role: subRole as any,
       };
 
+      if (password) {
+        const pwCheck = verifyUserPassword(staffUser.email, String(password));
+        if (!pwCheck.success) {
+          return res.status(pwCheck.isLocked ? 429 : 401).json({
+            success: false,
+            error: pwCheck.error || 'Staff credentials failed.',
+            remainingAttempts: pwCheck.remainingAttempts,
+          });
+        }
+      }
+
       const token = generateToken({
         userId: staffUser.id,
         name: staffUser.name,
@@ -749,11 +918,15 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         });
       }
 
-      if (password !== ADMIN_PASSWORD) {
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid administrator credentials.',
-        });
+      if (password) {
+        const pwCheck = verifyUserPassword(cleanEmail, String(password));
+        if (!pwCheck.success) {
+          return res.status(pwCheck.isLocked ? 429 : 401).json({
+            success: false,
+            error: pwCheck.error || 'Invalid administrator credentials.',
+            remainingAttempts: pwCheck.remainingAttempts,
+          });
+        }
       }
 
       // Mandatory Authenticator App 2FA code verification (RFC 6238 TOTP)
@@ -836,6 +1009,38 @@ app.post('/api/patients', (req: AuthenticatedRequest, res: Response) => {
   if (!newPat.mrn) newPat.mrn = `MRN-2026-${String(memPatients.length + 101).padStart(3, '0')}`;
   newPat.createdAt = newPat.createdAt || new Date().toISOString();
   memPatients.unshift(newPat);
+
+  if (supabaseServer) {
+    Promise.resolve(
+      supabaseServer
+        .from('patients')
+        .upsert(
+          {
+            mrn: newPat.mrn,
+            full_name: newPat.fullName,
+            dob: newPat.dob,
+            age: newPat.age,
+            gender: newPat.gender,
+            blood_type: newPat.bloodType,
+            phone: newPat.phone,
+            email: newPat.email,
+            address: newPat.address,
+            emergency_contact: newPat.emergencyContact,
+            allergies: newPat.allergies,
+            chronic_conditions: newPat.chronicConditions,
+            current_medications: newPat.currentMedications,
+            primary_doctor_id: newPat.primaryDoctorId,
+            vitals_history: newPat.vitalsHistory,
+          },
+          { onConflict: 'mrn' }
+        )
+    )
+      .then((res: any) => {
+        if (res?.error) console.warn('[Supabase] Staff patient add notice:', res.error.message);
+      })
+      .catch((err: any) => console.warn('[Supabase] Error saving patient:', err));
+  }
+
   return res.status(201).json(newPat);
 });
 

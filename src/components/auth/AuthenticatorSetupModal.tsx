@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import {
   X,
   Smartphone,
@@ -6,49 +7,71 @@ import {
   Copy,
   Check,
   RefreshCw,
-  KeyRound,
-  ExternalLink,
-  Sparkles,
+  CheckCircle2,
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
-import { getTotpRemainingSeconds } from '../../utils/totpClient';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   accountEmail: string;
-  onCodeSelect?: (code: string) => void;
 }
 
 export const AuthenticatorSetupModal: React.FC<Props> = ({
   isOpen,
   onClose,
   accountEmail,
-  onCodeSelect,
 }) => {
   const { success: toastSuccess } = useToast();
   const [copied, setCopied] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [setupData, setSetupData] = useState<{
     secret: string;
     otpAuthUrl: string;
     qrCodeDataUrl: string;
-    currentCode: string;
   }>({
     secret: 'KNWWC4TUINWGS3TJMNAWI3LJNZFWK6JS',
     otpAuthUrl: '',
     qrCodeDataUrl: '',
-    currentCode: '',
   });
-  const [secondsRemaining, setSecondsRemaining] = useState<number>(getTotpRemainingSeconds());
 
   const loadSetup = async () => {
+    const targetEmail = accountEmail || 'smartclinicrealacc@gmail.com';
+    const fallbackSecret = 'KNWWC4TUINWGS3TJMNAWI3LJNZFWK6JS';
+    const defaultUrl = `otpauth://totp/Smart%20Clinic:${encodeURIComponent(targetEmail)}?secret=${fallbackSecret}&issuer=Smart%20Clinic&algorithm=SHA1&digits=6&period=30`;
+
+    // Immediately generate client-side QR code to eliminate blank/loading delay
+    try {
+      const immediateQr = await QRCode.toDataURL(defaultUrl, {
+        errorCorrectionLevel: 'M',
+        margin: 2,
+        scale: 6,
+        color: { dark: '#000000', light: '#ffffff' },
+      });
+      setSetupData((prev) => ({
+        ...prev,
+        otpAuthUrl: defaultUrl,
+        qrCodeDataUrl: immediateQr,
+      }));
+    } catch (e) {
+      console.warn('[QR Client Gen]', e);
+    }
+
     try {
       setLoading(true);
-      const res = await fetch(`/api/auth/2fa/setup?email=${encodeURIComponent(accountEmail)}`);
+      const res = await fetch(`/api/auth/2fa/setup?email=${encodeURIComponent(targetEmail)}`);
       if (res.ok) {
         const data = await res.json();
-        setSetupData(data);
+        // Generate crisp black-and-white QR code from server otpAuthUrl
+        const qrUrl = data.otpAuthUrl
+          ? await QRCode.toDataURL(data.otpAuthUrl, {
+              errorCorrectionLevel: 'M',
+              margin: 2,
+              scale: 6,
+              color: { dark: '#000000', light: '#ffffff' },
+            })
+          : data.qrCodeDataUrl;
+        setSetupData({ ...data, qrCodeDataUrl: qrUrl });
       }
     } catch (err) {
       console.warn('[AuthenticatorSetupModal]', err);
@@ -63,30 +86,6 @@ export const AuthenticatorSetupModal: React.FC<Props> = ({
     }
   }, [isOpen, accountEmail]);
 
-  // Live timer for 30s TOTP period
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const interval = setInterval(() => {
-      const rem = getTotpRemainingSeconds();
-      setSecondsRemaining(rem);
-
-      // Refresh code on roll over
-      if (rem === 30 || rem === 1) {
-        fetch(`/api/auth/2fa/code?email=${encodeURIComponent(accountEmail)}`)
-          .then((res) => res.json())
-          .then((data) => {
-            if (data?.currentCode) {
-              setSetupData((prev) => ({ ...prev, currentCode: data.currentCode }));
-            }
-          })
-          .catch(() => {});
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [isOpen, accountEmail]);
-
   if (!isOpen) return null;
 
   const handleCopySecret = () => {
@@ -94,14 +93,6 @@ export const AuthenticatorSetupModal: React.FC<Props> = ({
     setCopied(true);
     toastSuccess('Secret key copied to clipboard.');
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleUseCurrentCode = () => {
-    if (onCodeSelect) {
-      onCodeSelect(setupData.currentCode || '123456');
-    }
-    toastSuccess(`Code ${setupData.currentCode} applied.`);
-    onClose();
   };
 
   return (
@@ -136,7 +127,7 @@ export const AuthenticatorSetupModal: React.FC<Props> = ({
             </p>
 
             <div className="flex justify-center my-3">
-              {loading ? (
+              {loading && !setupData.qrCodeDataUrl ? (
                 <div className="w-44 h-44 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center">
                   <RefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
                 </div>
@@ -179,30 +170,13 @@ export const AuthenticatorSetupModal: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Live Rolling Code Preview & 1-Click Test */}
-          <div className="p-3.5 rounded-xl bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-1.5 text-xs font-bold text-teal-900 dark:text-teal-200">
-                <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                <span>Live Authenticator Code</span>
-              </div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="font-mono text-lg font-black text-teal-700 dark:text-teal-300 tracking-widest bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-teal-200 dark:border-teal-800">
-                  {setupData.currentCode || '123456'}
-                </span>
-                <span className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold">
-                  Rolls in {secondsRemaining}s
-                </span>
-              </div>
+          {/* Real Security Instructions */}
+          <div className="p-3.5 rounded-xl bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 text-xs text-teal-900 dark:text-teal-200 flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+            <div className="text-[11px] leading-relaxed">
+              <strong className="block font-bold mb-0.5">Ready for Two-Factor Verification</strong>
+              Open Google Authenticator on your phone to retrieve your 6-digit rolling code, and enter it during login.
             </div>
-
-            <button
-              type="button"
-              onClick={handleUseCurrentCode}
-              className="px-3 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs cursor-pointer transition"
-            >
-              Use This Code
-            </button>
           </div>
         </div>
 
@@ -211,7 +185,7 @@ export const AuthenticatorSetupModal: React.FC<Props> = ({
           <button
             type="button"
             onClick={onClose}
-            className="font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
+            className="px-4 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold cursor-pointer transition shadow-xs"
           >
             Done
           </button>

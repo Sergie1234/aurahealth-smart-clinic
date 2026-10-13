@@ -45,8 +45,8 @@ export class EmailService {
   public initTransporter() {
     const host = process.env.SMTP_HOST || 'smtp.gmail.com';
     const port = Number(process.env.SMTP_PORT || 465);
-    const user = (process.env.SMTP_USER || process.env.SMTP_EMAIL || '').trim();
-    const rawPass = (process.env.SMTP_PASSWORD || process.env.SMTP_PASS || process.env.SMTP_APP_PASSWORD || '').trim();
+    const user = (process.env.SMTP_USER || process.env.SMTP_EMAIL || 'smartclinicrealacc@gmail.com').trim();
+    const rawPass = (process.env.SMTP_PASSWORD || process.env.SMTP_PASS || process.env.SMTP_APP_PASSWORD || 'yuck akfy ujlx fimn').trim();
     const pass = host.includes('gmail.com') ? rawPass.replace(/\s+/g, '') : rawPass;
     const secure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : port === 465;
 

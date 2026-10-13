@@ -29,6 +29,17 @@ export interface LoginCredentials {
   method?: 'email' | 'phone' | 'authenticator';
   fullName?: string;
   isRegister?: boolean;
+  // Patient Intake EMR fields for complete medical chart
+  dob?: string;
+  age?: number;
+  gender?: 'Male' | 'Female' | 'Other';
+  bloodType?: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
+  address?: string;
+  emergencyContactName?: string;
+  emergencyContactRelation?: string;
+  emergencyContactPhone?: string;
+  allergies?: string;
+  chronicConditions?: string;
 }
 
 export type PendingAction = 'book' | null;
@@ -359,19 +370,15 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const data = await res.json();
       if (!res.ok || !data.success) {
         return {
-          success: true,
-          code: '123456',
-          liveDispatched: false,
-          devNotice: data.error || 'Verification code generated for instant access.',
+          success: false,
+          error: data.error || 'Failed to dispatch verification code to email.',
         };
       }
       return data;
     } catch {
       return {
-        success: true,
-        code: '123456',
-        liveDispatched: false,
-        devNotice: 'SMTP gateway standby: Verification code (123456) ready.',
+        success: false,
+        error: 'Network error communicating with email gateway. Please check connection.',
       };
     }
   };
@@ -411,7 +418,22 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     logAction('AUTH_LOGIN', 'Security', accountId, `Patient session established: ${fullName}`);
   };
 
-  const registerPatient = (input: { fullName: string; email?: string; phone?: string; password?: string }) => {
+  const registerPatient = (input: {
+    fullName: string;
+    email?: string;
+    phone?: string;
+    password?: string;
+    dob?: string;
+    age?: number;
+    gender?: 'Male' | 'Female' | 'Other';
+    bloodType?: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
+    address?: string;
+    emergencyContactName?: string;
+    emergencyContactRelation?: string;
+    emergencyContactPhone?: string;
+    allergies?: string;
+    chronicConditions?: string;
+  }) => {
     const fullName = (input.fullName || '').trim();
     if (fullName.length < 2) return { success: false, error: 'Full legal name is required.' };
     const email = (input.email || '').trim().toLowerCase();
@@ -422,20 +444,29 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const patientId = `pat-${Date.now()}`;
     const mrn = `MRN-2026-${String(patients.length + 101).padStart(3, '0')}`;
+    const calculatedAge = input.age || (input.dob ? Math.max(0, new Date().getFullYear() - new Date(input.dob).getFullYear()) : 30);
     const newPatient: Patient = {
       id: patientId,
       mrn,
       fullName,
-      dob: '1990-01-01',
-      age: 34,
-      gender: 'Other',
-      bloodType: 'O+',
+      dob: input.dob || '1995-05-15',
+      age: calculatedAge,
+      gender: input.gender || 'Female',
+      bloodType: input.bloodType || 'O+',
       phone: phone ? `+${phone}` : '+639170000000',
       email: email || `${phone}@phone.smartclinic.local`,
-      address: 'Metro Manila, Philippines',
-      emergencyContact: { name: fullName, relationship: 'Self', phone: phone ? `+${phone}` : '+639170000000' },
-      allergies: [],
-      chronicConditions: [],
+      address: input.address || 'Metro Manila, Philippines',
+      emergencyContact: {
+        name: input.emergencyContactName || 'Emergency Contact',
+        relationship: input.emergencyContactRelation || 'Family',
+        phone: input.emergencyContactPhone || (phone ? `+${phone}` : '+639170000000'),
+      },
+      allergies: input.allergies
+        ? input.allergies.split(',').map((a, idx) => ({ id: `alg-${idx}`, allergen: a.trim(), severity: 'moderate' as const, reaction: 'Rash' })).filter((a) => a.allergen)
+        : [],
+      chronicConditions: input.chronicConditions
+        ? input.chronicConditions.split(',').map((c) => c.trim()).filter(Boolean)
+        : [],
       currentMedications: [],
       primaryDoctorId: 'usr-1',
       createdAt: new Date().toISOString(),
@@ -452,8 +483,9 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       patientId,
     };
     setPatientAccounts((prev) => [...prev, account]);
+    syncPatientToSupabase(newPatient);
     finishPatientSession(account.id, fullName, account.email || `${phone}@phone.smartclinic.local`, patientId);
-    logAction('AUTH_REGISTER', 'Security', account.id, `Patient registered: ${fullName} (${mrn})`);
+    logAction('AUTH_REGISTER', 'Security', account.id, `Patient registered with full EMR: ${fullName} (${mrn})`);
     return { success: true };
   };
 
@@ -461,6 +493,53 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const { primaryRole: role, subRole } = credentials;
 
     try {
+      // Direct call to registration endpoint if creating an account
+      if (credentials.isRegister) {
+        const regRes = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fullName: credentials.fullName,
+            email: credentials.email,
+            phone: credentials.phone,
+            password: credentials.password,
+            dob: credentials.dob,
+            age: credentials.age,
+            gender: credentials.gender,
+            bloodType: credentials.bloodType,
+            address: credentials.address,
+            emergencyContactName: credentials.emergencyContactName,
+            emergencyContactRelation: credentials.emergencyContactRelation,
+            emergencyContactPhone: credentials.emergencyContactPhone,
+            allergies: credentials.allergies,
+            chronicConditions: credentials.chronicConditions,
+          }),
+        });
+        const regData = await regRes.json();
+        if (!regRes.ok || !regData.success) {
+          return { success: false, error: regData.error || 'Registration failed.' };
+        }
+        const { token, user, patient } = regData;
+        if (token) setAuthToken(token);
+        if (patient) {
+          setPatients((prev) => {
+            const exists = prev.findIndex(
+              (p) => p.id === patient.id || (p.email && p.email.toLowerCase() === patient.email?.toLowerCase())
+            );
+            if (exists >= 0) {
+              const updated = [...prev];
+              updated[exists] = { ...updated[exists], ...patient };
+              return updated;
+            }
+            return [patient, ...prev];
+          });
+          setSelectedPatientId(patient.id);
+          syncPatientToSupabase(patient);
+        }
+        finishPatientSession(user.id, user.name, user.email, patient?.id || user.id, token);
+        return { success: true };
+      }
+
       // Direct call to server authentication endpoint
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -478,9 +557,21 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       // Route based on role
       if (role === 'patient') {
-        const patId = serverRes.patient?.id || serverRes.user?.id || 'pat-1';
-        if (serverRes.patient && !patients.some((p) => p.id === serverRes.patient.id)) {
-          setPatients((prev) => [serverRes.patient, ...prev]);
+        const pat = serverRes.patient;
+        const patId = pat?.id || serverRes.user?.id || 'pat-1';
+        if (pat) {
+          setPatients((prev) => {
+            const exists = prev.findIndex((p) => p.id === pat.id || (p.email && p.email.toLowerCase() === pat.email?.toLowerCase()));
+            if (exists >= 0) {
+              const updated = [...prev];
+              updated[exists] = { ...updated[exists], ...pat };
+              return updated;
+            }
+            return [pat, ...prev];
+          });
+          setSelectedPatientId(pat.id);
+        } else {
+          setSelectedPatientId(patId);
         }
         finishPatientSession(user.id, user.name, user.email, patId, token);
         return { success: true };

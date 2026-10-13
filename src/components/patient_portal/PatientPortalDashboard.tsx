@@ -29,10 +29,13 @@ export const PatientPortalDashboard: React.FC<Props> = ({
   onOpenLabReport,
   onOpenPrescription,
 }) => {
-  const { patients, appointments, prescriptions, labOrders, invoices, setActiveTab } = useClinic();
+  const { patients, appointments, prescriptions, labOrders, invoices, setActiveTab, linkedPatientId, currentUser } = useClinic();
 
-  // Eleanor Vance is default patient profile
-  const patient = patients[0];
+  // Active logged-in patient or fallback
+  const patient =
+    patients.find((p) => p.id === linkedPatientId) ||
+    patients.find((p) => p.email && currentUser.email && p.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+    patients[0];
 
   const myAppointments = appointments.filter((a) => a.patientId === patient.id);
   const myPrescriptions = prescriptions.filter((p) => p.patientId === patient.id);
@@ -53,7 +56,10 @@ export const PatientPortalDashboard: React.FC<Props> = ({
               Welcome, {patient.fullName}
             </h1>
             <p className="text-teal-100 text-xs mt-1">
-              MRN: {patient.mrn} • Blood Type: {patient.bloodType} • Primary Care: Dr. Sarah Lin, MD
+              MRN: {patient.mrn} • Age: {patient.age} yrs ({patient.gender}) • Blood Type: {patient.bloodType}
+            </p>
+            <p className="text-teal-200/90 text-[11px] mt-0.5">
+              Residential Address: {patient.address}
             </p>
           </div>
         </div>

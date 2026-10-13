@@ -17,7 +17,7 @@ export const getSupabaseUrl = (): string => {
     (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) ||
     (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) ||
     (typeof process !== 'undefined' && process.env?.SUPABASE_URL) ||
-    ''
+    'https://oqakutwoeixccadsgaii.supabase.co'
   ).trim();
 };
 
@@ -30,7 +30,7 @@ export const getSupabaseAnonKey = (): string => {
     (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) ||
     (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_ANON_KEY) ||
     (typeof process !== 'undefined' && process.env?.SUPABASE_ANON_KEY) ||
-    ''
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9xYWt1dHdvZWl4Y2NhZHNnYWlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzNDAxNTcsImV4cCI6MjEwNjkxNjE1N30.eGe7VsfW7BrJkTOZcTITEeiCItxyoxyv_hNTYlgErf4'
   ).trim();
 };
 
@@ -685,4 +685,48 @@ export async function fetchIsolatedPatientInvoices(patientId: string) {
     return [];
   }
 }
+
+/**
+ * Fetch all patients from Supabase for synchronized staff view
+ */
+export async function fetchAllPatientsFromSupabase(): Promise<any[] | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    const { data, error } = await client
+      .from('patients')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.warn('Fetch all patients from Supabase error:', error.message);
+      return null;
+    }
+    return (data || []).map((p: any) => ({
+      id: p.id,
+      mrn: p.mrn,
+      fullName: p.full_name,
+      dob: p.dob,
+      age: p.age,
+      gender: p.gender,
+      bloodType: p.blood_type,
+      phone: p.phone,
+      email: p.email,
+      address: p.address,
+      emergencyContact: p.emergency_contact || { name: 'Emergency Contact', relationship: 'Family', phone: p.phone },
+      allergies: Array.isArray(p.allergies) ? p.allergies : [],
+      chronicConditions: Array.isArray(p.chronic_conditions) ? p.chronic_conditions : [],
+      currentMedications: Array.isArray(p.current_medications) ? p.current_medications : [],
+      primaryDoctorId: p.primary_doctor_id || 'usr-1',
+      insuranceProvider: p.insurance_provider,
+      insurancePolicyNumber: p.insurance_policy_number,
+      vitalsHistory: Array.isArray(p.vitals_history) ? p.vitals_history : [],
+      tags: Array.isArray(p.tags) ? p.tags : [],
+      createdAt: p.created_at,
+    }));
+  } catch (err: any) {
+    console.warn('Fetch all patients exception:', err?.message);
+    return null;
+  }
+}
+
 
