@@ -24,10 +24,10 @@ export async function fetchTotpSetup(accountName: string) {
 
   // Graceful fallback values
   return {
-    secret: 'SMARTCLINIC2026ADMINAUTHKEYSECRET',
-    otpAuthUrl: `otpauth://totp/Smart%20Clinic:${encodeURIComponent(accountName)}?secret=SMARTCLINIC2026ADMINAUTHKEYSECRET&issuer=Smart%20Clinic`,
+    secret: 'KNWWC4TUINWGS3TJMNAWI3LJNZFWK6JS',
+    otpAuthUrl: `otpauth://totp/Smart%20Clinic:${encodeURIComponent(accountName)}?secret=KNWWC4TUINWGS3TJMNAWI3LJNZFWK6JS&issuer=Smart%20Clinic`,
     qrCodeDataUrl: '',
-    currentCode: '123456',
+    currentCode: '',
     stepRemaining: getTotpRemainingSeconds(),
   };
 }

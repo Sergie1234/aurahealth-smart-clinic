@@ -457,9 +457,7 @@ export const LoginPage: React.FC = () => {
               </div>
               {isPatient && method === 'email' && otpSent && (
                 <p className="mt-1 text-[11px] text-teal-600 dark:text-teal-400 font-medium">
-                  {isLiveDispatched
-                    ? `✓ Security code delivered to your personal inbox (${email}).`
-                    : `✓ Security code ready (${otpCode || generatedCode || '123456'}). Enter it below.`}
+                  ✓ Security verification code dispatched to your email ({email}). Please check your inbox.
                 </p>
               )}
               {isPatient && method === 'authenticator' && (
@@ -476,28 +474,16 @@ export const LoginPage: React.FC = () => {
                   <label className="block font-bold text-slate-700 dark:text-slate-300">
                     {method === 'authenticator' ? '6-Digit Authenticator Code' : '6-Digit Email Verification Code'}
                   </label>
-                  <div className="flex items-center gap-2">
-                    {method === 'authenticator' && (
-                      <button
-                        type="button"
-                        onClick={() => setShowAuthenticatorModal(true)}
-                        className="text-[11px] font-bold text-teal-600 hover:text-teal-700 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
-                      >
-                        <QrCode className="w-3 h-3" />
-                        <span>Scan QR</span>
-                      </button>
-                    )}
+                  {method === 'authenticator' && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setOtpCode('123456');
-                        setOtpSent(true);
-                      }}
-                      className="text-[11px] font-bold text-teal-600 hover:text-teal-700 dark:text-teal-400 hover:underline cursor-pointer"
+                      onClick={() => setShowAuthenticatorModal(true)}
+                      className="text-[11px] font-bold text-teal-600 hover:text-teal-700 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
                     >
-                      Test Code (123456)
+                      <QrCode className="w-3 h-3" />
+                      <span>Scan QR / Setup</span>
                     </button>
-                  </div>
+                  )}
                 </div>
 
                 <div className="relative">
@@ -508,36 +494,16 @@ export const LoginPage: React.FC = () => {
                     maxLength={6}
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value)}
-                    placeholder="Enter 6-digit code (e.g. 123456)"
+                    placeholder={method === 'authenticator' ? 'e.g. 6-digit app code' : 'Enter 6-digit code from email'}
                     className="w-full rounded-xl border border-teal-400 dark:border-teal-700 bg-teal-50/20 dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-3 py-2.5 text-xs font-mono font-bold tracking-widest focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
 
                 {otpSent && method === 'email' && (
-                  <div className="p-3 rounded-xl bg-teal-50/90 dark:bg-teal-950/50 border border-teal-200 dark:border-teal-800 text-[11px] text-teal-900 dark:text-teal-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 font-bold text-teal-800 dark:text-teal-200">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
-                        <span>Security Verification Code Active</span>
-                      </div>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-300 font-semibold">
-                        RA 10173 Verified
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-1 border-t border-teal-200/60 dark:border-teal-800/50">
-                      <span className="text-slate-600 dark:text-slate-400">
-                        Verification Code: <strong className="font-mono text-teal-700 dark:text-teal-300 bg-white dark:bg-slate-800 px-2 py-0.5 rounded border border-teal-200 dark:border-teal-700 font-bold tracking-widest">{otpCode || generatedCode || '123456'}</strong>
-                      </span>
-                      {(!otpCode || otpCode !== (generatedCode || '123456')) && (
-                        <button
-                          type="button"
-                          onClick={() => setOtpCode(generatedCode || '123456')}
-                          className="px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-[10px] shrink-0 cursor-pointer transition shadow-2xs"
-                        >
-                          Auto-fill
-                        </button>
-                      )}
+                  <div className="p-3 rounded-xl bg-teal-50/90 dark:bg-teal-950/50 border border-teal-200 dark:border-teal-800 text-[11px] text-teal-900 dark:text-teal-200 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 font-medium">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                      <span>Check your email inbox for the 6-digit code. Valid for 10 minutes.</span>
                     </div>
                   </div>
                 )}

@@ -200,15 +200,8 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
             <div className="p-3 rounded-xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200/80 dark:border-teal-800 text-xs text-teal-900 dark:text-teal-200 flex items-center justify-between">
               <div className="flex items-center gap-1.5 font-medium">
                 <Mail className="w-4 h-4 text-teal-600" />
-                <span>Reset code for {identifier}</span>
+                <span>Security reset code dispatched to: <strong>{identifier}</strong></span>
               </div>
-              <button
-                type="button"
-                onClick={() => setCode('123456')}
-                className="text-[11px] font-bold text-teal-700 dark:text-teal-300 underline cursor-pointer"
-              >
-                Auto-fill Code
-              </button>
             </div>
 
             <div>

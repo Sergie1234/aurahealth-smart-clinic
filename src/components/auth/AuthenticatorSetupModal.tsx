@@ -35,10 +35,10 @@ export const AuthenticatorSetupModal: React.FC<Props> = ({
     qrCodeDataUrl: string;
     currentCode: string;
   }>({
-    secret: 'SMARTCLINIC2026ADMINAUTHKEYSECRET',
+    secret: 'KNWWC4TUINWGS3TJMNAWI3LJNZFWK6JS',
     otpAuthUrl: '',
     qrCodeDataUrl: '',
-    currentCode: '123456',
+    currentCode: '',
   });
   const [secondsRemaining, setSecondsRemaining] = useState<number>(getTotpRemainingSeconds());
 

@@ -156,9 +156,9 @@ export async function generateQrCodeDataUrl(otpAuthUrl: string): Promise<string>
   });
 }
 
-// Deterministic default secrets for known accounts
-export const ADMIN_TOTP_SECRET = 'SMARTCLINIC2026ADMINAUTHKEYSECRET';
-export const PATIENT_DEFAULT_TOTP_SECRET = 'SMARTCLINICPATIENTAUTH2026KEY';
+// Deterministic default RFC 3548 Base32 secrets (compatible with Google Authenticator & Microsoft Authenticator)
+export const ADMIN_TOTP_SECRET = 'KNWWC4TUINWGS3TJMNAWI3LJNZFWK6JS';
+export const PATIENT_DEFAULT_TOTP_SECRET = 'KNWWC4TUINWGS3TJMNIGC5DJMVXHIS3F';
 
 // In-memory store for user-specific TOTP secrets
 const userTotpSecrets = new Map<string, string>();
