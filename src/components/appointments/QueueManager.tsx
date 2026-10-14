@@ -23,9 +23,11 @@ import {
   Radio,
   ArrowRight,
   Maximize2,
-  X
+  X,
+  FileText
 } from 'lucide-react';
 import type { Appointment } from '../../types/clinic';
+import { PrivacyPolicyModal } from '../auth/PrivacyPolicyModal';
 
 interface Props {
   onStartConsultation: (patientId: string) => void;
@@ -121,6 +123,7 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
 
   // Live Auto-Refresh ticker
   const [livePulse, setLivePulse] = useState<number>(0);
+  const [showPrivacyModal, setShowPrivacyModal] = useState<boolean>(false);
 
   // Live ticking PST clock effect
   useEffect(() => {
@@ -283,7 +286,7 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
           <div>
             <div className="flex items-center gap-2">
               <span className="font-extrabold text-sm tracking-tight text-white">
-                Live Outpatient Clinic Operation
+                Live Queue
               </span>
               <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
                 ACTIVE LIVE
@@ -331,7 +334,7 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
                 <Radio className="w-4 h-4 animate-pulse" />
               </div>
               <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                Outpatient Waiting Room & Queue Board
+                Live Queue & Waiting Room Board
               </h1>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -364,6 +367,17 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
             >
               <BellRing className="w-3.5 h-3.5 text-teal-600" />
               <span>Test Public Chime</span>
+            </button>
+
+            {/* View Privacy Policy Button */}
+            <button
+              type="button"
+              onClick={() => setShowPrivacyModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900 text-teal-800 dark:text-teal-200 border border-teal-200 dark:border-teal-800 transition cursor-pointer"
+              title="View Philippine Medical Privacy Policy (RA 10173)"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>Privacy Policy</span>
             </button>
 
             {/* Self-Service Check-in Button */}

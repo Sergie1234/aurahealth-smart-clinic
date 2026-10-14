@@ -61,7 +61,7 @@ export const Sidebar: React.FC = () => {
     },
     {
       id: 'queue',
-      label: 'Live Queue & Waiting Room',
+      label: 'Live Queue',
       icon: Layers,
       badge: waitingCount > 0 ? waitingCount : undefined,
       roles: ['admin', 'doctor', 'nurse', 'receptionist', 'patient'],

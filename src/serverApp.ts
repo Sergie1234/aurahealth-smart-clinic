@@ -95,15 +95,12 @@ let memInvoices = [...INITIAL_INVOICES];
 let memAuditLogs = [...INITIAL_AUDIT_LOGS];
 
 // Supabase cloud integration check
-const supabaseUrl =
-  process.env.SUPABASE_URL ||
-  process.env.VITE_SUPABASE_URL ||
-  'https://oqakutwoeixccadsgaii.supabase.co';
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const supabaseKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
   process.env.VITE_SUPABASE_ANON_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9xYWt1dHdvZWl4Y2NhZHNnYWlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzNDAxNTcsImV4cCI6MjEwNjkxNjE1N30.eGe7VsfW7BrJkTOZcTITEeiCItxyoxyv_hNTYlgErf4';
+  '';
 const isSupabaseLive = Boolean(
   supabaseUrl &&
     supabaseKey &&
@@ -440,38 +437,6 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     // Asynchronously dispatch Welcome Email via real Google SMTP
     if (cleanEmail) {
       emailService.sendWelcomeEmail(cleanEmail, cleanName, mrn).catch(console.error);
-    }
-
-    // Direct asynchronous Supabase persistence
-    if (supabaseServer) {
-      Promise.resolve(
-        supabaseServer
-          .from('patients')
-          .upsert(
-            {
-              mrn: newPatient.mrn,
-              full_name: newPatient.fullName,
-              dob: newPatient.dob,
-              age: newPatient.age,
-              gender: newPatient.gender,
-              blood_type: newPatient.bloodType,
-              phone: newPatient.phone,
-              email: newPatient.email,
-              address: newPatient.address,
-              emergency_contact: newPatient.emergencyContact,
-              allergies: newPatient.allergies,
-              chronic_conditions: newPatient.chronicConditions,
-              current_medications: newPatient.currentMedications,
-              primary_doctor_id: newPatient.primaryDoctorId,
-              vitals_history: newPatient.vitalsHistory,
-            },
-            { onConflict: 'mrn' }
-          )
-      )
-        .then((res: any) => {
-          if (res?.error) console.warn('[Supabase] Auto-sync patient notice:', res.error.message);
-        })
-        .catch((err: any) => console.warn('[Supabase] Auto-sync error:', err));
     }
 
     const token = generateToken({
@@ -1009,38 +974,6 @@ app.post('/api/patients', (req: AuthenticatedRequest, res: Response) => {
   if (!newPat.mrn) newPat.mrn = `MRN-2026-${String(memPatients.length + 101).padStart(3, '0')}`;
   newPat.createdAt = newPat.createdAt || new Date().toISOString();
   memPatients.unshift(newPat);
-
-  if (supabaseServer) {
-    Promise.resolve(
-      supabaseServer
-        .from('patients')
-        .upsert(
-          {
-            mrn: newPat.mrn,
-            full_name: newPat.fullName,
-            dob: newPat.dob,
-            age: newPat.age,
-            gender: newPat.gender,
-            blood_type: newPat.bloodType,
-            phone: newPat.phone,
-            email: newPat.email,
-            address: newPat.address,
-            emergency_contact: newPat.emergencyContact,
-            allergies: newPat.allergies,
-            chronic_conditions: newPat.chronicConditions,
-            current_medications: newPat.currentMedications,
-            primary_doctor_id: newPat.primaryDoctorId,
-            vitals_history: newPat.vitalsHistory,
-          },
-          { onConflict: 'mrn' }
-        )
-    )
-      .then((res: any) => {
-        if (res?.error) console.warn('[Supabase] Staff patient add notice:', res.error.message);
-      })
-      .catch((err: any) => console.warn('[Supabase] Error saving patient:', err));
-  }
-
   return res.status(201).json(newPat);
 });
 

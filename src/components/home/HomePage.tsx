@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
+import { PrivacyPolicyModal } from '../auth/PrivacyPolicyModal';
 import {
   Calendar,
   Clock,
@@ -25,7 +26,9 @@ import {
   Search,
   LogIn,
   Hospital,
-  BadgeCheck
+  BadgeCheck,
+  Menu,
+  X
 } from 'lucide-react';
 import { INITIAL_USERS } from '../../data/mockData';
 
@@ -34,14 +37,44 @@ interface HomePageProps {
 }
 
 export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => {
-  const { setActiveTab, appointments, patients, isAuthenticated, currentUser } = useClinic();
+  const { setActiveTab, appointments, patients, isAuthenticated, currentUser, setPendingAction } = useClinic();
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const doctors = INITIAL_USERS.filter((u) => u.role === 'doctor');
   
-  // Real-time queue calculations
+  // Real-time queue calculations synced directly with clinic core
   const activeInConsult = appointments.filter((a) => a.status === 'In Consultation').length;
   const waitingInQueue = appointments.filter((a) => a.status === 'Checked In').length;
+  const scheduledUpcoming = appointments.filter((a) => a.status === 'Scheduled' || a.status === 'Confirmed').length;
   const totalToday = appointments.filter((a) => a.status !== 'Cancelled').length;
+  const avgWaitMinutes = Math.max(6, waitingInQueue * 8 + (activeInConsult > 0 ? 4 : 0));
+
+  // Live queue snapshot: In Consultation first, then Checked In, then upcoming
+  const liveQueueSnapshot = [...appointments]
+    .filter((a) => a.status !== 'Cancelled')
+    .sort((a, b) => {
+      const order: Record<string, number> = {
+        'In Consultation': 1,
+        'Checked In': 2,
+        'Scheduled': 3,
+        'Confirmed': 4,
+        'Completed': 5,
+      };
+      const diff = (order[a.status] || 99) - (order[b.status] || 99);
+      if (diff !== 0) return diff;
+      return (a.time || '').localeCompare(b.time || '');
+    })
+    .slice(0, 3);
+
+  const handleViewLiveQueue = () => {
+    if (!isAuthenticated) {
+      setPendingAction('queue');
+      setActiveTab('login');
+    } else {
+      setActiveTab('queue');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
@@ -52,7 +85,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
             <span className="bg-white/20 px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase">
               Notice
             </span>
-            <span>Accredited with PhilHealth & Major HMOs • Data Privacy Act (RA 10173) Certified</span>
+            <span>Accredited with PhilHealth & Major HMOs • <button type="button" onClick={() => setShowPrivacyModal(true)} className="underline hover:text-white font-bold cursor-pointer">Data Privacy Act (RA 10173) Certified</button></span>
           </div>
           <div className="flex items-center gap-4 text-[11px] opacity-90">
             <span className="flex items-center gap-1">
@@ -83,22 +116,18 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
             </div>
           </div>
 
-          <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-slate-600 dark:text-slate-300">
+          <nav className="hidden lg:flex items-center gap-6 xl:gap-7 text-sm font-medium text-slate-600 dark:text-slate-300">
             <a href="#services" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Services</a>
             <a href="#specialties" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Clinical Specialties</a>
+            <a href="#portals" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Clinic Portals</a>
+            <a href="#standards" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Standards</a>
             <button
               type="button"
-              onClick={() => setActiveTab('queue')}
-              className="hover:text-teal-600 dark:hover:text-teal-400 transition cursor-pointer flex items-center gap-1.5 font-semibold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/60 px-3 py-1 rounded-full border border-teal-200 dark:border-teal-800"
+              onClick={() => setShowPrivacyModal(true)}
+              className="hover:text-teal-600 dark:hover:text-teal-400 transition cursor-pointer font-medium"
             >
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span>Live Queue</span>
+              Privacy Policy
             </button>
-            <a href="#portals" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Clinic Portals</a>
-            <a href="#compliance" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Privacy & Standards</a>
           </nav>
 
           <div className="flex items-center gap-3">
@@ -114,31 +143,78 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
             ) : (
               <>
                 <button
-                  type="button"
-                  onClick={() => setActiveTab('queue')}
-                  className="lg:hidden inline-flex items-center gap-1.5 px-2.5 py-2 text-xs font-semibold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/70 border border-teal-200 dark:border-teal-800 rounded-lg hover:bg-teal-100 transition cursor-pointer"
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span>Queue</span>
-                </button>
-                <button
                   onClick={() => setActiveTab('login')}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
                 >
                   <LogIn className="w-4 h-4" />
                   <span>Login</span>
                 </button>
                 <button
                   onClick={onOpenBookAppointment}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 rounded-lg shadow-sm hover:shadow transition cursor-pointer"
+                  className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 rounded-lg shadow-sm hover:shadow transition cursor-pointer"
                 >
                   <Calendar className="w-4 h-4" />
-                  <span>Book Now</span>
+                  <span className="hidden sm:inline">Book Now</span>
+                  <span className="sm:hidden">Book</span>
                 </button>
               </>
             )}
+
+            {/* Mobile Nav Toggle */}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="lg:hidden p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              aria-label="Toggle navigation menu"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Dropdown Navigation */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-4 py-3 space-y-1.5 text-sm font-medium">
+            <a
+              href="#services"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-teal-600 dark:hover:text-teal-400 transition"
+            >
+              Services
+            </a>
+            <a
+              href="#specialties"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-teal-600 dark:hover:text-teal-400 transition"
+            >
+              Clinical Specialties
+            </a>
+            <a
+              href="#portals"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-teal-600 dark:hover:text-teal-400 transition"
+            >
+              Clinic Portals
+            </a>
+            <a
+              href="#standards"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-teal-600 dark:hover:text-teal-400 transition"
+            >
+              Standards
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setShowPrivacyModal(true);
+              }}
+              className="w-full text-left block px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-teal-600 dark:hover:text-teal-400 transition cursor-pointer"
+            >
+              Privacy Policy
+            </button>
+          </div>
+        )}
       </header>
 
       {/* Hero Section */}
@@ -193,7 +269,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
                   <div className="text-xs text-slate-500 dark:text-slate-400">Digital Health Records</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold text-teal-600 dark:text-teal-400">12 min</div>
+                  <div className="text-2xl font-bold text-teal-600 dark:text-teal-400">{avgWaitMinutes} min</div>
                   <div className="text-xs text-slate-500 dark:text-slate-400">Avg. Outpatient Wait</div>
                 </div>
                 <div>
@@ -214,10 +290,16 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                     </span>
-                    <span className="text-sm font-bold text-slate-800 dark:text-slate-100">Live Clinic Operations</span>
+                    <div>
+                      <span className="text-sm font-bold text-slate-800 dark:text-slate-100 block leading-tight">Live Clinic Operations</span>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        Synced Live with Inside EMR
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-xs font-medium px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                    Open Now
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800">
+                    Open Now • PST
                   </span>
                 </div>
 
@@ -245,46 +327,75 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
 
                 {/* Queue Snapshot Table */}
                 <div className="space-y-2 mt-4">
-                  <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Recent Outpatient Queue (Privacy Anonymized)
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    <span>Active Queue Snapshot</span>
+                    <span className="text-[10px] text-teal-600 dark:text-teal-400 normal-case font-medium">Privacy Protected</span>
                   </div>
-                  {appointments.slice(0, 3).map((apt, idx) => (
-                    <div
-                      key={apt.id}
-                      className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 text-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 px-1.5 py-0.5 rounded">
-                          {apt.queueNumber || `Q-${101 + idx}`}
-                        </span>
-                        <div>
-                          <div className="font-medium text-slate-800 dark:text-slate-200">
-                            Ticket #{apt.queueNumber || `Q-${101 + idx}`}
+                  {liveQueueSnapshot.map((apt, idx) => {
+                    const ticketId = apt.queueNumber || `Q-${101 + idx}`;
+                    return (
+                      <div
+                        key={apt.id}
+                        className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 text-xs hover:border-teal-200 dark:hover:border-teal-800/60 transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className={`font-mono font-bold px-2 py-0.5 rounded text-xs ${
+                            apt.status === 'In Consultation'
+                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                              : apt.status === 'Checked In'
+                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                              : 'bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-400 border border-teal-200/60 dark:border-teal-800/50'
+                          }`}>
+                            {ticketId}
+                          </span>
+                          <div>
+                            <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                              <span>Ticket #{ticketId}</span>
+                              {apt.status === 'In Consultation' && (
+                                <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-1.5 py-0.2 rounded uppercase">
+                                  {apt.room || 'Room 302'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                              {apt.department} • {apt.doctorName ? apt.doctorName.split(',')[0] : 'Attending Physician'}
+                            </div>
                           </div>
-                          <div className="text-[10px] text-slate-400">{apt.department} • {apt.time}</div>
                         </div>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          apt.status === 'In Consultation'
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                            : apt.status === 'Checked In'
+                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                        }`}>
+                          {apt.status}
+                        </span>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                        apt.status === 'In Consultation'
-                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
-                          : apt.status === 'Checked In'
-                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                      }`}>
-                        {apt.status}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                  <span className="text-slate-500 dark:text-slate-400">Total Registered Today: {totalToday}</span>
+                  <span className="text-slate-500 dark:text-slate-400">
+                    Total Registered Today: <strong className="text-slate-800 dark:text-slate-200">{totalToday}</strong>
+                  </span>
                   <button
-                    onClick={() => setActiveTab('queue')}
-                    className="text-teal-600 dark:text-teal-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                    type="button"
+                    onClick={handleViewLiveQueue}
+                    className="inline-flex items-center gap-1.5 text-teal-600 dark:text-teal-400 font-bold hover:text-teal-700 dark:hover:text-teal-300 hover:underline cursor-pointer group transition"
+                    title={isAuthenticated ? 'View full live queue board' : 'Sign in required to view live queue board'}
                   >
-                    <span>View Full Live Queue & Operations</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
+                    {!isAuthenticated && (
+                      <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                    )}
+                    <span>View Live Queue</span>
+                    {!isAuthenticated && (
+                      <span className="text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                        Login Required
+                      </span>
+                    )}
+                    <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                   </button>
                 </div>
               </div>
@@ -551,7 +662,8 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
       </section>
 
       {/* Compliance & Standards */}
-      <section id="compliance" className="py-14 bg-slate-100/70 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-800">
+      <section id="standards" className="scroll-mt-20 py-14 bg-slate-100/70 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-800 relative">
+        <div id="compliance" className="absolute -top-20" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
@@ -565,6 +677,14 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
                     Compliant with Philippine Data Privacy Act of 2012 for patient consent and health record security.
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowPrivacyModal(true)}
+                    className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-950/70 border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 font-bold text-xs hover:bg-teal-100 dark:hover:bg-teal-900 transition cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Read Full Privacy Policy (RA 10173)</span>
+                  </button>
                 </div>
               </div>
 
@@ -635,13 +755,20 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
               © {new Date().getFullYear()} Smart Clinic. All rights reserved.
             </div>
             <div className="flex items-center gap-4">
-              <span>Republic Act No. 10173</span>
+              <button
+                type="button"
+                onClick={() => setShowPrivacyModal(true)}
+                className="hover:text-teal-600 dark:hover:text-teal-400 hover:underline flex items-center gap-1 cursor-pointer font-bold text-slate-700 dark:text-slate-300"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
+                <span>Republic Act No. 10173 (Privacy Policy)</span>
+              </button>
               <span>•</span>
               <span>DOH Outpatient Standards</span>
               <span>•</span>
               <button
                 onClick={() => setActiveTab('login')}
-                className="text-teal-600 dark:text-teal-400 hover:underline"
+                className="text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer"
               >
                 Staff Portal
               </button>
@@ -649,6 +776,12 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
           </div>
         </div>
       </footer>
+
+      {/* Philippine Medical Privacy Policy Modal (RA 10173) */}
+      <PrivacyPolicyModal
+        isOpen={showPrivacyModal}
+        onClose={() => setShowPrivacyModal(false)}
+      />
     </div>
   );
 };

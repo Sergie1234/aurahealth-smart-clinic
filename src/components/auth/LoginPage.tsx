@@ -179,6 +179,8 @@ export const LoginPage: React.FC = () => {
         toastSuccess(
           pendingAction === 'book'
             ? 'Account created! Redirecting directly to appointment booking...'
+            : pendingAction === 'queue'
+            ? 'Account created! Redirecting directly to Live Queue board...'
             : `Welcome to Smart Clinic, ${cleanName}! EMR created and account active.`
         );
         return;
@@ -220,6 +222,8 @@ export const LoginPage: React.FC = () => {
       toastSuccess(
         pendingAction === 'book'
           ? 'Authenticated successfully! Redirecting directly to appointment booking...'
+          : pendingAction === 'queue'
+          ? 'Authenticated! Routing directly to Live Queue board...'
           : 'Welcome to your Smart Clinic Health Portal.'
       );
       return;
@@ -238,7 +242,11 @@ export const LoginPage: React.FC = () => {
         toastError(res.error || 'Doctor authentication failed.');
         return;
       }
-      toastSuccess('Provider authenticated. Routing to Doctor Consultation Suite.');
+      toastSuccess(
+        pendingAction === 'queue'
+          ? 'Provider authenticated. Routing directly to Live Queue board.'
+          : 'Provider authenticated. Routing to Doctor Consultation Suite.'
+      );
       return;
     }
 
@@ -256,7 +264,11 @@ export const LoginPage: React.FC = () => {
         toastError(res.error || 'Staff authentication failed.');
         return;
       }
-      toastSuccess(`Staff authenticated. Routing to ${staffSubRole.replace('_', ' ').toUpperCase()} workbench.`);
+      toastSuccess(
+        pendingAction === 'queue'
+          ? 'Staff authenticated. Routing directly to Live Queue board.'
+          : `Staff authenticated. Routing to ${staffSubRole.replace('_', ' ').toUpperCase()} workbench.`
+      );
       return;
     }
 
@@ -282,7 +294,11 @@ export const LoginPage: React.FC = () => {
         toastError(res.error || 'Admin 2FA verification failed.');
         return;
       }
-      toastSuccess('Admin Two-Factor Authentication verified. Access granted.');
+      toastSuccess(
+        pendingAction === 'queue'
+          ? 'Admin Two-Factor Authentication verified. Accessing Live Queue.'
+          : 'Admin Two-Factor Authentication verified. Access granted.'
+      );
     }
   };
 
@@ -310,6 +326,26 @@ export const LoginPage: React.FC = () => {
             <span>
               <strong>Appointment Booking Gate:</strong> Please sign in or create an account to finalize your outpatient reservation. You will be redirected immediately.
             </span>
+          </div>
+        )}
+
+        {/* Auth Gate Notification if Intercepted from 'View Live Queue' */}
+        {pendingAction === 'queue' && (
+          <div className="mb-4 p-4 rounded-2xl bg-teal-50 dark:bg-teal-950/60 border border-teal-300 dark:border-teal-700 text-teal-900 dark:text-teal-100 text-xs flex items-start gap-3 shadow-xs animate-in fade-in duration-200">
+            <div className="p-2 rounded-xl bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 shrink-0">
+              <Lock className="w-4 h-4" />
+            </div>
+            <div className="space-y-1">
+              <div className="font-bold text-teal-900 dark:text-white flex items-center gap-2">
+                <span>Authentication Required to View Live Queue</span>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-teal-200/80 dark:bg-teal-800 text-teal-800 dark:text-teal-200">
+                  RA 10173 Protected
+                </span>
+              </div>
+              <p className="text-teal-700 dark:text-teal-300 leading-relaxed">
+                To protect outpatient medical privacy and clinical triage confidentiality under Philippine Health Data Security Standards, viewing live waiting room details and room calls requires authentication. Please sign in with any role to proceed directly.
+              </p>
+            </div>
           </div>
         )}
 

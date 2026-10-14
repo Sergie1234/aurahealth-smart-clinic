@@ -42,7 +42,7 @@ export interface LoginCredentials {
   chronicConditions?: string;
 }
 
-export type PendingAction = 'book' | null;
+export type PendingAction = 'book' | 'queue' | null;
 
 export interface PatientAccount {
   id: string;
@@ -147,7 +147,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     dashboard: 'Clinic Dashboard',
     patients: 'Patient Directory',
     appointments: 'Appointment Calendar',
-    queue: 'Live Queue & Triage',
+    queue: 'Live Queue & Waiting Room',
     consultations: 'Doctor Consultation Suite',
     emr: 'Medical Records (EMR)',
     prescriptions: 'Pharmacy & e-Prescriptions',
@@ -414,7 +414,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setLinkedPatientId(patientId);
     setSelectedPatientId(patientId);
     if (token) setAuthToken(token);
-    setActiveTab(pendingAction === 'book' ? 'home' : 'dashboard');
+    setActiveTab(pendingAction === 'book' ? 'home' : pendingAction === 'queue' ? 'queue' : 'dashboard');
     logAction('AUTH_LOGIN', 'Security', accountId, `Patient session established: ${fullName}`);
   };
 
@@ -584,8 +584,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setPrimaryRole('doctor');
         setStaffSubRole(null);
         setIsAuthenticated(true);
-        // Provider routes directly to Doctor Consultation Suite
-        setActiveTab('consultations');
+        // Provider routes directly to Live Queue if requested, else Consultation Suite
+        setActiveTab(pendingAction === 'queue' ? 'queue' : 'consultations');
         logAction('AUTH_LOGIN', 'Security', doctorUser.id, `Doctor provider logged in: ${doctorUser.name}`);
         return { success: true };
       }
@@ -598,8 +598,9 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setStaffSubRole(subRole || 'nurse');
         setIsAuthenticated(true);
 
-        // Dynamic routing to appropriate staff workbench
-        if (subRole === 'nurse') setActiveTab('queue');
+        // Dynamic routing to appropriate staff workbench or requested queue
+        if (pendingAction === 'queue') setActiveTab('queue');
+        else if (subRole === 'nurse') setActiveTab('queue');
         else if (subRole === 'pharmacist') setActiveTab('inventory');
         else if (subRole === 'receptionist') setActiveTab('appointments');
         else if (subRole === 'lab_technician') setActiveTab('laboratory');
@@ -616,7 +617,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setPrimaryRole('admin');
         setStaffSubRole(null);
         setIsAuthenticated(true);
-        setActiveTab('dashboard');
+        setActiveTab(pendingAction === 'queue' ? 'queue' : 'dashboard');
         logAction('AUTH_LOGIN', 'Security', adminUser.id, 'Administrator 2FA verified and logged in.');
         return { success: true };
       }
@@ -657,7 +658,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setPrimaryRole('doctor');
         setStaffSubRole(null);
         setIsAuthenticated(true);
-        setActiveTab('consultations');
+        setActiveTab(pendingAction === 'queue' ? 'queue' : 'consultations');
         return { success: true };
       }
 
@@ -674,7 +675,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setPrimaryRole('staff');
         setStaffSubRole(staffSub);
         setIsAuthenticated(true);
-        if (staffSub === 'nurse') setActiveTab('queue');
+        if (pendingAction === 'queue') setActiveTab('queue');
+        else if (staffSub === 'nurse') setActiveTab('queue');
         else if (staffSub === 'pharmacist') setActiveTab('inventory');
         else if (staffSub === 'receptionist') setActiveTab('appointments');
         else if (staffSub === 'lab_technician') setActiveTab('laboratory');
@@ -694,7 +696,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setPrimaryRole('admin');
         setStaffSubRole(null);
         setIsAuthenticated(true);
-        setActiveTab('dashboard');
+        setActiveTab(pendingAction === 'queue' ? 'queue' : 'dashboard');
         return { success: true };
       }
 
