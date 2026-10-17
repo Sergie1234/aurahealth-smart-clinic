@@ -57,15 +57,18 @@ export const AIAssistantHub: React.FC = () => {
     setActiveTab,
   } = useClinic();
 
-  // Resolve initial role from user's clinic account
-  const initialRole: RoleType =
+  // Resolve strict role from user's authenticated clinic account
+  // A logged-in Patient is strictly locked to 'patient'
+  // A logged-in Doctor/Nurse/Staff is strictly locked to 'provider'
+  // A logged-in Admin is strictly locked to 'admin'
+  const resolvedRole: RoleType =
     systemRole === 'patient'
       ? 'patient'
-      : ['admin', 'receptionist', 'manager'].includes(systemRole)
+      : systemRole === 'admin'
       ? 'admin'
       : 'provider';
 
-  const [activeRole, setActiveRole] = useState<RoleType>(initialRole);
+  const activeRole: RoleType = resolvedRole;
   const [patientPage, setPatientPage] = useState<PatientPage>('Triage');
   const [providerPage, setProviderPage] = useState<ProviderPage>('Dashboard');
   const [adminPage, setAdminPage] = useState<AdminPage>('Dashboard');
@@ -237,39 +240,6 @@ export const AIAssistantHub: React.FC = () => {
     }
   }, [messages, isLoading]);
 
-  const handleRoleChange = (newRole: RoleType) => {
-    setActiveRole(newRole);
-    let defaultPage = 'Dashboard';
-    if (newRole === 'patient') {
-      defaultPage = 'Triage';
-      setPatientPage('Triage');
-    } else if (newRole === 'provider') {
-      defaultPage = 'Dashboard';
-      setProviderPage('Dashboard');
-    } else {
-      defaultPage = 'Dashboard';
-      setAdminPage('Dashboard');
-    }
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `role-${Date.now()}`,
-        sender: 'assistant',
-        text: `Switched Runtime Context.\n\nRole: ${newRole}\nPage: ${defaultPage}\n\n${
-          newRole === 'patient'
-            ? patientPageConfig['Triage'].task
-            : newRole === 'provider'
-            ? providerPageConfig['Dashboard'].task
-            : adminPageConfig['Dashboard'].task
-        }`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        persona: 'SmartClinic AI Engine',
-        activePage: defaultPage,
-      },
-    ]);
-  };
-
   const handlePageChange = (newPage: string) => {
     if (activeRole === 'patient') {
       setPatientPage(newPage as PatientPage);
@@ -414,79 +384,76 @@ export const AIAssistantHub: React.FC = () => {
   const adminPagesList: AdminPage[] = ['Dashboard', 'Master Schedule', 'Patient Management', 'Billing'];
 
   return (
-    <div className="space-y-3.5 max-w-5xl mx-auto flex flex-col h-[calc(100vh-140px)]">
-      {/* Primary Header Card with Runtime Context Badges */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col gap-3 shrink-0">
+    <div className="space-y-3 max-w-5xl mx-auto flex flex-col h-[calc(100vh-120px)] font-sans">
+      {/* Primary Header Card with Fixed Authenticated Role & Clean Alignment */}
+      <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col gap-3.5 shrink-0">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <SmartClinicLogo className="w-10 h-10" glow={true} />
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                  SmartClinic AI Engine
+                <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 tracking-tight">
+                  {activeRole === 'patient'
+                    ? 'AI Triage Chatbot'
+                    : activeRole === 'provider'
+                    ? 'Clinical Decision Support AI'
+                    : 'Clinic Operations AI'}
                 </h1>
 
-                {/* Runtime Role Selector */}
-                <div className="inline-flex rounded-lg p-0.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-bold">
-                  {(['patient', 'provider', 'admin'] as RoleType[]).map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => handleRoleChange(r)}
-                      className={`px-2 py-0.5 rounded-md capitalize transition cursor-pointer ${
-                        activeRole === r
-                          ? r === 'patient'
-                            ? 'bg-emerald-600 text-white shadow-2xs'
-                            : r === 'provider'
-                            ? 'bg-teal-600 text-white shadow-2xs'
-                            : 'bg-indigo-600 text-white shadow-2xs'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-                      }`}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
+                {/* Locked Authenticated Role Badge (Never allows switching to other roles) */}
+                <span
+                  className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full capitalize border flex items-center gap-1 ${
+                    activeRole === 'patient'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                      : activeRole === 'provider'
+                      ? 'bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800'
+                      : 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+                  }`}
+                >
+                  <Lock className="w-3 h-3" />
+                  <span>{activeRole} Role Isolated</span>
+                </span>
 
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center gap-1">
-                  <Layers className="w-3 h-3 text-teal-600" />
-                  <span>Page: {currentPage}</span>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                  <Layers className="w-3 h-3 text-teal-500" />
+                  <span>Module: {currentPage}</span>
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {activeRole === 'patient'
-                  ? `Authenticated patient: ${activePatient?.fullName || 'Patient'} (MRN: ${activePatient?.mrn || 'N/A'}). Strictly isolated records.`
+                  ? `Authenticated patient: ${activePatient?.fullName || 'Patient'} (MRN: ${activePatient?.mrn || 'N/A'}). Strictly isolated personal health records.`
                   : activeRole === 'provider'
-                  ? `Clinical perspective: ${currentUser.name} (Provider). Decision support strictly limited to current role & page.`
-                  : `Administrative perspective: Operational overview and resource allocation. Zero clinical access.`}
+                  ? `Clinical perspective: ${currentUser.name} (Provider). Decision support strictly limited to clinical notes and charting.`
+                  : `Administrative perspective: ${currentUser.name} (Admin). Facility operations, audit trails, and financial oversight.`}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-auto">
+          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
             <button
               onClick={() => setShowRulebookModal(true)}
-              className="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer border border-slate-200 dark:border-slate-700"
+              className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border border-slate-200 dark:border-slate-700 shadow-2xs"
               title="View Strict Rulebook Directives"
             >
-              <Info className="w-3.5 h-3.5 text-teal-600" />
+              <Info className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
               <span>Rulebook</span>
             </button>
 
             <button
               onClick={handleClearChat}
-              className="px-2.5 py-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-xs font-medium flex items-center gap-1 transition cursor-pointer"
+              className="px-3 py-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
             >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Clear</span>
+              <Trash2 className="w-3.5 h-3.5 text-slate-400" />
+              <span className="hidden sm:inline">Clear Chat</span>
             </button>
           </div>
         </div>
 
-        {/* Runtime Variable Active Page Selector Bar */}
-        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-2">
+        {/* Module Sub-Page Selector Bar & Current Active Rule Box */}
+        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1">
-              <span>Active Page:</span>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 shrink-0">
+              <span>Authorized Modules:</span>
             </span>
             <div className="inline-flex rounded-xl p-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 gap-1 flex-wrap">
               {activeRole === 'patient' &&
@@ -494,7 +461,7 @@ export const AIAssistantHub: React.FC = () => {
                   <button
                     key={p}
                     onClick={() => handlePageChange(p)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
                       patientPage === p
                         ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 shadow-2xs border border-emerald-300 dark:border-emerald-700'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
@@ -513,7 +480,7 @@ export const AIAssistantHub: React.FC = () => {
                   <button
                     key={p}
                     onClick={() => handlePageChange(p)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
                       providerPage === p
                         ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-2xs border border-teal-300 dark:border-teal-700'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
@@ -532,7 +499,7 @@ export const AIAssistantHub: React.FC = () => {
                   <button
                     key={p}
                     onClick={() => handlePageChange(p)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
                       adminPage === p
                         ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-2xs border border-indigo-300 dark:border-indigo-700'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
@@ -548,11 +515,12 @@ export const AIAssistantHub: React.FC = () => {
             </div>
           </div>
 
-          {/* Active Page Rule Badge */}
-          <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-2">
-            <Lock className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-            <span className="truncate">
-              <strong className="text-slate-900 dark:text-slate-100">Rule:</strong> {currentConfig.task}
+          {/* Active Page Rule Box */}
+          <div className="text-[11px] text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/80 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-2 max-w-xl">
+            <Lock className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+            <span className="leading-snug">
+              <strong className="text-slate-900 dark:text-slate-100 font-bold mr-1">Active Rule:</strong>
+              {currentConfig.task}
             </span>
           </div>
         </div>

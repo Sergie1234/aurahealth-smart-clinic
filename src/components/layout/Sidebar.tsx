@@ -36,112 +36,177 @@ export const Sidebar: React.FC = () => {
   const pendingLabs = labOrders.filter((l) => l.status === 'Requested' || l.status === 'Processing').length;
   const lowStockCount = inventory.filter((i) => i.stockQuantity <= i.reorderLevel).length;
 
+  // Strict Role Classification
   const isPatient = activeRole === 'patient';
-  const isPharmacy = activeRole === 'pharmacist' || (activeRole as string) === 'pharmacy';
+  const isAdmin = activeRole === 'admin';
+  const isProvider = !isPatient && !isAdmin; // doctor, nurse, receptionist, pharmacist, lab_technician
 
-  // Base navigation registry with strict role-based access control (RBAC)
+  // Exact navigation item registry with strict role-based access control (RBAC)
   const navItems: NavItem[] = [
+    // 1. PATIENT MODULES (Strictly for Patient role)
     {
       id: 'dashboard',
-      label: isPatient ? 'My Health Portal' : 'Clinic Dashboard',
+      label: 'My Health Portal',
       icon: LayoutDashboard,
-      roles: ['admin', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician', 'patient'],
+      roles: ['patient'],
     },
     {
       id: 'appointments',
-      label: isPatient ? 'My Appointments' : 'Appointments',
+      label: 'My Appointments',
       icon: Calendar,
-      roles: ['admin', 'doctor', 'nurse', 'receptionist', 'patient'],
-    },
-    {
-      id: 'patients',
-      label: 'Patient Directory',
-      icon: Users,
-      roles: ['admin', 'doctor', 'nurse', 'receptionist'],
+      roles: ['patient'],
     },
     {
       id: 'queue',
-      label: 'Live Queue',
+      label: 'Live Queue & Waiting Room',
       icon: Layers,
       badge: waitingCount > 0 ? waitingCount : undefined,
-      roles: ['admin', 'doctor', 'nurse', 'receptionist', 'patient'],
-    },
-    {
-      id: 'consultations',
-      label: 'Consultation Room',
-      icon: Stethoscope,
-      roles: ['admin', 'doctor', 'nurse'],
+      roles: ['patient'],
     },
     {
       id: 'emr',
-      label: isPatient ? 'My Medical Records' : 'Medical Records (EMR)',
+      label: 'My Medical Records',
       icon: FileText,
-      roles: ['admin', 'doctor', 'nurse', 'patient'],
+      roles: ['patient'],
     },
     {
       id: 'prescriptions',
-      label: isPatient ? 'My Prescriptions' : 'E-Prescriptions',
+      label: 'My Prescriptions',
       icon: Pill,
-      roles: ['admin', 'doctor', 'pharmacist', 'patient'],
+      roles: ['patient'],
     },
     {
       id: 'laboratory',
-      label: isPatient ? 'My Diagnostic Lab' : 'Diagnostic Lab',
+      label: 'My Diagnostic Lab',
       icon: FlaskConical,
-      badge: pendingLabs > 0 && !isPatient ? pendingLabs : undefined,
-      roles: ['admin', 'doctor', 'lab_technician', 'patient'],
-    },
-    {
-      id: 'inventory',
-      label: 'Pharmacy & Stock',
-      icon: PackageCheck,
-      badge: lowStockCount > 0 ? lowStockCount : undefined,
-      // Strictly restricted: NEVER accessible to Patient or Pharmacy
-      roles: ['admin', 'doctor'],
+      roles: ['patient'],
     },
     {
       id: 'billing',
-      label: isPatient ? 'My Billing & Invoices' : 'Billing & Payments',
+      label: 'My Billing & Invoices',
       icon: Receipt,
-      roles: ['admin', 'receptionist', 'patient'],
+      roles: ['patient'],
+    },
+    {
+      id: 'ai-assistant',
+      label: 'AI Triage Chatbot',
+      icon: Sparkles,
+      roles: ['patient'],
+    },
+
+    // 2. PROVIDER MODULES (Doctor, Nurse, Staff)
+    {
+      id: 'dashboard',
+      label: 'Provider Dashboard',
+      icon: LayoutDashboard,
+      roles: ['doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician'],
+    },
+    {
+      id: 'patients',
+      label: 'Patient List & Search',
+      icon: Users,
+      roles: ['doctor', 'nurse', 'receptionist'],
+    },
+    {
+      id: 'appointments',
+      label: 'Appointment Management',
+      icon: Calendar,
+      roles: ['doctor', 'nurse', 'receptionist'],
+    },
+    {
+      id: 'queue',
+      label: 'Triage Review & Queue',
+      icon: Layers,
+      badge: waitingCount > 0 ? waitingCount : undefined,
+      roles: ['doctor', 'nurse', 'receptionist'],
+    },
+    {
+      id: 'consultations',
+      label: 'Clinical Notes & Charting',
+      icon: Stethoscope,
+      roles: ['doctor', 'nurse'],
+    },
+    {
+      id: 'prescriptions',
+      label: 'Prescription Writing',
+      icon: Pill,
+      roles: ['doctor', 'pharmacist'],
+    },
+    {
+      id: 'laboratory',
+      label: 'Lab Orders',
+      icon: FlaskConical,
+      badge: pendingLabs > 0 ? pendingLabs : undefined,
+      roles: ['doctor', 'lab_technician', 'nurse'],
+    },
+    {
+      id: 'inventory',
+      label: 'Medication Formulary',
+      icon: PackageCheck,
+      badge: lowStockCount > 0 ? lowStockCount : undefined,
+      roles: ['pharmacist', 'doctor'],
+    },
+    {
+      id: 'ai-assistant',
+      label: 'Clinical AI Assistant',
+      icon: Sparkles,
+      roles: ['doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician'],
+    },
+
+    // 3. ADMIN MODULES (Strictly for Executive Admin)
+    {
+      id: 'dashboard',
+      label: 'Executive Overview',
+      icon: LayoutDashboard,
+      roles: ['admin'],
+    },
+    {
+      id: 'patients',
+      label: 'User & Patient Management',
+      icon: Users,
+      roles: ['admin'],
+    },
+    {
+      id: 'audit-logs',
+      label: 'Audit Logs & Compliance',
+      icon: ShieldAlert,
+      roles: ['admin'],
     },
     {
       id: 'reports',
       label: 'Reports & Analytics',
       icon: BarChart3,
-      // Strictly restricted: NEVER accessible to Patient or Pharmacy
-      roles: ['admin', 'doctor'],
+      roles: ['admin'],
     },
     {
       id: 'predictive-analytics',
-      label: 'Predictive Analytics',
+      label: 'Clinic Predictive Analytics',
       icon: TrendingUp,
-      roles: ['admin', 'doctor', 'nurse'],
+      roles: ['admin'],
+    },
+    {
+      id: 'billing',
+      label: 'Clinic Billing & Revenue',
+      icon: Receipt,
+      roles: ['admin'],
+    },
+    {
+      id: 'inventory',
+      label: 'Supply & Stock Management',
+      icon: PackageCheck,
+      badge: lowStockCount > 0 ? lowStockCount : undefined,
+      roles: ['admin'],
     },
     {
       id: 'ai-assistant',
-      label: isPatient ? 'AI Triage Chatbot' : 'SmartClinic AI Engine',
+      label: 'Clinic Operations AI',
       icon: Sparkles,
-      roles: ['admin', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician', 'patient'],
-    },
-    {
-      id: 'audit-logs',
-      label: 'Audit & Compliance',
-      icon: ShieldAlert,
       roles: ['admin'],
     },
   ];
 
-  // Apply strict security filter: strip out forbidden modules
-  const visibleItems = navItems.filter((item) => {
-    if (isPatient && (item.id === 'inventory' || item.id === 'reports' || item.id === 'consultations')) {
-      return false;
-    }
-    if (isPharmacy && (item.id === 'queue' || item.id === 'inventory' || item.id === 'reports')) {
-      return false;
-    }
-    return item.roles.includes(activeRole);
-  });
+  // Apply strict role filter: a user ONLY sees items mapped to their active role
+  const visibleItems = navItems.filter((item) => item.roles.includes(activeRole));
 
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 min-h-screen text-slate-300 select-none">
@@ -212,9 +277,9 @@ export const Sidebar: React.FC = () => {
           <p className="text-[10px] text-slate-400 leading-tight">
             {isPatient
               ? 'Private single-patient isolation active. Only your verified health records are accessible.'
-              : isPharmacy
-              ? 'Pharmacy prescription dispensing session. Live queue and inventory routes restricted.'
-              : 'Role-based access control (RBAC) enforced with immutable audit logging.'}
+              : isAdmin
+              ? 'Executive administration session. Full audit trail and facility configuration active.'
+              : 'Clinical provider session. Patient care, charting, and diagnostic orders active.'}
           </p>
         </div>
       </div>

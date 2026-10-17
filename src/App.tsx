@@ -119,33 +119,56 @@ const ClinicAppContent: React.FC = () => {
   useEffect(() => {
     if (!isAuthenticated) return;
     const isPatient = activeRole === 'patient';
-    const isPharmacy = activeRole === 'pharmacist' || (activeRole as string) === 'pharmacy';
+    const isAdmin = activeRole === 'admin';
 
     if (isPatient) {
-      const unauthorizedTabsForPatient = [
-        'patients',
-        'consultations',
-        'inventory',
-        'reports',
-        'predictive-analytics',
-        'audit-logs',
-      ];
-      if (unauthorizedTabsForPatient.includes(activeTab)) {
-        setActiveTab(activeTab === 'patients' ? 'emr' : 'dashboard');
-      }
-    } else if (isPharmacy) {
-      const unauthorizedTabsForPharmacy = [
+      // Patient is strictly whitelisted to patient-authorized modules only
+      const authorizedPatientTabs = [
+        'home',
+        'dashboard',
+        'appointments',
         'queue',
-        'inventory',
-        'reports',
-        'patients',
-        'consultations',
+        'emr',
+        'prescriptions',
         'laboratory',
         'billing',
-        'audit-logs',
+        'ai-assistant',
       ];
-      if (unauthorizedTabsForPharmacy.includes(activeTab)) {
-        setActiveTab('prescriptions');
+      if (!authorizedPatientTabs.includes(activeTab)) {
+        setActiveTab('dashboard');
+      }
+    } else if (isAdmin) {
+      // Admin is strictly whitelisted to executive administrative modules only
+      const authorizedAdminTabs = [
+        'home',
+        'dashboard',
+        'patients',
+        'audit-logs',
+        'reports',
+        'predictive-analytics',
+        'billing',
+        'inventory',
+        'ai-assistant',
+      ];
+      if (!authorizedAdminTabs.includes(activeTab)) {
+        setActiveTab('dashboard');
+      }
+    } else {
+      // Provider (Doctor, Nurse, Staff) is strictly whitelisted to clinical modules only
+      const authorizedProviderTabs = [
+        'home',
+        'dashboard',
+        'patients',
+        'appointments',
+        'queue',
+        'consultations',
+        'prescriptions',
+        'laboratory',
+        'inventory',
+        'ai-assistant',
+      ];
+      if (!authorizedProviderTabs.includes(activeTab)) {
+        setActiveTab('dashboard');
       }
     }
   }, [isAuthenticated, activeRole, activeTab, setActiveTab]);
