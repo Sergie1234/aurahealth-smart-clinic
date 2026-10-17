@@ -40,6 +40,7 @@ import { PatientDashboardView } from './components/dashboards/PatientDashboardVi
 import { StaffDashboardView } from './components/dashboards/StaffDashboardView';
 import { DoctorDashboardView } from './components/dashboards/DoctorDashboardView';
 import { AdminDashboardView } from './components/dashboards/AdminDashboardView';
+import { NotificationsPage } from './components/notifications/NotificationsPage';
 import type { Patient, Prescription, LabTestOrder } from './types/clinic';
 
 const ClinicAppContent: React.FC = () => {
@@ -133,6 +134,7 @@ const ClinicAppContent: React.FC = () => {
         'laboratory',
         'billing',
         'ai-assistant',
+        'notifications',
       ];
       if (!authorizedPatientTabs.includes(activeTab)) {
         setActiveTab('dashboard');
@@ -149,6 +151,7 @@ const ClinicAppContent: React.FC = () => {
         'billing',
         'inventory',
         'ai-assistant',
+        'notifications',
       ];
       if (!authorizedAdminTabs.includes(activeTab)) {
         setActiveTab('dashboard');
@@ -166,6 +169,7 @@ const ClinicAppContent: React.FC = () => {
         'laboratory',
         'inventory',
         'ai-assistant',
+        'notifications',
       ];
       if (!authorizedProviderTabs.includes(activeTab)) {
         setActiveTab('dashboard');
@@ -302,6 +306,7 @@ const ClinicAppContent: React.FC = () => {
               {activeTab === 'predictive-analytics' && <PredictiveAnalyticsDashboard />}
               {activeTab === 'ai-assistant' && <AIAssistantHub />}
               {activeTab === 'audit-logs' && <AuditLogsView />}
+              {activeTab === 'notifications' && <NotificationsPage />}
             </main>
           </div>
         </>

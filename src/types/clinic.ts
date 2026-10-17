@@ -254,15 +254,18 @@ export interface Invoice {
 export interface Notification {
   id: string;
   userId?: string;
+  targetRole?: 'patient' | 'provider' | 'admin' | 'all';
   title: string;
   message: string;
-  category?: 'appointment' | 'lab' | 'prescription' | 'inventory' | 'billing' | 'system';
+  content?: string;
+  category?: 'appointment' | 'lab' | 'prescription' | 'inventory' | 'billing' | 'system' | 'triage' | 'security';
   type?: string;
   priority?: 'low' | 'normal' | 'high' | 'urgent';
   timestamp?: string;
   createdAt?: string;
   read: boolean;
   link?: string;
+  actionUrl?: string;
 }
 
 export interface AuditLog {

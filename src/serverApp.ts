@@ -49,7 +49,9 @@ import {
   INITIAL_INVENTORY,
   INITIAL_INVOICES,
   INITIAL_AUDIT_LOGS,
+  INITIAL_NOTIFICATIONS,
 } from './data/mockData';
+import type { Notification } from './types/clinic';
 
 dotenv.config();
 
@@ -93,6 +95,7 @@ let memLabOrders = [...INITIAL_LAB_ORDERS];
 let memInventory = [...INITIAL_INVENTORY];
 let memInvoices = [...INITIAL_INVOICES];
 let memAuditLogs = [...INITIAL_AUDIT_LOGS];
+let memNotifications = [...INITIAL_NOTIFICATIONS];
 
 // Supabase cloud integration check
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -1165,6 +1168,69 @@ app.get('/api/audit-logs', (req: AuthenticatedRequest, res: Response) => {
     });
   }
   return res.json(memAuditLogs);
+});
+
+/* ==========================================================================
+   ROLE-BASED NOTIFICATIONS (Real-time live & RBAC isolated)
+   ========================================================================== */
+app.get('/api/notifications', (req: AuthenticatedRequest, res: Response) => {
+  const rawRole = (req.userRole || req.user?.role || 'patient').toLowerCase();
+  const isPatient = rawRole === 'patient';
+  const isAdmin = rawRole === 'admin';
+  const roleScope: 'patient' | 'provider' | 'admin' = isPatient ? 'patient' : isAdmin ? 'admin' : 'provider';
+
+  // Strict role filter: ONLY return notifications matching the user's role scope or 'all'
+  const filtered = memNotifications.filter((n) => {
+    const target = n.targetRole || 'all';
+    if (target === 'all') return true;
+    return target === roleScope;
+  });
+
+  return res.json(filtered);
+});
+
+app.patch('/api/notifications/:id/read', (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  const notif = memNotifications.find((n) => n.id === id);
+  if (!notif) {
+    return res.status(404).json({ error: 'Notification not found' });
+  }
+  notif.read = true;
+  return res.json({ success: true, notification: notif });
+});
+
+app.post('/api/notifications/read-all', (req: AuthenticatedRequest, res: Response) => {
+  const rawRole = (req.userRole || req.user?.role || 'patient').toLowerCase();
+  const isPatient = rawRole === 'patient';
+  const isAdmin = rawRole === 'admin';
+  const roleScope: 'patient' | 'provider' | 'admin' = isPatient ? 'patient' : isAdmin ? 'admin' : 'provider';
+
+  memNotifications.forEach((n) => {
+    const target = n.targetRole || 'all';
+    if (target === 'all' || target === roleScope) {
+      n.read = true;
+    }
+  });
+
+  return res.json({ success: true, message: 'All authorized notifications marked as read' });
+});
+
+app.post('/api/notifications', (req: AuthenticatedRequest, res: Response) => {
+  const body = req.body || {};
+  const newNotif: Notification = {
+    id: body.id || `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    targetRole: body.targetRole || 'all',
+    title: body.title || 'New Clinic Update',
+    message: body.message || '',
+    content: body.content || body.message || '',
+    category: body.category || 'system',
+    priority: body.priority || 'normal',
+    read: false,
+    createdAt: new Date().toISOString(),
+  };
+
+  memNotifications.unshift(newNotif);
+  return res.status(201).json(newNotif);
 });
 
 /* ==========================================================================

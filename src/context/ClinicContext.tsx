@@ -105,6 +105,9 @@ interface ClinicContextType {
   addInvoice: (invoice: Omit<Invoice, 'id' | 'invoiceNumber'>) => Invoice;
   payInvoice: (invoiceId: string, amount: number, method: Invoice['paymentMethod']) => void;
   notifications: Notification[];
+  allNotifications: Notification[];
+  unreadNotificationCount: number;
+  addNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'read'>) => Notification;
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
   auditLogs: AuditLog[];
@@ -158,6 +161,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     'predictive-analytics': 'Predictive Analytics & Risk Stratification',
     'ai-assistant': 'Smart Clinic AI Assistant',
     'audit-logs': 'Audit Logs & Compliance',
+    notifications: 'Notifications & Clinical Alerts',
   };
 
   const setActiveTab = (tab: string) => {
@@ -1001,12 +1005,139 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     logAction('PAYMENT_RECORDED', 'Billing', invoiceId, `Payment of ₱${amount} recorded via ${method}`);
   };
 
+  // ==============================================================================
+  // ROLE-BASED NOTIFICATION FILTERING (Strict Isolation)
+  // Patient -> only 'patient'
+  // Provider (Doctor, Nurse, Staff) -> only 'provider'
+  // Admin -> only 'admin'
+  // ==============================================================================
+  const currentRoleScope: 'patient' | 'provider' | 'admin' = useMemo(() => {
+    if (primaryRole === 'patient' || activeRole === 'patient') return 'patient';
+    if (primaryRole === 'admin' || activeRole === 'admin') return 'admin';
+    return 'provider';
+  }, [primaryRole, activeRole]);
+
+  const roleNotifications = useMemo(() => {
+    return notifications
+      .filter((n) => {
+        const target = n.targetRole || 'all';
+        if (target === 'all') return true;
+        return target === currentRoleScope;
+      })
+      .sort((a, b) => {
+        const timeA = new Date(a.createdAt || a.timestamp || 0).getTime();
+        const timeB = new Date(b.createdAt || b.timestamp || 0).getTime();
+        return timeB - timeA;
+      });
+  }, [notifications, currentRoleScope]);
+
+  const unreadNotificationCount = useMemo(() => {
+    return roleNotifications.filter((n) => !n.read).length;
+  }, [roleNotifications]);
+
+  // Live real-time notification sync with server
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchLiveNotifications = async () => {
+      try {
+        const token = authToken || localStorage.getItem('smart_clinic_token');
+        const headers: Record<string, string> = {
+          'x-user-role': activeRole,
+        };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch('/api/notifications', { headers });
+        if (res.ok) {
+          const liveData: Notification[] = await res.json();
+          if (isMounted && Array.isArray(liveData)) {
+            setNotifications((prev) => {
+              // Merge live server notifications without overwriting local read states
+              const idMap = new Map<string, Notification>();
+              prev.forEach((n) => idMap.set(n.id, n));
+              liveData.forEach((liveNotif) => {
+                if (!idMap.has(liveNotif.id)) {
+                  idMap.set(liveNotif.id, liveNotif);
+                }
+              });
+              return Array.from(idMap.values());
+            });
+          }
+        }
+      } catch {
+        // Fallback silently if offline or during build
+      }
+    };
+
+    fetchLiveNotifications();
+    const interval = setInterval(fetchLiveNotifications, 6000); // Poll live every 6s
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [activeRole, authToken]);
+
+  const addNotification = (notifData: Omit<Notification, 'id' | 'createdAt' | 'read'>): Notification => {
+    const newNotif: Notification = {
+      ...notifData,
+      id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      createdAt: new Date().toISOString(),
+      read: false,
+    };
+    setNotifications((prev) => [newNotif, ...prev]);
+
+    // Dispatch to server asynchronously for live broadcast
+    try {
+      const token = authToken || localStorage.getItem('smart_clinic_token');
+      fetch('/api/notifications', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': activeRole,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(newNotif),
+      }).catch(() => {});
+    } catch {}
+
+    return newNotif;
+  };
+
   const markNotificationAsRead = (id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    try {
+      const token = authToken || localStorage.getItem('smart_clinic_token');
+      fetch(`/api/notifications/${id}/read`, {
+        method: 'PATCH',
+        headers: {
+          'x-user-role': activeRole,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      }).catch(() => {});
+    } catch {}
   };
 
   const markAllNotificationsAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setNotifications((prev) =>
+      prev.map((n) => {
+        const target = n.targetRole || 'all';
+        if (target === 'all' || target === currentRoleScope) {
+          return { ...n, read: true };
+        }
+        return n;
+      })
+    );
+    try {
+      const token = authToken || localStorage.getItem('smart_clinic_token');
+      fetch('/api/notifications/read-all', {
+        method: 'POST',
+        headers: {
+          'x-user-role': activeRole,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      }).catch(() => {});
+    } catch {}
   };
 
   const [supabaseRefreshKey, setSupabaseRefreshKey] = useState(0);
@@ -1081,7 +1212,10 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         invoices: isolatedInvoices,
         addInvoice,
         payInvoice,
-        notifications,
+        notifications: roleNotifications,
+        allNotifications: notifications,
+        unreadNotificationCount,
+        addNotification,
         markNotificationAsRead,
         markAllNotificationsAsRead,
         auditLogs,

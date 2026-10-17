@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
+import { NotificationDetailModal } from '../notifications/NotificationDetailModal';
+import type { Notification } from '../../types/clinic';
 import {
   Search, Bell, Clock, Sparkles, CheckCircle2, AlertTriangle, User, X, Plus, Database, Home, LogOut, Lock, ShieldCheck
 } from 'lucide-react';
@@ -13,15 +15,16 @@ interface Props {
 
 export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatient, onOpenSupabaseModal }) => {
   const {
-    currentUser, activeRole, notifications, markNotificationAsRead, markAllNotificationsAsRead,
+    currentUser, activeRole, notifications, unreadNotificationCount, markNotificationAsRead, markAllNotificationsAsRead,
     searchQuery, setSearchQuery, patients, appointments, inventory, selectPatient, setActiveTab, logout
   } = useClinic();
 
   const [showNotifications, setShowNotifications] = useState(false);
+  const [selectedNotifModal, setSelectedNotifModal] = useState<Notification | null>(null);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = unreadNotificationCount;
 
   const isPatient = activeRole === 'patient';
   const isAdmin = activeRole === 'admin';
@@ -194,25 +197,93 @@ export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatien
 
           {/* Notifications Dropdown */}
           <div className="relative" ref={notifRef}>
-            <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition relative cursor-pointer" title="Notifications">
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition relative cursor-pointer"
+              title="Notifications"
+            >
               <Bell className="w-4 h-4" />
-              {unreadCount > 0 && <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white rounded-full text-[9px] font-bold flex items-center justify-center">{unreadCount}</span>}
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 w-4 h-4 bg-teal-500 text-white rounded-full text-[9px] font-bold flex items-center justify-center animate-pulse shadow-sm">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
             {showNotifications && (
-              <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden">
-                <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800">
-                  <span className="font-bold text-slate-800 dark:text-slate-100 text-xs">Notifications</span>
-                  {unreadCount > 0 && <button onClick={markAllNotificationsAsRead} className="text-[11px] text-teal-600 font-semibold cursor-pointer">Mark all read</button>}
+              <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden font-sans animate-in fade-in zoom-in-95 duration-150">
+                <div className="p-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/60">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-800 dark:text-slate-100 text-xs">
+                      Notifications
+                    </span>
+                    <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                      {isPatient ? 'Patient' : isAdmin ? 'Admin' : 'Provider'}
+                    </span>
+                  </div>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllNotificationsAsRead}
+                      className="text-[11px] text-teal-600 dark:text-teal-400 font-semibold hover:underline cursor-pointer"
+                    >
+                      Mark all read
+                    </button>
+                  )}
                 </div>
+
                 <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
                   {notifications.length === 0 ? (
-                    <div className="p-6 text-center text-xs text-slate-400">No current notifications</div>
-                  ) : notifications.map((notif) => (
-                    <div key={notif.id} onClick={() => markNotificationAsRead(notif.id)} className={`p-3 text-xs transition cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 ${!notif.read ? 'bg-teal-50/30 dark:bg-teal-900/20' : ''}`}>
-                      <p className="font-semibold text-slate-800 dark:text-slate-100">{notif.title}</p>
-                      <p className="text-slate-600 dark:text-slate-400 text-[11px] mt-0.5">{notif.message}</p>
+                    <div className="p-6 text-center text-xs text-slate-400 space-y-1">
+                      <p className="font-medium text-slate-600 dark:text-slate-300">No notifications</p>
+                      <p className="text-[11px] text-slate-400">All caught up for your role!</p>
                     </div>
-                  ))}
+                  ) : (
+                    notifications.slice(0, 4).map((notif) => (
+                      <div
+                        key={notif.id}
+                        onClick={() => {
+                          markNotificationAsRead(notif.id);
+                          setSelectedNotifModal(notif);
+                          setShowNotifications(false);
+                        }}
+                        className={`p-3 text-xs transition cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/80 ${
+                          !notif.read ? 'bg-teal-50/40 dark:bg-teal-950/20' : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-semibold text-slate-800 dark:text-slate-100 truncate text-xs">
+                            {notif.title}
+                          </p>
+                          {!notif.read && (
+                            <span className="w-2 h-2 rounded-full bg-teal-500 shrink-0" />
+                          )}
+                        </div>
+                        <p className="text-slate-600 dark:text-slate-400 text-[11px] mt-0.5 line-clamp-2 leading-relaxed">
+                          {notif.message}
+                        </p>
+                        <p className="text-slate-400 text-[10px] mt-1">
+                          {notif.createdAt || notif.timestamp
+                            ? new Date(notif.createdAt || notif.timestamp || '').toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })
+                            : 'Just now'}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Clear "See All" Button */}
+                <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40 text-center">
+                  <button
+                    onClick={() => {
+                      setShowNotifications(false);
+                      setActiveTab('notifications');
+                    }}
+                    className="w-full py-1.5 px-3 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                  >
+                    <span>See All Notifications ({notifications.length})</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -236,6 +307,18 @@ export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatien
           </div>
         </div>
       </div>
+
+      {/* Floating Centered Popup Modal */}
+      {selectedNotifModal && (
+        <NotificationDetailModal
+          notification={selectedNotifModal}
+          onClose={() => setSelectedNotifModal(null)}
+          onMarkAsRead={(id) => {
+            markNotificationAsRead(id);
+            setSelectedNotifModal((prev) => (prev ? { ...prev, read: true } : null));
+          }}
+        />
+      )}
     </header>
   );
 };
