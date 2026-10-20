@@ -307,10 +307,19 @@ export const LoginPage: React.FC = () => {
       <div className={`w-full ${isPatient && mode === 'register' ? 'max-w-2xl' : 'max-w-lg'} transition-all`}>
         {/* Header / Brand */}
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white dark:bg-slate-900 shadow-xl border border-teal-100 dark:border-teal-900/50 mb-3.5">
-            <SmartClinicLogo className="w-11 h-11" glow={true} />
-          </div>
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Smart Clinic</h1>
+          <button
+            type="button"
+            onClick={() => setActiveTab('home')}
+            className="group inline-flex flex-col items-center cursor-pointer focus:outline-none transition-transform hover:scale-[1.02] active:scale-[0.98]"
+            title="Return to Smart Clinic Homepage"
+          >
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white dark:bg-slate-900 shadow-xl border border-teal-100 dark:border-teal-900/50 mb-3.5 group-hover:border-teal-400 dark:group-hover:border-teal-600 transition">
+              <SmartClinicLogo className="w-11 h-11" glow={true} />
+            </div>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight group-hover:text-teal-600 dark:group-hover:text-teal-400 transition">
+              Smart Clinic
+            </h1>
+          </button>
           <div className="flex items-center justify-center gap-2 mt-2">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/80 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -840,16 +849,8 @@ export const LoginPage: React.FC = () => {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder={isAdmin ? 'SmartClinic@Admin2026' : '••••••••'}
-                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-10 py-2.5 text-xs focus:ring-2 focus:ring-teal-500"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowLoginPassword(!showLoginPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-                      title={showLoginPassword ? 'Hide Password' : 'See Password'}
-                    >
-                      {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
                   </div>
                 </div>
 

@@ -89,7 +89,7 @@ export interface Appointment {
   durationMinutes: number;
   reason: string;
   status: AppointmentStatus;
-  type: 'In-Person' | 'Telehealth' | 'Follow-up' | 'Emergency';
+  type: 'In-Person' | 'Telehealth' | 'Follow-up' | 'Emergency' | 'Consultation' | 'Check-up';
   queueNumber?: string;
   room?: string;
   notes?: string;

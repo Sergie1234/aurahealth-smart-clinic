@@ -79,21 +79,34 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
       {/* Top Banner / Announcement */}
-      <div className="bg-gradient-to-r from-teal-700 via-teal-600 to-cyan-600 text-white text-xs py-2 px-4 shadow-sm">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
-          <div className="flex items-center gap-2 font-medium">
-            <span className="bg-white/20 px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase">
+      <div className="bg-gradient-to-r from-teal-800 via-teal-700 to-cyan-700 text-white text-xs py-2 px-4 shadow-sm">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5 text-center sm:text-left">
+          <div className="flex items-center gap-2.5 font-medium flex-wrap justify-center sm:justify-start">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 text-white/95 text-[10px] font-bold tracking-wider uppercase border border-white/20 shadow-2xs backdrop-blur-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
               Notice
             </span>
-            <span>Accredited with PhilHealth & Major HMOs • <button type="button" onClick={() => setShowPrivacyModal(true)} className="underline hover:text-white font-bold cursor-pointer">Data Privacy Act (RA 10173) Certified</button></span>
-          </div>
-          <div className="flex items-center gap-4 text-[11px] opacity-90">
-            <span className="flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" /> Mon - Sat: 8:00 AM - 6:00 PM
+            <span className="text-white/95 text-[11px] sm:text-xs">
+              Accredited with PhilHealth & Major HMOs <span className="opacity-60 mx-1">•</span>{' '}
+              <button
+                type="button"
+                onClick={() => setShowPrivacyModal(true)}
+                className="inline-flex items-center gap-1 font-semibold text-white hover:text-teal-100 transition cursor-pointer hover:underline decoration-teal-200/60"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-teal-200 inline" />
+                <span>Data Privacy Act (RA 10173) Certified</span>
+              </button>
             </span>
-            <span className="hidden md:inline">|</span>
-            <span className="flex items-center gap-1">
-              <Phone className="w-3.5 h-3.5" /> Emergency Hotline: Globe +639154050623
+          </div>
+          <div className="flex items-center gap-3.5 text-[11px] text-white/90 shrink-0">
+            <span className="flex items-center gap-1.5 font-medium">
+              <Clock className="w-3.5 h-3.5 text-teal-200" />
+              <span>Open 24 Hours • 7 Days a Week</span>
+            </span>
+            <span className="hidden md:inline opacity-40">|</span>
+            <span className="flex items-center gap-1.5 font-medium">
+              <Phone className="w-3.5 h-3.5 text-teal-200" />
+              <span>Emergency Hotline: Globe +639154050623</span>
             </span>
           </div>
         </div>
@@ -677,14 +690,6 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
                     Compliant with Philippine Data Privacy Act of 2012 for patient consent and health record security.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => setShowPrivacyModal(true)}
-                    className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-50 dark:bg-teal-950/70 border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 font-bold text-xs hover:bg-teal-100 dark:hover:bg-teal-900 transition cursor-pointer"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>Read Full Privacy Policy (RA 10173)</span>
-                  </button>
                 </div>
               </div>
 
@@ -733,8 +738,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
 
             <div>
               <h5 className="font-bold text-slate-800 dark:text-slate-200 mb-2.5">Operating Hours</h5>
-              <p className="text-xs">Monday to Saturday: 8:00 AM - 6:00 PM</p>
-              <p className="text-xs mt-1">Sundays: Urgent Care Only (9:00 AM - 2:00 PM)</p>
+              <p className="text-xs">Open 24 Hours • 7 Days a Week</p>
             </div>
 
             <div>

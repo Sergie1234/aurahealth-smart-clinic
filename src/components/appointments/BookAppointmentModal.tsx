@@ -1,216 +1,948 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useClinic } from '../../context/ClinicContext';
-import { X, Calendar } from 'lucide-react';
+import {
+  X,
+  Calendar as CalendarIcon,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  User,
+  Stethoscope,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  MapPin,
+  CalendarCheck,
+  ShieldCheck,
+  Building2,
+} from 'lucide-react';
+import type { User as ClinicUser, Appointment } from '../../types/clinic';
 
 interface Props {
   initialPatientId?: string;
   onClose: () => void;
 }
 
-const fieldClass =
-  'w-full p-2 rounded-lg text-xs border transition ' +
-  'bg-white text-slate-900 border-slate-200 placeholder:text-slate-400 ' +
-  'dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600 dark:placeholder:text-slate-500 ' +
-  'focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500';
+// Master fixed time slots (8:00 AM to 5:30 PM with 30-min intervals)
+export const MASTER_TIME_SLOTS: string[] = [
+  '08:00',
+  '08:30',
+  '09:00',
+  '09:30',
+  '10:00',
+  '10:30',
+  '11:00',
+  '11:30',
+  '13:00',
+  '13:30',
+  '14:00',
+  '14:30',
+  '15:00',
+  '15:30',
+  '16:00',
+  '16:30',
+  '17:00',
+  '17:30',
+];
 
-const labelClass =
-  'font-semibold text-slate-700 dark:text-slate-200 block mb-1 text-xs';
+export function formatTimeSlot(timeStr: string): string {
+  const [hStr, mStr] = timeStr.split(':');
+  const h = parseInt(hStr, 10);
+  const m = mStr || '00';
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${m} ${ampm}`;
+}
 
 export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClose }) => {
-  const { patients, users, addAppointment, primaryRole, linkedPatientId, visiblePatients } = useClinic();
+  const {
+    patients,
+    users,
+    appointments,
+    addAppointment,
+    primaryRole,
+    linkedPatientId,
+    visiblePatients,
+    addNotification,
+    setActiveTab,
+  } = useClinic();
 
   const isPatientLocked = primaryRole === 'patient' && !!linkedPatientId;
   const patientOptions = isPatientLocked ? visiblePatients : patients;
 
-  const [selectedPatId, setSelectedPatId] = useState(
+  // Filter clinical doctors
+  const doctors: ClinicUser[] = useMemo(() => {
+    return users.filter((u) => u.role === 'doctor');
+  }, [users]);
+
+  // Doctor schedules / clinic active days mapping:
+  // e.g. Dr. Reyes (usr-1): Mon - Sat (days 1, 2, 3, 4, 5, 6)
+  // e.g. Dr. Santos (usr-2): Mon, Wed, Thu, Fri, Sat (days 1, 3, 4, 5, 6)
+  const getDoctorWorkDays = (docId: string): number[] => {
+    if (docId === 'usr-2') return [1, 3, 4, 5, 6]; // Cardiology clinics
+    return [1, 2, 3, 4, 5, 6]; // Internal Medicine & Endocrinology
+  };
+
+  // Extract unique specialties from doctors
+  const specialties = useMemo(() => {
+    const set = new Set<string>();
+    doctors.forEach((d) => {
+      if (d.department) set.add(d.department);
+      if (d.specialty) set.add(d.specialty);
+    });
+    return Array.from(set);
+  }, [doctors]);
+
+  // Steps state: 1. Doctor -> 2. Date -> 3. Time -> 4. Review & Confirm -> 5. Success
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+
+  // Form selections
+  const [selectedSpecialty, setSelectedSpecialty] = useState<string>('all');
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(doctors[0]?.id || 'usr-1');
+  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
+  const [visitType, setVisitType] = useState<
+    'Consultation' | 'Follow-up' | 'Check-up' | 'Emergency' | 'Telehealth'
+  >('Consultation');
+  const [reason, setReason] = useState<string>('');
+  const [confirmedAppointment, setConfirmedAppointment] = useState<Appointment | null>(null);
+
+  // Selected Patient
+  const [selectedPatId, setSelectedPatId] = useState<string>(
     (isPatientLocked ? linkedPatientId : null) || initialPatientId || patientOptions[0]?.id || ''
   );
-  const [selectedDocId, setSelectedDocId] = useState('usr-1');
-  const [date, setDate] = useState('2026-10-06');
-  const [time, setTime] = useState('14:30');
-  const [duration, setDuration] = useState(30);
-  const [department, setDepartment] = useState('Internal Medicine');
-  const [type, setType] = useState<'In-Person' | 'Telehealth' | 'Follow-up' | 'Emergency'>('In-Person');
-  const [reason, setReason] = useState('');
-  const [room, setRoom] = useState('Room 302');
-
-  const doctors = users.filter((u) => u.role === 'doctor');
   const effectivePatId = isPatientLocked ? (linkedPatientId || selectedPatId) : selectedPatId;
-  const selectedPatient = patientOptions.find((p) => p.id === effectivePatId) || patients.find((p) => p.id === effectivePatId);
-  const selectedDoctor = doctors.find((d) => d.id === selectedDocId);
+  const selectedPatient = patientOptions.find((p) => p.id === effectivePatId) || patients.find((p) => p.id === effectivePatId) || patients[0];
+  const selectedDoctor = doctors.find((d) => d.id === selectedDoctorId) || doctors[0];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Calendar monthly view navigation
+  // Reference date base: October 2026
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => new Date(2026, 9, 1)); // October 2026
+
+  const prevMonth = () => {
+    setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  };
+
+  const nextMonth = () => {
+    setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
+
+  // Filtered doctors list based on selected specialty
+  const filteredDoctors = useMemo(() => {
+    if (selectedSpecialty === 'all') return doctors;
+    return doctors.filter(
+      (d) => d.department === selectedSpecialty || d.specialty?.includes(selectedSpecialty)
+    );
+  }, [doctors, selectedSpecialty]);
+
+  // Calendar days grid computation
+  const calendarGrid = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+
+    const firstDayIndex = new Date(year, month, 1).getDay(); // 0 is Sunday
+    const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const days: Array<{
+      dateString: string;
+      dayNumber: number;
+      isCurrentMonth: boolean;
+      isPast: boolean;
+      isWorkDay: boolean;
+      availableSlotsCount: number;
+    }> = [];
+
+    // Doctor working days
+    const docWorkDays = getDoctorWorkDays(selectedDoctor?.id || '');
+
+    const todayDateStr = '2026-10-06';
+
+    for (let day = 1; day <= totalDaysInMonth; day++) {
+      const d = new Date(year, month, day);
+      const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const dayOfWeek = d.getDay();
+      const isWorkDay = docWorkDays.includes(dayOfWeek);
+      const isPast = dateString < todayDateStr;
+
+      // Check slot availability for this doctor on this day
+      const bookedOnThisDay = appointments.filter(
+        (a) => a.doctorId === selectedDoctor?.id && a.date === dateString && a.status !== 'Cancelled'
+      );
+      const availableSlotsCount = (isWorkDay && !isPast) ? Math.max(0, MASTER_TIME_SLOTS.length - bookedOnThisDay.length) : 0;
+
+      days.push({
+        dateString,
+        dayNumber: day,
+        isCurrentMonth: true,
+        isPast,
+        isWorkDay,
+        availableSlotsCount,
+      });
+    }
+
+    return { firstDayIndex, days };
+  }, [calendarMonth, selectedDoctor, appointments]);
+
+  // Slots for the currently selected date
+  const slotAvailability = useMemo(() => {
+    if (!selectedDate || !selectedDoctor) return [];
+
+    const bookedSlotsForDate = new Set(
+      appointments
+        .filter(
+          (a) =>
+            a.doctorId === selectedDoctor.id &&
+            a.date === selectedDate &&
+            a.status !== 'Cancelled'
+        )
+        .map((a) => a.time)
+    );
+
+    return MASTER_TIME_SLOTS.map((slot) => {
+      const isBooked = bookedSlotsForDate.has(slot);
+      return {
+        slot,
+        formatted: formatTimeSlot(slot),
+        isAvailable: !isBooked,
+      };
+    });
+  }, [selectedDate, selectedDoctor, appointments]);
+
+  // Available slots count for selected date
+  const remainingSlotsForSelectedDate = useMemo(() => {
+    return slotAvailability.filter((s) => s.isAvailable).length;
+  }, [slotAvailability]);
+
+  // Handle final submission
+  const handleConfirmBooking = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedPatient || !selectedDoctor) return;
+    if (!selectedPatient || !selectedDoctor || !selectedDate || !selectedTimeSlot) return;
 
-    addAppointment({
+    // Double-check race condition prevention
+    const isAlreadyBooked = appointments.some(
+      (a) =>
+        a.doctorId === selectedDoctor.id &&
+        a.date === selectedDate &&
+        a.time === selectedTimeSlot &&
+        a.status !== 'Cancelled'
+    );
+
+    if (isAlreadyBooked) {
+      alert('This time slot was just booked by another patient. Please choose another available slot.');
+      return;
+    }
+
+    // Map visitType to Appointment type
+    const mappedType: Appointment['type'] =
+      visitType === 'Emergency'
+        ? 'Emergency'
+        : visitType === 'Follow-up'
+        ? 'Follow-up'
+        : visitType === 'Check-up'
+        ? 'Check-up'
+        : visitType === 'Telehealth'
+        ? 'Telehealth'
+        : 'Consultation';
+
+    const newApt = addAppointment({
       patientId: selectedPatient.id,
       patientName: selectedPatient.fullName,
       patientMrn: selectedPatient.mrn,
       doctorId: selectedDoctor.id,
       doctorName: selectedDoctor.name,
-      department: selectedDoctor.department || department,
-      date,
-      time,
-      durationMinutes: duration,
-      reason: reason || 'Scheduled outpatient consultation',
+      department: selectedDoctor.department || 'Outpatient Clinic',
+      date: selectedDate,
+      time: selectedTimeSlot,
+      durationMinutes: 30,
+      reason: reason ? `[${visitType}] ${reason}` : `Scheduled ${visitType} consultation`,
       status: 'Scheduled',
-      type,
-      room,
+      type: mappedType,
+      room: selectedDoctor.department?.includes('Cardio') ? 'Cardiology Suite 1' : 'Room 302',
     });
 
-    onClose();
+    // Create a live notification for patient confirmation with approval notice
+    addNotification({
+      targetRole: 'patient',
+      title: 'Appointment Recorded',
+      message: 'Your appointment has been recorded. Please wait for approval.',
+      content: `Your appointment request with ${selectedDoctor.name} on ${selectedDate} at ${formatTimeSlot(selectedTimeSlot)} (${visitType}) has been recorded. Please wait for clinic staff confirmation. Assigned Queue Station: ${newApt.queueNumber}.`,
+      category: 'appointment',
+      priority: visitType === 'Emergency' ? 'high' : 'normal',
+    });
+
+    // Also notify provider
+    addNotification({
+      targetRole: 'provider',
+      title: 'New Patient Booking Pending Approval',
+      message: `${selectedPatient.fullName} booked a consultation on ${selectedDate} at ${formatTimeSlot(selectedTimeSlot)} (${visitType}).`,
+      content: `New confirmed appointment scheduled: ${selectedPatient.fullName} (${selectedPatient.mrn}) with Dr. ${selectedDoctor.name} on ${selectedDate} at ${formatTimeSlot(selectedTimeSlot)} (${visitType}). Review required.`,
+      category: 'appointment',
+      priority: visitType === 'Emergency' ? 'high' : 'normal',
+    });
+
+    setConfirmedAppointment(newApt);
+    setCurrentStep(5); // Success confirmation step
   };
 
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 dark:bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div
-        className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-lg overflow-hidden animate-in fade-in duration-150"
-        style={{ colorScheme: 'light dark' }}
+        className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl overflow-hidden font-sans my-auto animate-in zoom-in-95 duration-150 select-none text-slate-800 dark:text-slate-100"
       >
-        <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 flex items-center justify-center font-bold">
-              <Calendar className="w-4 h-4" />
+        {/* Header Bar */}
+        <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-900/60">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800/60 flex items-center justify-center text-teal-600 dark:text-teal-300 font-bold shadow-2xs">
+              <CalendarIcon className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Schedule Clinical Appointment</h2>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">Book visit with doctor availability slot</p>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm sm:text-base font-black tracking-tight text-slate-900 dark:text-white">
+                  Book Clinical Appointment
+                </h2>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800 uppercase tracking-wider">
+                  Live Slots
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Doctor availability schedule & automated single-slot locking
+              </p>
             </div>
           </div>
+
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
             aria-label="Close"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-3.5">
-          <div>
-            <label className={labelClass}>Patient Record *</label>
-            <select
-              required
-              value={effectivePatId}
-              onChange={(e) => !isPatientLocked && setSelectedPatId(e.target.value)}
-              disabled={isPatientLocked}
-              className={fieldClass + (isPatientLocked ? ' opacity-90 cursor-not-allowed' : '')}
-            >
-              {patientOptions.map((p) => (
-                <option key={p.id} value={p.id} className="bg-white text-slate-900 dark:bg-slate-800 dark:text-slate-100">
-                  {p.fullName} (MRN: {p.mrn}) - {p.age}y {p.gender}
-                </option>
+        {/* Step Indicator (Steps 1 to 4) */}
+        {currentStep !== 5 && (
+          <div className="px-5 pt-3 pb-2 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/40">
+            <div className="flex items-center justify-between text-xs">
+              {[
+                { step: 1, label: '1. Select Doctor' },
+                { step: 2, label: '2. Select Date' },
+                { step: 3, label: '3. Choose Slot' },
+                { step: 4, label: '4. Confirm' },
+              ].map((item) => (
+                <button
+                  key={item.step}
+                  type="button"
+                  disabled={item.step > currentStep}
+                  onClick={() => setCurrentStep(item.step as any)}
+                  className={`flex items-center gap-1.5 font-bold transition ${
+                    currentStep === item.step
+                      ? 'text-teal-600 dark:text-teal-400'
+                      : item.step < currentStep
+                      ? 'text-slate-700 dark:text-slate-300 cursor-pointer'
+                      : 'text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-60'
+                  }`}
+                >
+                  <span
+                    className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold ${
+                      currentStep === item.step
+                        ? 'bg-teal-600 text-white'
+                        : item.step < currentStep
+                        ? 'bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300'
+                        : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+                    }`}
+                  >
+                    {item.step < currentStep ? '✓' : item.step}
+                  </span>
+                  <span className="hidden sm:inline text-[11px]">{item.label}</span>
+                </button>
               ))}
-            </select>
-            {isPatientLocked && (
-              <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
-                Privacy: you can only book under your own patient record.
-              </p>
-            )}
+            </div>
           </div>
+        )}
 
-          <div>
-            <label className={labelClass}>Attending Physician *</label>
-            <select
-              required
-              value={selectedDocId}
-              onChange={(e) => setSelectedDocId(e.target.value)}
-              className={fieldClass}
-            >
-              {doctors.map((d) => (
-                <option key={d.id} value={d.id} className="bg-white text-slate-900 dark:bg-slate-800 dark:text-slate-100">
-                  {d.name} · {d.department || 'General'}
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* ========================================================================= */}
+        {/* STEP 1: SELECT DOCTOR & SPECIALTY                                         */}
+        {/* ========================================================================= */}
+        {currentStep === 1 && (
+          <div className="p-5 sm:p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+            {/* Patient Identity Confirmation */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 flex items-center justify-center font-bold text-xs">
+                  <User className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-900 dark:text-white">
+                    Booking for: {selectedPatient?.fullName}
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    MRN: <span className="font-mono font-semibold">{selectedPatient?.mrn}</span> • {selectedPatient?.age}y {selectedPatient?.gender}
+                  </p>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-2 gap-3">
+              {!isPatientLocked && patientOptions.length > 1 && (
+                <select
+                  value={effectivePatId}
+                  onChange={(e) => setSelectedPatId(e.target.value)}
+                  className="px-2.5 py-1.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold"
+                >
+                  {patientOptions.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.fullName}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Specialty Filter */}
             <div>
-              <label className={labelClass}>Visit Type</label>
-              <select
-                value={type}
-                onChange={(e) => setType(e.target.value as typeof type)}
-                className={fieldClass}
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Filter by Clinical Department
+                </label>
+                <span className="text-[11px] font-semibold text-teal-600 dark:text-teal-400">
+                  {filteredDoctors.length} {filteredDoctors.length === 1 ? 'Physician' : 'Physicians'} Available
+                </span>
+              </div>
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSpecialty('all')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+                    selectedSpecialty === 'all'
+                      ? 'bg-teal-600 text-white shadow-2xs'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                  }`}
+                >
+                  All Specialties
+                </button>
+                {specialties.map((spec) => (
+                  <button
+                    key={spec}
+                    type="button"
+                    onClick={() => setSelectedSpecialty(spec)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+                      selectedSpecialty === spec
+                        ? 'bg-teal-600 text-white shadow-2xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    {spec}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Doctor Cards Selection */}
+            <div className="space-y-3">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Select Attending Physician
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {filteredDoctors.map((doc) => {
+                  const isSelected = selectedDoctorId === doc.id;
+                  const workDays = getDoctorWorkDays(doc.id);
+                  const isMonToSat = workDays.length === 6;
+
+                  return (
+                    <div
+                      key={doc.id}
+                      onClick={() => setSelectedDoctorId(doc.id)}
+                      className={`p-4 rounded-2xl border-2 transition cursor-pointer flex flex-col justify-between gap-3 ${
+                        isSelected
+                          ? 'border-teal-500 bg-teal-50/50 dark:bg-teal-950/40 shadow-sm'
+                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/60 hover:border-teal-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <div>
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate">
+                          {doc.name}
+                        </h4>
+                        <p className="text-teal-600 dark:text-teal-400 text-xs font-semibold truncate mt-0.5">
+                          {doc.specialty || doc.department}
+                        </p>
+                        <p className="text-slate-400 text-[11px] font-mono mt-0.5">
+                          License: {doc.licenseNumber || 'MD-REG'}
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-[11px]">
+                        <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-teal-500" />
+                          <span>{isMonToSat ? 'Mon - Sat Clinics' : 'Mon, Wed - Sat'}</span>
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            isSelected
+                              ? 'bg-teal-600 text-white'
+                              : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                          }`}
+                        >
+                          {isSelected ? 'Selected' : 'Choose'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Next button */}
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
               >
-                <option value="In-Person">In-Person</option>
-                <option value="Telehealth">Telehealth</option>
-                <option value="Follow-up">Follow-up</option>
-                <option value="Emergency">Emergency</option>
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Department</label>
-              <input
-                type="text"
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                className={fieldClass}
-              />
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!selectedDoctorId}
+                onClick={() => setCurrentStep(2)}
+                className="px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <span>Continue to Calendar</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
+        )}
 
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className={labelClass}>Date</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={fieldClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Time</label>
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={fieldClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Duration</label>
-              <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className={fieldClass}>
-                <option value={15}>15 Minutes</option>
-                <option value={30}>30 Minutes</option>
-                <option value={45}>45 Minutes</option>
-                <option value={60}>60 Minutes</option>
-              </select>
-            </div>
-          </div>
+        {/* ========================================================================= */}
+        {/* STEP 2: SELECT DATE FROM MONTHLY CALENDAR                                 */}
+        {/* ========================================================================= */}
+        {currentStep === 2 && (
+          <div className="p-5 sm:p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+            {/* Active Doctor Context Header (No photo/picture) */}
+            <div className="p-3.5 rounded-2xl bg-teal-50/60 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 flex items-center justify-between gap-3">
+              <div>
+                <p className="font-bold text-xs text-slate-900 dark:text-white">
+                  {selectedDoctor?.name}
+                </p>
+                <p className="text-[11px] text-teal-700 dark:text-teal-300">
+                  {selectedDoctor?.specialty || selectedDoctor?.department} • License: {selectedDoctor?.licenseNumber || 'MD-REG'}
+                </p>
+              </div>
 
-          <div>
-            <label className={labelClass}>Room / Suite</label>
-            <input
-              type="text"
-              value={room}
-              onChange={(e) => setRoom(e.target.value)}
-              className={fieldClass}
-              placeholder="e.g. Room 302, Cardiology Suite 1"
-            />
-          </div>
+              <button
+                type="button"
+                onClick={() => setCurrentStep(1)}
+                className="text-xs text-teal-600 dark:text-teal-400 font-bold hover:underline cursor-pointer"
+              >
+                Change Doctor
+              </button>
+            </div>
 
-          <div>
-            <label className={labelClass}>Chief Reason for Encounter *</label>
-            <textarea
-              required
-              rows={2}
-              placeholder="e.g. Follow-up on elevated fasting glucose and mild dizziness..."
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className={fieldClass}
-            />
-          </div>
+            {/* Month Navigator */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                  {monthNames[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Pick any available consultation day
+                </p>
+              </div>
 
-          <div className="pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 rounded-lg text-xs font-medium cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-xs font-semibold shadow-sm cursor-pointer"
-            >
-              Confirm Booking
-            </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={prevMonth}
+                  className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                  title="Previous Month"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={nextMonth}
+                  className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                  title="Next Month"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Calendar Days of Week Header */}
+            <div className="grid grid-cols-7 gap-1 text-center font-bold text-[11px] text-slate-400 uppercase tracking-wider pb-1">
+              <span>Sun</span>
+              <span>Mon</span>
+              <span>Tue</span>
+              <span>Wed</span>
+              <span>Thu</span>
+              <span>Fri</span>
+              <span>Sat</span>
+            </div>
+
+            {/* Calendar Days Grid */}
+            <div className="grid grid-cols-7 gap-1.5">
+              {/* Empty leading padding slots */}
+              {Array.from({ length: calendarGrid.firstDayIndex }).map((_, i) => (
+                <div key={`empty-${i}`} className="h-14 sm:h-16 rounded-xl bg-slate-50/40 dark:bg-slate-900/20" />
+              ))}
+
+              {calendarGrid.days.map((dayItem) => {
+                const isSelected = selectedDate === dayItem.dateString;
+                const isUnavailable = !dayItem.isWorkDay || dayItem.availableSlotsCount === 0;
+
+                return (
+                  <button
+                    key={dayItem.dateString}
+                    type="button"
+                    disabled={isUnavailable}
+                    onClick={() => {
+                      setSelectedDate(dayItem.dateString);
+                      // Reset previously selected time slot if date changes
+                      setSelectedTimeSlot('');
+                    }}
+                    className={`h-14 sm:h-16 rounded-xl p-1.5 flex flex-col justify-between items-center transition border text-xs cursor-pointer ${
+                      isSelected
+                        ? 'bg-teal-600 text-white border-teal-600 font-bold shadow-md shadow-teal-900/30 ring-2 ring-teal-400'
+                        : isUnavailable
+                        ? 'bg-slate-100/60 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-60'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-teal-400 hover:bg-teal-50/50 dark:hover:bg-teal-950/30'
+                    }`}
+                  >
+                    <span className="text-xs sm:text-sm font-bold">{dayItem.dayNumber}</span>
+                    <span
+                      className={`text-[9px] px-1 rounded font-semibold truncate ${
+                        isSelected
+                          ? 'bg-teal-700 text-teal-100'
+                          : isUnavailable
+                          ? 'text-slate-400 dark:text-slate-500'
+                          : 'bg-teal-50 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800'
+                      }`}
+                    >
+                      {isUnavailable ? 'Off' : `${dayItem.availableSlotsCount} slots`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Footer / Step Actions */}
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setCurrentStep(1)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer flex items-center gap-1"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Back</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={!selectedDate}
+                onClick={() => setCurrentStep(3)}
+                className="px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <span>Choose Time Slot</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-        </form>
+        )}
+
+        {/* ========================================================================= */}
+        {/* STEP 3: SELECT TIME SLOT & VISIT DETAILS                                  */}
+        {/* ========================================================================= */}
+        {currentStep === 3 && (
+          <div className="p-5 sm:p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+            {/* Summary Context */}
+            <div className="p-3.5 rounded-2xl bg-teal-50/60 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 flex items-center justify-between gap-3">
+              <div>
+                <p className="font-bold text-xs text-slate-900 dark:text-white">
+                  {selectedDoctor?.name} • {selectedDate}
+                </p>
+                <p className="text-[11px] text-teal-700 dark:text-teal-300">
+                  {remainingSlotsForSelectedDate} open slots available on this date
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCurrentStep(2)}
+                className="text-xs text-teal-600 dark:text-teal-400 font-bold hover:underline cursor-pointer"
+              >
+                Change Date
+              </button>
+            </div>
+
+            {/* Time Slot Grid (with grayed-out booked slots) */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Available Time Slots (30 min)
+                </label>
+                <span className="text-[11px] text-slate-400">
+                  Single-patient locking enforced
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+                {slotAvailability.map((item) => {
+                  const isSelected = selectedTimeSlot === item.slot;
+
+                  return (
+                    <button
+                      key={item.slot}
+                      type="button"
+                      disabled={!item.isAvailable}
+                      onClick={() => setSelectedTimeSlot(item.slot)}
+                      className={`py-2.5 px-2 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center border cursor-pointer ${
+                        isSelected
+                          ? 'bg-teal-600 text-white border-teal-600 shadow-md shadow-teal-900/20 ring-2 ring-teal-400'
+                          : item.isAvailable
+                          ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-teal-400 hover:bg-teal-50 dark:hover:bg-slate-700'
+                          : 'bg-slate-100 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-50'
+                      }`}
+                    >
+                      <span className="text-xs">{item.formatted}</span>
+                      <span
+                        className={`text-[9px] mt-0.5 uppercase tracking-wider ${
+                          isSelected
+                            ? 'text-teal-100 font-bold'
+                            : item.isAvailable
+                            ? 'text-teal-600 dark:text-teal-400'
+                            : 'text-slate-400'
+                        }`}
+                      >
+                        {item.isAvailable ? 'Available' : 'Booked'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Consultation Details */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 text-xs mb-1">
+                  Encounter Type
+                </label>
+                <select
+                  value={visitType}
+                  onChange={(e) => setVisitType(e.target.value as any)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+                >
+                  <option value="Consultation">Consultation</option>
+                  <option value="Follow-up">Follow-up</option>
+                  <option value="Emergency">Emergency</option>
+                  <option value="Check-up">Check-up</option>
+                  <option value="Telehealth">Telehealth</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 text-xs mb-1">
+                  Reason for Visit / Symptoms
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Regular blood sugar & BP checkup"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setCurrentStep(2)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer flex items-center gap-1"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Back</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={!selectedTimeSlot}
+                onClick={() => setCurrentStep(4)}
+                className="px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <span>Review & Confirm</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* STEP 4: REVIEW & CONFIRM BOOKING                                          */}
+        {/* ========================================================================= */}
+        {currentStep === 4 && (
+          <form onSubmit={handleConfirmBooking} className="p-5 sm:p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                Verify Appointment Details
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Please review your clinical booking details prior to confirming
+              </p>
+            </div>
+
+            {/* Review Card */}
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-700">
+                <span className="text-slate-500 text-xs">Patient</span>
+                <span className="font-bold text-slate-900 dark:text-white text-xs">
+                  {selectedPatient?.fullName} (MRN: {selectedPatient?.mrn})
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-700">
+                <span className="text-slate-500 text-xs">Attending Physician</span>
+                <span className="font-bold text-teal-600 dark:text-teal-400 text-xs">
+                  {selectedDoctor?.name}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-700">
+                <span className="text-slate-500 text-xs">Specialty / Dept</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                  {selectedDoctor?.specialty || selectedDoctor?.department}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-700">
+                <span className="text-slate-500 text-xs">Date & Time</span>
+                <span className="font-black text-slate-900 dark:text-white text-xs">
+                  {selectedDate} at {formatTimeSlot(selectedTimeSlot)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-700">
+                <span className="text-slate-500 text-xs">Type</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                  {visitType} (Duration: 30 minutes)
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 text-xs">Chief Reason</span>
+                <span className="font-medium text-slate-800 dark:text-slate-200 text-xs text-right max-w-xs">
+                  {reason || 'Outpatient consultation'}
+                </span>
+              </div>
+            </div>
+
+            {/* Privacy notice banner */}
+            <div className="p-3 bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 rounded-xl flex items-start gap-2.5 text-xs text-teal-900 dark:text-teal-200">
+              <ShieldCheck className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0 mt-0.5" />
+              <span>
+                By confirming, this slot is locked exclusively for your account under RA 10173 data privacy protection.
+              </span>
+            </div>
+
+            {/* Submit & Back buttons */}
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setCurrentStep(3)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer flex items-center gap-1"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Back</span>
+              </button>
+
+              <button
+                type="submit"
+                className="px-6 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-900/20 transition cursor-pointer flex items-center gap-2"
+              >
+                <CalendarCheck className="w-4 h-4" />
+                <span>Confirm & Lock Appointment</span>
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* ========================================================================= */}
+        {/* STEP 5: SUCCESS CONFIRMATION                                              */}
+        {/* ========================================================================= */}
+        {currentStep === 5 && (
+          <div className="p-6 sm:p-8 text-center space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-3xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center mx-auto shadow-lg shadow-emerald-950/20">
+              <CheckCircle2 className="w-9 h-9" />
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                Reservation Recorded
+              </span>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white pt-1">
+                Your appointment has been recorded. Please wait for approval.
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                Your appointment request with {selectedDoctor?.name} is logged in the clinic system. You will receive an alert once approved by attending staff.
+              </p>
+            </div>
+
+            {confirmedAppointment && (
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-left max-w-md mx-auto space-y-2">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-500">Queue Number:</span>
+                  <span className="font-mono font-bold text-teal-600 dark:text-teal-400 text-sm">
+                    {confirmedAppointment.queueNumber}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-500">Date & Time:</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-100">
+                    {confirmedAppointment.date} at {formatTimeSlot(confirmedAppointment.time)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-500">Physician:</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-100">
+                    {confirmedAppointment.doctorName}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Location:</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-100">
+                    {confirmedAppointment.room} • Outpatient Clinic
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  setActiveTab('appointments');
+                }}
+                className="px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-md shadow-teal-900/20"
+              >
+                View in My Appointments
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
