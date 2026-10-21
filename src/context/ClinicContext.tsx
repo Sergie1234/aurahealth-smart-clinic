@@ -546,7 +546,12 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return { success: true };
   };
 
-  const login = async (credentials: LoginCredentials): Promise<{ success: boolean; error?: string }> => {
+  const login = async (credentials: LoginCredentials): Promise<{
+    success: boolean;
+    error?: string;
+    requires2FA?: boolean;
+    twoFactorRequired?: boolean;
+  }> => {
     const { primaryRole: role, subRole } = credentials;
 
     try {

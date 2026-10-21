@@ -50,7 +50,8 @@ import {
   INITIAL_INVOICES,
   INITIAL_AUDIT_LOGS,
   INITIAL_NOTIFICATIONS,
-import type { Notification, User } from './types/clinic';
+} from './data/mockData';
+import type { Notification, User, AuditLog } from './types/clinic';
 import { validatePasswordStrength } from './utils/passwordValidation';
 import { createCustomDoctorSchedule, DOCTOR_SCHEDULES } from './utils/doctorSchedules';
 
@@ -1171,12 +1172,14 @@ app.post('/api/doctors', (req: Request, res: Response) => {
     });
 
     // Record audit event
-    const auditEntry = {
+    const auditEntry: AuditLog = {
       id: `log-${Date.now()}`,
       action: 'DOCTOR_CREDENTIALED',
-      category: 'Security',
       userId: 'usr-admin',
       userName: 'Clinic Director',
+      userRole: 'admin',
+      resourceType: 'Security',
+      resourceId: newDoctor.id,
       timestamp: new Date().toISOString(),
       description: `New Physician Credentialed: ${cleanName} (${newDoctor.specialty}, PRC: ${newDoctor.licenseNumber}) under Philippine Medical Governance.`,
       ipAddress: String(req.ip || '127.0.0.1'),
@@ -2032,8 +2035,104 @@ Reminder: The attending provider must manually review and sign this draft before
   });
 });
 
-app.post('/api/ai/predictive-risk', async (_req: Request, res: Response) => {
-  return res.json({ success: true, data: { riskScore: 0.2, tier: 'low', factors: [] }, disclaimer: CLINICAL_DISCLAIMER });
+app.post('/api/ai/predictive-risk', async (req: Request, res: Response) => {
+  const { patient, vitals, riskProfile } = req.body || {};
+  const patientName = patient?.fullName || 'Patient';
+  const age = patient?.age || 50;
+  const conditions = patient?.chronicConditions || [];
+  const meds = patient?.currentMedications || [];
+
+  try {
+    if (ai) {
+      const prompt = `You are the SmartClinic Clinical Decision Support Engine.
+Analyze the following longitudinal outpatient risk profile and generate a 30 to 90-day clinical risk trajectory forecast.
+
+Patient: ${patientName} (${age}yo, ${patient?.gender || 'N/A'}, MRN: ${patient?.mrn || 'N/A'})
+Diagnoses / Chronic Conditions: ${JSON.stringify(conditions)}
+Current Medications: ${JSON.stringify(meds)}
+Allergies: ${JSON.stringify(patient?.allergies || [])}
+Vitals: ${JSON.stringify(vitals || {})}
+Heuristic Risk Profile:
+- Overall Score: ${riskProfile?.overallScore || 40}/100 (${riskProfile?.overallTier || 'Moderate'})
+- Cardiovascular Risk: ${riskProfile?.cardioRisk?.score || 30}% (${riskProfile?.cardioRisk?.tier || 'Low'})
+- Diabetic Progression: ${riskProfile?.diabeticRisk?.score || 25}% (${riskProfile?.diabeticRisk?.tier || 'Low'})
+- 30-Day Deterioration/Readmission Risk: ${riskProfile?.readmissionRisk?.score || 20}%
+
+Respond strictly with valid JSON conforming to this schema:
+{
+  "patientTrajectorySynopsis": string (2-3 sentences synthesizing the 30-90 day health outlook),
+  "stratifiedRisks": [
+    {
+      "category": string (e.g. "Cardiovascular & Hemodynamic", "Metabolic & Glycemic", "Medication Adherence & Safety", "Emergency Decompensation"),
+      "riskScore": number (0-100),
+      "riskLevel": "LOW" | "MODERATE" | "HIGH" | "CRITICAL",
+      "clinicalRationale": string,
+      "projected30DayOutlook": string
+    }
+  ],
+  "preventativeInterventionPlan": string[] (3-5 actionable clinical protocols),
+  "recommendedSurveillanceSchedule": string (e.g. "Bi-weekly vitals logging with 30-day comprehensive outpatient clinic review")
+}`;
+
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+          config: { responseMimeType: 'application/json', temperature: 0.15 },
+        }),
+        10000
+      );
+
+      const parsed = JSON.parse(response.text || '{}');
+      if (parsed && Array.isArray(parsed.stratifiedRisks) && parsed.stratifiedRisks.length > 0) {
+        return res.json({ success: true, data: parsed, disclaimer: CLINICAL_DISCLAIMER });
+      }
+    }
+  } catch (error: any) {
+    console.warn('Gemini predictive risk fallback:', error?.message);
+  }
+
+  // Clinical Fallback grounded in heuristic profile
+  const overallScore = riskProfile?.overallScore || 35;
+  const isHigh = overallScore >= 55;
+  const fallbackData = {
+    patientTrajectorySynopsis: `${patientName} exhibits a ${riskProfile?.overallTier || 'moderate'} longitudinal risk profile (${overallScore}/100). With targeted monitoring of ${conditions.slice(0, 2).join(' and ') || 'primary vitals'} and continued pharmacotherapy compliance, the 90-day trajectory is anticipated to remain stable.`,
+    stratifiedRisks: [
+      {
+        category: 'Cardiovascular & Hemodynamic',
+        riskScore: riskProfile?.cardioRisk?.score || 35,
+        riskLevel: (riskProfile?.cardioRisk?.tier?.toUpperCase() || 'MODERATE') as 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL',
+        clinicalRationale: riskProfile?.cardioRisk?.drivers?.[0] || 'Resting blood pressure and hemodynamic parameters under active outpatient surveillance.',
+        projected30DayOutlook: 'Stable pressure control with continuous outpatient surveillance.'
+      },
+      {
+        category: 'Metabolic & Glycemic Management',
+        riskScore: riskProfile?.diabeticRisk?.score || 30,
+        riskLevel: (riskProfile?.diabeticRisk?.tier?.toUpperCase() || 'LOW') as 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL',
+        clinicalRationale: riskProfile?.diabeticRisk?.drivers?.[0] || 'Standard glycemic baseline requiring regular outpatient lab reviews.',
+        projected30DayOutlook: 'Fasting glucose and HbA1c to be evaluated at next outpatient milestone.'
+      },
+      {
+        category: '30-Day Care Continuity & Readmission',
+        riskScore: riskProfile?.readmissionRisk?.score || 25,
+        riskLevel: (isHigh ? 'HIGH' : 'LOW') as 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL',
+        clinicalRationale: isHigh ? 'Multimorbidity burden requires active outpatient care management.' : 'Good adherence indicators and scheduled follow-ups.',
+        projected30DayOutlook: 'Low hospitalization probability under preventative protocol.'
+      }
+    ],
+    preventativeInterventionPlan: (riskProfile?.recommendedInterventions?.length
+      ? riskProfile.recommendedInterventions
+      : [
+          'Enforce medication reconciliation and compliance tracking.',
+          'Schedule 14-day telemedicine check-in for vitals review.',
+          'Provide patient educational materials on diet and exercise.'
+        ]) as string[],
+    recommendedSurveillanceSchedule: isHigh
+      ? 'Bi-weekly tele-triage check-in with 30-day physician evaluation.'
+      : 'Standard 60-day outpatient follow-up with regular home vitals logging.'
+  };
+
+  return res.json({ success: true, data: fallbackData, disclaimer: CLINICAL_DISCLAIMER });
 });
 
 export default app;

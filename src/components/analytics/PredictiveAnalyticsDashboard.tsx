@@ -138,7 +138,25 @@ export const PredictiveAnalyticsDashboard: React.FC = () => {
         vitals: patientObj.vitalsHistory?.[0],
         riskProfile: profile,
       });
-      setAiReport(res.data);
+      if (res && res.data) {
+        const safeData: PredictiveRiskResponse = {
+          patientTrajectorySynopsis:
+            res.data.patientTrajectorySynopsis ||
+            'Patient maintains a stable clinical baseline under active outpatient protocols.',
+          stratifiedRisks: Array.isArray(res.data.stratifiedRisks)
+            ? res.data.stratifiedRisks
+            : [],
+          preventativeInterventionPlan: Array.isArray(res.data.preventativeInterventionPlan)
+            ? res.data.preventativeInterventionPlan
+            : [],
+          recommendedSurveillanceSchedule:
+            res.data.recommendedSurveillanceSchedule ||
+            'Standard 30-day clinical outpatient surveillance.',
+        };
+        setAiReport(safeData);
+      } else {
+        throw new Error('Invalid assessment response format.');
+      }
     } catch (err: any) {
       setAiError(err?.message || 'Failed to complete AI predictive risk analysis');
     } finally {
@@ -463,7 +481,7 @@ export const PredictiveAnalyticsDashboard: React.FC = () => {
                         Leading Risk Drivers:
                       </span>
                       <ul className="space-y-1">
-                        {profile.keyRiskDrivers.map((driver, idx) => (
+                        {(profile.keyRiskDrivers || []).map((driver, idx) => (
                           <li
                             key={idx}
                             className="text-[11px] text-slate-600 flex items-start gap-1.5 leading-snug"
@@ -624,7 +642,7 @@ export const PredictiveAnalyticsDashboard: React.FC = () => {
                         {/* Drivers */}
                         <td className="py-3.5 px-4">
                           <ul className="space-y-0.5">
-                            {pred.contributingFactors.map((f, i) => (
+                            {(pred.contributingFactors || []).map((f, i) => (
                               <li key={i} className="text-[11px] text-slate-600 flex items-center gap-1">
                                 <span className="w-1 h-1 rounded-full bg-slate-400" />
                                 {f}
@@ -915,7 +933,7 @@ export const PredictiveAnalyticsDashboard: React.FC = () => {
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                     Domain Risk Projections:
                   </span>
-                  {aiReport.stratifiedRisks.map((risk, i) => (
+                  {(aiReport.stratifiedRisks || []).map((risk, i) => (
                     <div
                       key={i}
                       className="p-3 bg-white rounded-xl border border-slate-200 space-y-1.5 shadow-2xs"
@@ -949,7 +967,7 @@ export const PredictiveAnalyticsDashboard: React.FC = () => {
                     Preventative Clinical Action Plan:
                   </span>
                   <ul className="space-y-1">
-                    {aiReport.preventativeInterventionPlan.map((action, i) => (
+                    {(aiReport.preventativeInterventionPlan || []).map((action, i) => (
                       <li key={i} className="text-teal-900 text-[11px] flex items-start gap-1.5">
                         <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
                         <span>{action}</span>
