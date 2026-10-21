@@ -842,11 +842,11 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
           }
         }
 
-        // 2. Authenticator App 2FA Enforcement
+        // 2. Authenticator App 2FA Enforcement (Exempt for patient role per requirements)
         const has2Fa = twoFactorEnabledUsers.has(cleanEmail);
         const codeToVerify = String(twoFactorCode || req.body?.otpCode || '').trim();
 
-        if (has2Fa) {
+        if (has2Fa && primaryRole !== 'patient') {
           if (!codeToVerify) {
             return res.status(200).json({
               success: false,
@@ -867,7 +867,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
               error: 'Invalid Authenticator code. Check the rolling 6-digit code in your Authenticator app (e.g. Google Authenticator).',
             });
           }
-        } else if (codeToVerify) {
+        } else if (codeToVerify && primaryRole !== 'patient') {
           const secret = getUserTotpSecret(cleanEmail);
           const isTotp = verifyTotpCode(secret, codeToVerify);
           if (!isTotp) {

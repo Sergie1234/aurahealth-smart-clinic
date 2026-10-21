@@ -41,6 +41,8 @@ import { StaffDashboardView } from './components/dashboards/StaffDashboardView';
 import { DoctorDashboardView } from './components/dashboards/DoctorDashboardView';
 import { AdminDashboardView } from './components/dashboards/AdminDashboardView';
 import { NotificationsPage } from './components/notifications/NotificationsPage';
+import { ScanHealthIdModal } from './components/patients/ScanHealthIdModal';
+import { ScanHealthIdPage } from './components/patients/ScanHealthIdPage';
 import type { Patient, Prescription, LabTestOrder } from './types/clinic';
 
 const ClinicAppContent: React.FC = () => {
@@ -66,6 +68,8 @@ const ClinicAppContent: React.FC = () => {
   const [showBookAppointment, setShowBookAppointment] = useState(false);
   const [showNewPrescription, setShowNewPrescription] = useState(false);
   const [showSupabaseModal, setShowSupabaseModal] = useState(false);
+  const [showScanQRModal, setShowScanQRModal] = useState(false);
+  const [scanQRMode, setScanQRMode] = useState<'checkin' | 'emergency'>('checkin');
   const [detailPatient, setDetailPatient] = useState<Patient | null>(null);
   const [qrPatient, setQrPatient] = useState<Patient | null>(null);
   const [printingRx, setPrintingRx] = useState<Prescription | null>(null);
@@ -145,6 +149,7 @@ const ClinicAppContent: React.FC = () => {
         'home',
         'dashboard',
         'patients',
+        'scan-qr',
         'audit-logs',
         'reports',
         'predictive-analytics',
@@ -162,6 +167,7 @@ const ClinicAppContent: React.FC = () => {
         'home',
         'dashboard',
         'patients',
+        'scan-qr',
         'appointments',
         'queue',
         'consultations',
@@ -215,6 +221,10 @@ const ClinicAppContent: React.FC = () => {
             onOpenBookAppointment={openBookAppointment}
             onOpenNewPatient={() => setShowNewPatient(true)}
             onOpenSupabaseModal={() => setShowSupabaseModal(true)}
+            onOpenScanQR={(mode) => {
+              setScanQRMode(mode || 'checkin');
+              setShowScanQRModal(true);
+            }}
           />
           <div className="flex flex-1 overflow-hidden">
             <Sidebar />
@@ -259,6 +269,19 @@ const ClinicAppContent: React.FC = () => {
                     selectPatient(id);
                     openBookAppointment();
                   }}
+                  onOpenScanQR={() => {
+                    setScanQRMode('checkin');
+                    setShowScanQRModal(true);
+                  }}
+                />
+              )}
+              {activeTab === 'scan-qr' && (
+                <ScanHealthIdPage
+                  onOpenScanner={(mode) => {
+                    setScanQRMode(mode);
+                    setShowScanQRModal(true);
+                  }}
+                  onStartConsultation={handleStartConsultation}
                 />
               )}
               {activeTab === 'emr' && (
@@ -275,6 +298,10 @@ const ClinicAppContent: React.FC = () => {
                   onBookAppointment={(id) => {
                     selectPatient(id);
                     openBookAppointment();
+                  }}
+                  onOpenScanQR={() => {
+                    setScanQRMode('checkin');
+                    setShowScanQRModal(true);
                   }}
                 />
               )}
@@ -333,6 +360,12 @@ const ClinicAppContent: React.FC = () => {
         <LabReportModal order={labOrderForReport} onClose={() => setLabOrderForReport(null)} />
       )}
       {showSupabaseModal && <SupabaseModal onClose={() => setShowSupabaseModal(false)} />}
+      <ScanHealthIdModal
+        isOpen={showScanQRModal}
+        onClose={() => setShowScanQRModal(false)}
+        initialMode={scanQRMode}
+        onStartConsultation={handleStartConsultation}
+      />
     </div>
   );
 };

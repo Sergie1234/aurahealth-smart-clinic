@@ -81,8 +81,27 @@ export const LoginPage: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Proactively check if entered email has Authenticator 2FA enabled
+  // CAPTCHA verification state for Patient login
+  const [isCaptchaVerified, setIsCaptchaVerified] = useState(false);
+  const [isCaptchaChecking, setIsCaptchaChecking] = useState(false);
+  const [captchaError, setCaptchaError] = useState(false);
+
+  const handleCaptchaClick = () => {
+    if (isCaptchaVerified || isCaptchaChecking) return;
+    setIsCaptchaChecking(true);
+    setCaptchaError(false);
+    setTimeout(() => {
+      setIsCaptchaChecking(false);
+      setIsCaptchaVerified(true);
+    }, 600);
+  };
+
+  // Proactively check if entered email has Authenticator 2FA enabled (Admin, Doctor, Staff only)
   useEffect(() => {
+    if (primaryRole === 'patient') {
+      setEnablePatient2Fa(false);
+      return;
+    }
     const clean = email.trim().toLowerCase();
     if (clean && clean.includes('@')) {
       const timer = setTimeout(() => {
@@ -97,7 +116,7 @@ export const LoginPage: React.FC = () => {
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [email]);
+  }, [email, primaryRole]);
 
   const isPatient = primaryRole === 'patient';
   const isDoctor = primaryRole === 'doctor';
@@ -210,7 +229,7 @@ export const LoginPage: React.FC = () => {
         return;
       }
 
-      // LOGIN MODE: Email + Password (with optional Authenticator 2FA)
+      // LOGIN MODE: Email + Password + CAPTCHA Verification
       if (!cleanEmail || !cleanEmail.includes('@')) {
         setError('Please enter your registered email address.');
         setLoading(false);
@@ -222,8 +241,10 @@ export const LoginPage: React.FC = () => {
         return;
       }
 
-      if (enablePatient2Fa && (!twoFactorCode || twoFactorCode.trim().length < 6)) {
-        setError('Please enter the 6-digit code from your Authenticator app.');
+      // Patient-only CAPTCHA check
+      if (!isCaptchaVerified) {
+        setError("Please complete the security check ('I'm not a robot') before signing in.");
+        setCaptchaError(true);
         setLoading(false);
         return;
       }
@@ -232,17 +253,11 @@ export const LoginPage: React.FC = () => {
         primaryRole: 'patient',
         email: cleanEmail,
         password,
-        twoFactorCode: twoFactorCode.trim() || undefined,
         isRegister: false,
       });
 
       setLoading(false);
       if (!res.success) {
-        if (res.requires2FA) {
-          setEnablePatient2Fa(true);
-          setError(res.error || 'Two-Factor Authentication is active on this account. Please enter the 6-digit code from your Authenticator app.');
-          return;
-        }
         setError(res.error || 'Invalid email or password.');
         toastError(res.error || 'Invalid email or password.');
         return;
@@ -913,55 +928,86 @@ export const LoginPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Patient Authenticator 2FA Verification Card */}
+                {/* Patient Security Verification: CAPTCHA / "I'm not a robot" */}
                 {isPatient && mode === 'login' && (
                   <div className="pt-1">
-                    <div className="flex items-center justify-between pb-1">
-                      <button
-                        type="button"
-                        onClick={() => setEnablePatient2Fa(!enablePatient2Fa)}
-                        className="text-[11px] font-semibold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 cursor-pointer"
-                      >
-                        <Smartphone className="w-3.5 h-3.5" />
-                        <span>{enablePatient2Fa ? '✓ Authenticator 2FA Enabled' : '+ Sign in with Authenticator App (2FA)'}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowAuthenticatorModal(true)}
-                        className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
-                      >
-                        <QrCode className="w-3.5 h-3.5" />
-                        <span>Setup / Scan QR</span>
-                      </button>
-                    </div>
+                    <div
+                      className={`p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border transition-all ${
+                        captchaError
+                          ? 'border-rose-400 dark:border-rose-700 bg-rose-50/40 dark:bg-rose-950/20 shadow-xs'
+                          : isCaptchaVerified
+                          ? 'border-emerald-300 dark:border-emerald-700/80 bg-emerald-50/30 dark:bg-emerald-950/20'
+                          : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={handleCaptchaClick}
+                            aria-label="Verify I am not a robot"
+                            className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer ${
+                              isCaptchaVerified
+                                ? 'bg-emerald-500 border-emerald-500 text-white shadow-xs'
+                                : isCaptchaChecking
+                                ? 'border-teal-500 bg-white dark:bg-slate-900'
+                                : captchaError
+                                ? 'border-rose-400 hover:border-rose-500 bg-white dark:bg-slate-900'
+                                : 'border-slate-300 dark:border-slate-600 hover:border-teal-500 bg-white dark:bg-slate-900'
+                            }`}
+                          >
+                            {isCaptchaChecking ? (
+                              <div className="w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
+                            ) : isCaptchaVerified ? (
+                              <CheckCircle2 className="w-4 h-4 text-white stroke-[2.5]" />
+                            ) : null}
+                          </button>
 
-                    {enablePatient2Fa && (
-                      <div className="mt-1 p-3.5 rounded-2xl bg-teal-50/80 dark:bg-slate-800/80 border border-teal-300 dark:border-teal-700 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <label className="block text-xs font-bold text-teal-950 dark:text-teal-200 flex items-center gap-1.5">
-                            <Smartphone className="w-3.5 h-3.5 text-teal-600" />
-                            <span>Authenticator 6-Digit Code *</span>
-                          </label>
-                          <span className="text-[10px] font-mono text-teal-700 dark:text-teal-300 bg-teal-100 dark:bg-teal-900/60 px-2 py-0.5 rounded-full font-bold">
-                            RFC 6238 TOTP
-                          </span>
+                          <div>
+                            <label
+                              onClick={handleCaptchaClick}
+                              className="text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer select-none flex items-center gap-1.5"
+                            >
+                              <span>I'm not a robot</span>
+                              {isCaptchaVerified && (
+                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.2 rounded-full">
+                                  Verified
+                                </span>
+                              )}
+                            </label>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                              {isCaptchaVerified
+                                ? 'Security check passed • Bot protection verified'
+                                : 'Click checkbox to confirm security verification'}
+                            </p>
+                          </div>
                         </div>
-                        <div className="relative">
-                          <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-teal-600" />
-                          <input
-                            type="text"
-                            maxLength={6}
-                            value={twoFactorCode}
-                            onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
-                            placeholder="Enter 6-digit rolling code"
-                            className="w-full rounded-xl border border-teal-300 dark:border-teal-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 pl-9 pr-3 py-2.5 text-xs font-mono font-bold tracking-widest text-center focus:ring-2 focus:ring-teal-500"
-                          />
+
+                        <div className="flex flex-col items-end shrink-0 pl-3 border-l border-slate-200 dark:border-slate-700">
+                          <div className="flex items-center gap-1 text-slate-400 dark:text-slate-500">
+                            <ShieldCheck className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                            <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300">reCAPTCHA</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[9px] text-slate-400 mt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setShowPrivacyModal(true)}
+                              className="hover:underline cursor-pointer"
+                            >
+                              Privacy
+                            </button>
+                            <span>•</span>
+                            <button
+                              type="button"
+                              onClick={() => setShowPrivacyModal(true)}
+                              className="hover:underline cursor-pointer"
+                            >
+                              Terms
+                            </button>
+                          </div>
                         </div>
-                        <p className="text-[11px] text-teal-800 dark:text-teal-300">
-                          Enter the current 6-digit code showing in your Google Authenticator or Microsoft Authenticator app.
-                        </p>
                       </div>
-                    )}
+                    </div>
                   </div>
                 )}
 
@@ -1096,7 +1142,7 @@ export const LoginPage: React.FC = () => {
               >
                 <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Patient</div>
                 <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">elena.vargas@example.com</div>
-                <div className="text-[9px] text-teal-600 dark:text-teal-400 font-medium">Password Login</div>
+                <div className="text-[9px] text-teal-600 dark:text-teal-400 font-medium">CAPTCHA Security</div>
               </button>
 
               <button

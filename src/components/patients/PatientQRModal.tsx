@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import { Patient } from '../../types/clinic';
 import { X, Printer, Shield, HeartPulse } from 'lucide-react';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
@@ -9,6 +10,28 @@ interface Props {
 }
 
 export const PatientQRModal: React.FC<Props> = ({ patient, onClose }) => {
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+
+  useEffect(() => {
+    const payload = JSON.stringify({
+      type: 'SMARTCLINIC_HEALTH_ID',
+      mrn: patient.mrn,
+      id: patient.id,
+      name: patient.fullName,
+      bloodType: patient.bloodType,
+    });
+
+    QRCode.toDataURL(payload, {
+      width: 200,
+      margin: 1,
+      color: { dark: '#0f172a', light: '#ffffff' },
+    })
+      .then(setQrDataUrl)
+      .catch((err) => {
+        console.warn('QR code generation error:', err);
+      });
+  }, [patient]);
+
   const handlePrint = () => {
     window.print();
   };
@@ -59,38 +82,19 @@ export const PatientQRModal: React.FC<Props> = ({ patient, onClose }) => {
 
             {/* Simulated QR Code & Barcode */}
             <div className="py-2 flex flex-col items-center justify-center space-y-2">
-              {/* SVG QR Code Pattern */}
+              {/* Genuine Generated QR Code */}
               <div className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
-                <svg className="w-32 h-32" viewBox="0 0 100 100" fill="currentColor">
-                  {/* Outer corner squares */}
-                  <rect x="10" y="10" width="24" height="24" rx="3" fill="#0f172a" />
-                  <rect x="14" y="14" width="16" height="16" rx="2" fill="#ffffff" />
-                  <rect x="18" y="18" width="8" height="8" rx="1" fill="#0f172a" />
-
-                  <rect x="66" y="10" width="24" height="24" rx="3" fill="#0f172a" />
-                  <rect x="70" y="14" width="16" height="16" rx="2" fill="#ffffff" />
-                  <rect x="74" y="18" width="8" height="8" rx="1" fill="#0f172a" />
-
-                  <rect x="10" y="66" width="24" height="24" rx="3" fill="#0f172a" />
-                  <rect x="14" y="70" width="16" height="16" rx="2" fill="#ffffff" />
-                  <rect x="18" y="74" width="8" height="8" rx="1" fill="#0f172a" />
-
-                  {/* QR Data pixel bits */}
-                  <rect x="38" y="12" width="6" height="6" fill="#0d9488" />
-                  <rect x="48" y="12" width="6" height="6" fill="#0f172a" />
-                  <rect x="38" y="24" width="6" height="6" fill="#0f172a" />
-                  <rect x="52" y="24" width="8" height="6" fill="#0d9488" />
-                  <rect x="42" y="38" width="16" height="16" rx="2" fill="#0d9488" />
-                  <rect x="12" y="44" width="6" height="12" fill="#0f172a" />
-                  <rect x="24" y="44" width="8" height="6" fill="#0d9488" />
-                  <rect x="68" y="44" width="8" height="8" fill="#0f172a" />
-                  <rect x="80" y="44" width="8" height="6" fill="#0d9488" />
-                  <rect x="44" y="66" width="10" height="6" fill="#0f172a" />
-                  <rect x="60" y="66" width="8" height="6" fill="#0d9488" />
-                  <rect x="40" y="78" width="8" height="10" fill="#0f172a" />
-                  <rect x="54" y="80" width="16" height="6" fill="#0d9488" />
-                  <rect x="76" y="74" width="12" height="12" fill="#0f172a" />
-                </svg>
+                {qrDataUrl ? (
+                  <img
+                    src={qrDataUrl}
+                    alt={`Electronic Health ID QR Code for ${patient.fullName}`}
+                    className="w-32 h-32 object-contain"
+                  />
+                ) : (
+                  <div className="w-32 h-32 flex items-center justify-center text-slate-400">
+                    <HeartPulse className="w-8 h-8 animate-pulse text-teal-600" />
+                  </div>
+                )}
               </div>
 
               {/* Barcode line representation */}

@@ -18,6 +18,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Lock,
+  QrCode,
 } from 'lucide-react';
 import { UserRole } from '../../types/clinic';
 
@@ -121,6 +122,12 @@ export const Sidebar: React.FC = () => {
       roles: ['doctor', 'nurse', 'receptionist'],
     },
     {
+      id: 'scan-qr',
+      label: 'Scan Health ID (QR)',
+      icon: QrCode,
+      roles: ['doctor', 'nurse', 'receptionist'],
+    },
+    {
       id: 'consultations',
       label: 'Clinical Notes & Charting',
       icon: Stethoscope,
@@ -164,6 +171,12 @@ export const Sidebar: React.FC = () => {
       id: 'patients',
       label: 'User & Patient Management',
       icon: Users,
+      roles: ['admin'],
+    },
+    {
+      id: 'scan-qr',
+      label: 'Scan Health ID (QR)',
+      icon: QrCode,
       roles: ['admin'],
     },
     {

@@ -24,10 +24,12 @@ import {
   ArrowRight,
   Maximize2,
   X,
-  FileText
+  FileText,
+  QrCode,
 } from 'lucide-react';
 import type { Appointment } from '../../types/clinic';
 import { PrivacyPolicyModal } from '../auth/PrivacyPolicyModal';
+import { ScanHealthIdModal } from '../patients/ScanHealthIdModal';
 
 interface Props {
   onStartConsultation: (patientId: string) => void;
@@ -123,6 +125,7 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
 
   // Live Auto-Refresh ticker
   const [livePulse, setLivePulse] = useState<number>(0);
+  const [showScanModal, setShowScanModal] = useState<boolean>(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState<boolean>(false);
 
   // Live ticking PST clock effect
@@ -378,6 +381,17 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
             >
               <ShieldCheck className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
               <span>Privacy Policy</span>
+            </button>
+
+            {/* Scan Patient Health ID Check-in & Emergency Button */}
+            <button
+              type="button"
+              onClick={() => setShowScanModal(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white shadow-xs transition cursor-pointer"
+              title="Scan Patient Electronic Health ID QR Code for Check-in or Emergency Lookup"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>Scan Health ID</span>
             </button>
 
             {/* Self-Service Check-in Button */}
@@ -802,6 +816,19 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
           </div>
         </div>
       )}
+
+      {/* Health ID QR Scanner Modal for Staff */}
+      <ScanHealthIdModal
+        isOpen={showScanModal}
+        onClose={() => setShowScanModal(false)}
+        onStartConsultation={onStartConsultation}
+      />
+
+      {/* Medical Privacy Policy Modal */}
+      <PrivacyPolicyModal
+        isOpen={showPrivacyModal}
+        onClose={() => setShowPrivacyModal(false)}
+      />
     </div>
   );
 };

@@ -30,6 +30,7 @@ interface Props {
   onOpenAISummary: (patient: Patient) => void;
   onStartConsultation: (patientId: string) => void;
   onBookAppointment: (patientId: string) => void;
+  onOpenScanQR?: () => void;
 }
 
 export const PatientList: React.FC<Props> = ({
@@ -39,6 +40,7 @@ export const PatientList: React.FC<Props> = ({
   onOpenAISummary,
   onStartConsultation,
   onBookAppointment,
+  onOpenScanQR,
 }) => {
   const { patients, activeRole } = useClinic();
   const isPatient = activeRole === 'patient';
@@ -283,13 +285,25 @@ export const PatientList: React.FC<Props> = ({
           </p>
         </div>
 
-        <button
-          onClick={onOpenNewPatient}
-          className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs rounded-lg transition flex items-center gap-1.5 shadow-sm shadow-teal-700/20 cursor-pointer self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Register New Patient</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {onOpenScanQR && (
+            <button
+              onClick={onOpenScanQR}
+              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs rounded-lg transition flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 cursor-pointer"
+              title="Scan Electronic Health ID QR Code"
+            >
+              <QrCode className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+              <span>Scan Health ID</span>
+            </button>
+          )}
+          <button
+            onClick={onOpenNewPatient}
+            className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs rounded-lg transition flex items-center gap-1.5 shadow-sm shadow-teal-700/20 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Register New Patient</span>
+          </button>
+        </div>
       </div>
 
       {/* Staff Audit & Security Banner */}
