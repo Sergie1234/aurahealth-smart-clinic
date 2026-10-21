@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import { NotificationDetailModal } from '../notifications/NotificationDetailModal';
+import { canUserScanQR } from '../../utils/qrPermissions';
 import type { Notification } from '../../types/clinic';
 import {
   Search, Bell, Clock, Sparkles, CheckCircle2, AlertTriangle, User, X, Plus, Database, Home, LogOut, Lock, ShieldCheck, QrCode
@@ -16,7 +17,7 @@ interface Props {
 
 export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatient, onOpenSupabaseModal, onOpenScanQR }) => {
   const {
-    currentUser, activeRole, notifications, unreadNotificationCount, markNotificationAsRead, markAllNotificationsAsRead,
+    currentUser, activeRole, primaryRole, staffSubRole, notifications, unreadNotificationCount, markNotificationAsRead, markAllNotificationsAsRead,
     searchQuery, setSearchQuery, patients, appointments, inventory, selectPatient, setActiveTab, logout
   } = useClinic();
 
@@ -158,11 +159,11 @@ export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatien
           {/* Staff Quick Actions - Never rendered for Patient */}
           {!isPatient && (
             <div className="hidden md:flex items-center gap-1.5">
-              {onOpenScanQR && (
+              {onOpenScanQR && canUserScanQR(activeRole, primaryRole, staffSubRole) && (
                 <button
                   onClick={() => onOpenScanQR('checkin')}
                   className="px-2.5 py-1.5 text-xs font-semibold text-teal-800 dark:text-teal-200 bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900/60 border border-teal-200 dark:border-teal-700/80 rounded-lg transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                  title="Scan Patient Electronic Health ID QR Code"
+                  title="Scan Patient Electronic Health ID QR Code (Receptionist & Nurse Only)"
                 >
                   <QrCode className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
                   <span>Scan Health ID</span>

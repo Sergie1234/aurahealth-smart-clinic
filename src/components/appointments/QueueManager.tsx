@@ -30,6 +30,7 @@ import {
 import type { Appointment } from '../../types/clinic';
 import { PrivacyPolicyModal } from '../auth/PrivacyPolicyModal';
 import { ScanHealthIdModal } from '../patients/ScanHealthIdModal';
+import { canUserScanQR } from '../../utils/qrPermissions';
 
 interface Props {
   onStartConsultation: (patientId: string) => void;
@@ -94,6 +95,8 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
     updateAppointmentStatus,
     addAppointment,
     activeRole,
+    primaryRole,
+    staffSubRole,
     currentUser,
     linkedPatientId,
     patients,
@@ -383,16 +386,18 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
               <span>Privacy Policy</span>
             </button>
 
-            {/* Scan Patient Health ID Check-in & Emergency Button */}
-            <button
-              type="button"
-              onClick={() => setShowScanModal(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white shadow-xs transition cursor-pointer"
-              title="Scan Patient Electronic Health ID QR Code for Check-in or Emergency Lookup"
-            >
-              <QrCode className="w-3.5 h-3.5" />
-              <span>Scan Health ID</span>
-            </button>
+            {/* Scan Patient Health ID Check-in & Emergency Button (Receptionist & Nurse Only) */}
+            {canUserScanQR(activeRole, primaryRole, staffSubRole) && (
+              <button
+                type="button"
+                onClick={() => setShowScanModal(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white shadow-xs transition cursor-pointer"
+                title="Scan Patient Electronic Health ID QR Code (Receptionist & Nurse Only)"
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                <span>Scan Health ID</span>
+              </button>
+            )}
 
             {/* Self-Service Check-in Button */}
             <button

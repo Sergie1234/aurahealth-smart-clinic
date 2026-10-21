@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { Patient } from '../../types/clinic';
 import { calculatePatientRiskStratification } from '../../utils/predictiveAnalytics';
+import { canUserScanQR } from '../../utils/qrPermissions';
 import {
   Search,
   Filter,
@@ -42,7 +43,7 @@ export const PatientList: React.FC<Props> = ({
   onBookAppointment,
   onOpenScanQR,
 }) => {
-  const { patients, activeRole } = useClinic();
+  const { patients, activeRole, primaryRole, staffSubRole } = useClinic();
   const isPatient = activeRole === 'patient';
 
   const [filterSearch, setFilterSearch] = useState('');
@@ -286,11 +287,11 @@ export const PatientList: React.FC<Props> = ({
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          {onOpenScanQR && (
+          {onOpenScanQR && canUserScanQR(activeRole, primaryRole, staffSubRole) && (
             <button
               onClick={onOpenScanQR}
               className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs rounded-lg transition flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 cursor-pointer"
-              title="Scan Electronic Health ID QR Code"
+              title="Scan Electronic Health ID QR Code (Receptionist & Nurse Only)"
             >
               <QrCode className="w-4 h-4 text-teal-600 dark:text-teal-400" />
               <span>Scan Health ID</span>

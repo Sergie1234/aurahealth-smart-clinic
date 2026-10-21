@@ -125,7 +125,7 @@ export const Sidebar: React.FC = () => {
       id: 'scan-qr',
       label: 'Scan Health ID (QR)',
       icon: QrCode,
-      roles: ['doctor', 'nurse', 'receptionist'],
+      roles: ['nurse', 'receptionist'],
     },
     {
       id: 'consultations',
@@ -160,7 +160,7 @@ export const Sidebar: React.FC = () => {
       roles: ['doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician'],
     },
 
-    // 3. ADMIN MODULES (Strictly for Executive Admin)
+    // 3. ADMIN MODULES (Strictly for Executive Admin - No QR scanner access)
     {
       id: 'dashboard',
       label: 'Executive Overview',
@@ -171,12 +171,6 @@ export const Sidebar: React.FC = () => {
       id: 'patients',
       label: 'User & Patient Management',
       icon: Users,
-      roles: ['admin'],
-    },
-    {
-      id: 'scan-qr',
-      label: 'Scan Health ID (QR)',
-      icon: QrCode,
       roles: ['admin'],
     },
     {

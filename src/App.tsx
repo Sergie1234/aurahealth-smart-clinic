@@ -43,6 +43,7 @@ import { AdminDashboardView } from './components/dashboards/AdminDashboardView';
 import { NotificationsPage } from './components/notifications/NotificationsPage';
 import { ScanHealthIdModal } from './components/patients/ScanHealthIdModal';
 import { ScanHealthIdPage } from './components/patients/ScanHealthIdPage';
+import { canUserScanQR } from './utils/qrPermissions';
 import type { Patient, Prescription, LabTestOrder } from './types/clinic';
 
 const ClinicAppContent: React.FC = () => {
@@ -144,12 +145,11 @@ const ClinicAppContent: React.FC = () => {
         setActiveTab('dashboard');
       }
     } else if (isAdmin) {
-      // Admin is strictly whitelisted to executive administrative modules only
+      // Admin is strictly whitelisted to executive administrative modules only (No QR scanner access)
       const authorizedAdminTabs = [
         'home',
         'dashboard',
         'patients',
-        'scan-qr',
         'audit-logs',
         'reports',
         'predictive-analytics',
@@ -163,11 +163,13 @@ const ClinicAppContent: React.FC = () => {
       }
     } else {
       // Provider (Doctor, Nurse, Staff) is strictly whitelisted to clinical modules only
+      // Only Receptionist and Nurse have scan-qr tab access
+      const canScan = canUserScanQR(activeRole, primaryRole, staffSubRole);
       const authorizedProviderTabs = [
         'home',
         'dashboard',
         'patients',
-        'scan-qr',
+        ...(canScan ? ['scan-qr'] : []),
         'appointments',
         'queue',
         'consultations',
@@ -181,7 +183,7 @@ const ClinicAppContent: React.FC = () => {
         setActiveTab('dashboard');
       }
     }
-  }, [isAuthenticated, activeRole, activeTab, setActiveTab]);
+  }, [isAuthenticated, activeRole, primaryRole, staffSubRole, activeTab, setActiveTab]);
 
   const handleStartConsultation = (patientId: string) => {
     setConsultPatientId(patientId);

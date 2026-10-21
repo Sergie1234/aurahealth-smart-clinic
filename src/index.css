@@ -30,3 +30,31 @@ html:not(.dark) select option {
   background-color: #ffffff;
   color: #0f172a; /* slate-900 */
 }
+
+/* Mobile-Friendly QR Scanner Viewport Styling */
+#qr-camera-viewport {
+  width: 100% !important;
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  background-color: #020617;
+}
+
+#qr-camera-viewport video {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 260px;
+  max-height: 340px;
+  object-fit: cover !important;
+  border-radius: 1rem;
+}
+
+#qr-camera-viewport__scan_region {
+  position: absolute !important;
+  inset: 0 !important;
+}
+
+#qr-camera-viewport__scan_region img {
+  display: none !important;
+}
+
