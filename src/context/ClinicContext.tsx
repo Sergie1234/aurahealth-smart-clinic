@@ -15,6 +15,7 @@ import {
   syncInvoiceToSupabase, syncAuditLogToSupabase, syncAllClinicDataToSupabase,
   getSupabaseConfigInfo,
 } from '../lib/supabase';
+import { formatTimeSlot, createCustomDoctorSchedule, registerDoctorSchedule } from '../utils/doctorSchedules';
 
 export type PrimaryAuthRole = 'patient' | 'staff' | 'doctor' | 'admin';
 export type StaffSubRole = 'nurse' | 'pharmacist' | 'receptionist' | 'lab_technician';
@@ -63,8 +64,28 @@ interface ClinicContextType {
   isAuthenticated: boolean;
   authReady: boolean;
   authToken: string | null;
-  login: (credentials: LoginCredentials) => Promise<{ success: boolean; error?: string }>;
+  login: (credentials: LoginCredentials) => Promise<{
+    success: boolean;
+    error?: string;
+    requires2FA?: boolean;
+    twoFactorRequired?: boolean;
+  }>;
   logout: () => void;
+  addDoctor: (doctorData: {
+    name: string;
+    email: string;
+    department: string;
+    specialty: string;
+    licenseNumber: string;
+    workDays: number[];
+    startHour?: number;
+    endHour?: number;
+    workDaysLabel?: string;
+    hoursLabel?: string;
+  }) => Promise<{ success: boolean; doctor?: User; error?: string }>;
+  checkTwoFactorStatus: (email: string) => Promise<{ enabled: boolean }>;
+  enableTwoFactor: (email: string, code: string) => Promise<{ success: boolean; error?: string }>;
+  disableTwoFactor: (email: string, code: string) => Promise<{ success: boolean; error?: string }>;
   pendingAction: PendingAction;
   setPendingAction: (action: PendingAction) => void;
   requestPhoneOtp: (phone: string, purpose?: 'patient_login' | 'patient_register') => Promise<{ success: boolean; error?: string; code?: string; liveDispatched?: boolean; devNotice?: string; provider?: string; message?: string }>;
@@ -122,7 +143,39 @@ interface ClinicContextType {
 const ClinicContext = createContext<ClinicContextType | undefined>(undefined);
 
 export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [users] = useState<User[]>(INITIAL_USERS);
+  const [users, setUsers] = useState<User[]>(() => {
+    try {
+      const saved = localStorage.getItem('smart_clinic_users');
+      if (saved) {
+        const parsed: User[] = JSON.parse(saved);
+        const map = new Map<string, User>();
+        INITIAL_USERS.forEach((u) => map.set(u.id, u));
+        parsed.forEach((u) => map.set(u.id, u));
+        return Array.from(map.values());
+      }
+    } catch {}
+    return INITIAL_USERS;
+  });
+
+  useEffect(() => {
+    fetch('/api/doctors')
+      .then((res) => res.json())
+      .then((serverDoctors) => {
+        if (Array.isArray(serverDoctors) && serverDoctors.length > 0) {
+          setUsers((prev) => {
+            const map = new Map<string, User>();
+            prev.forEach((u) => map.set(u.id, u));
+            serverDoctors.forEach((d: User) => map.set(d.id, d));
+            const merged = Array.from(map.values());
+            try {
+              localStorage.setItem('smart_clinic_users', JSON.stringify(merged));
+            } catch {}
+            return merged;
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
   const [activeRole, setActiveRole] = useState<UserRole>('doctor');
   const [currentUser, setCurrentUser] = useState<User>(INITIAL_USERS[0]);
   const [primaryRole, setPrimaryRole] = useState<PrimaryAuthRole | null>(null);
@@ -553,6 +606,14 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       const serverRes = await res.json();
       if (!res.ok || !serverRes.success) {
+        if (serverRes?.requires2FA) {
+          return {
+            success: false,
+            requires2FA: true,
+            twoFactorRequired: true,
+            error: serverRes.message || serverRes.error || 'Please enter the 6-digit code from your Authenticator app.',
+          };
+        }
         return { success: false, error: serverRes.error || 'Authentication rejected.' };
       }
 
@@ -855,8 +916,42 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const updateAppointmentStatus = (id: string, status: AppointmentStatus) => {
+    const existingApt = appointments.find((a) => a.id === id);
     setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
     logAction('APPOINTMENT_STATUS', 'Appointment', id, `Updated status to: ${status}`);
+
+    // If an appointment is approved (status 'Confirmed')
+    if (status === 'Confirmed' && existingApt) {
+      addNotification({
+        userId: existingApt.patientId,
+        targetRole: 'patient',
+        title: 'Appointment Approved',
+        message: 'Your appointment has been approved.',
+        content: `Your appointment with ${existingApt.doctorName} on ${existingApt.date} at ${formatTimeSlot(existingApt.time)} (${existingApt.type}) has been approved. Location: ${existingApt.room || 'Outpatient Clinic'}. Queue Number: ${existingApt.queueNumber || 'Standard Queue'}.`,
+        category: 'appointment',
+        priority: 'normal',
+      });
+    }
+
+    // Sync status change with server
+    try {
+      const token = authToken || localStorage.getItem('smart_clinic_token');
+      fetch(`/api/appointments/${id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': activeRole,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ status }),
+      }).catch(() => {});
+
+      if (typeof window !== 'undefined' && window.BroadcastChannel) {
+        const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
+        channel.postMessage({ type: 'UPDATE_APPOINTMENT_STATUS', id, status });
+        channel.close();
+      }
+    } catch {}
   };
 
   const rescheduleAppointment = (id: string, newDate: string, newTime: string) => {
@@ -1020,9 +1115,17 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const roleNotifications = useMemo(() => {
     return notifications
       .filter((n) => {
-        const target = n.targetRole || 'all';
-        if (target === 'all') return true;
-        return target === currentRoleScope;
+        // Strict Role-Based Isolation:
+        // - Patient only receives patient-related notifications (appointment approved, reminders, lab results, rx)
+        // - Provider only receives provider-related notifications (new appointment request, patient triage, etc.)
+        // - Admin only receives admin-related notifications (system alerts, low stock, compliance audits)
+        if (currentRoleScope === 'patient') {
+          return n.targetRole === 'patient';
+        }
+        if (currentRoleScope === 'admin') {
+          return n.targetRole === 'admin';
+        }
+        return n.targetRole === 'provider';
       })
       .sort((a, b) => {
         const timeA = new Date(a.createdAt || a.timestamp || 0).getTime();
@@ -1035,9 +1138,30 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return roleNotifications.filter((n) => !n.read).length;
   }, [roleNotifications]);
 
-  // Live real-time notification sync with server
+  // Live real-time notification sync with server and cross-tab BroadcastChannel
   useEffect(() => {
     let isMounted = true;
+
+    // Cross-tab broadcast channel for instant real-time sync across open windows/tabs
+    let channel: BroadcastChannel | null = null;
+    try {
+      if (typeof window !== 'undefined' && window.BroadcastChannel) {
+        channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
+        channel.onmessage = (event) => {
+          if (!isMounted) return;
+          if (event.data?.type === 'NEW_NOTIFICATION' && event.data.notification) {
+            const incoming: Notification = event.data.notification;
+            setNotifications((prev) => {
+              if (prev.some((n) => n.id === incoming.id)) return prev;
+              return [incoming, ...prev];
+            });
+          } else if (event.data?.type === 'UPDATE_APPOINTMENT_STATUS') {
+            const { id, status } = event.data;
+            setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
+          }
+        };
+      }
+    } catch {}
 
     const fetchLiveNotifications = async () => {
       try {
@@ -1070,11 +1194,12 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     fetchLiveNotifications();
-    const interval = setInterval(fetchLiveNotifications, 6000); // Poll live every 6s
+    const interval = setInterval(fetchLiveNotifications, 3000); // Live real-time sync every 3s
 
     return () => {
       isMounted = false;
       clearInterval(interval);
+      if (channel) channel.close();
     };
   }, [activeRole, authToken]);
 
@@ -1086,6 +1211,15 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       read: false,
     };
     setNotifications((prev) => [newNotif, ...prev]);
+
+    // Dispatch via BroadcastChannel for instant zero-latency cross-tab update
+    try {
+      if (typeof window !== 'undefined' && window.BroadcastChannel) {
+        const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
+        channel.postMessage({ type: 'NEW_NOTIFICATION', notification: newNotif });
+        channel.close();
+      }
+    } catch {}
 
     // Dispatch to server asynchronously for live broadcast
     try {
@@ -1159,6 +1293,122 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return res;
   };
 
+  const addDoctor = async (doctorData: {
+    name: string;
+    email: string;
+    department: string;
+    specialty: string;
+    licenseNumber: string;
+    workDays: number[];
+    startHour?: number;
+    endHour?: number;
+    workDaysLabel?: string;
+    hoursLabel?: string;
+  }) => {
+    const cleanName = doctorData.name.trim();
+    const cleanEmail = doctorData.email.trim().toLowerCase();
+
+    if (!cleanName) return { success: false, error: 'Doctor name is required.' };
+    if (!cleanEmail || !cleanEmail.includes('@')) return { success: false, error: 'Valid email is required.' };
+
+    const doctorId = `usr-${Date.now()}`;
+    const newDoctor: User = {
+      id: doctorId,
+      name: cleanName,
+      email: cleanEmail,
+      role: 'doctor',
+      department: doctorData.department || 'General Medicine',
+      specialty: doctorData.specialty || 'Internal & Family Medicine',
+      licenseNumber: doctorData.licenseNumber || `MD-${Math.floor(100000 + Math.random() * 900000)}`,
+    };
+
+    // Register their dynamic personal schedule
+    createCustomDoctorSchedule({
+      doctorId,
+      doctorName: cleanName,
+      department: newDoctor.department || 'General Medicine',
+      specialty: newDoctor.specialty || 'General Practice',
+      workDays: doctorData.workDays.length > 0 ? doctorData.workDays : [1, 2, 3, 4, 5],
+      workDaysLabel: doctorData.workDaysLabel,
+      hoursLabel: doctorData.hoursLabel,
+      startHour: doctorData.startHour || 8,
+      endHour: doctorData.endHour || 17,
+    });
+
+    // Update state & persist in localStorage
+    setUsers((prev) => {
+      const updated = [newDoctor, ...prev.filter((u) => u.id !== doctorId)];
+      try {
+        localStorage.setItem('smart_clinic_users', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    // Persist to server database
+    try {
+      await fetch('/api/doctors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(doctorData),
+      });
+    } catch {}
+
+    // Add audit log and notification
+    logAction('DOCTOR_CREDENTIALED', 'Security', doctorId, `New physician credentialed: ${cleanName} (${newDoctor.specialty})`);
+    addNotification({
+      title: 'New Physician Credentialed',
+      message: `${cleanName} (${newDoctor.specialty}) has joined the clinic medical team and is open for appointment booking.`,
+      targetRole: 'all',
+      type: 'system',
+    });
+
+    return { success: true, doctor: newDoctor };
+  };
+
+  const checkTwoFactorStatus = async (email: string) => {
+    try {
+      const res = await fetch(`/api/auth/2fa/status?email=${encodeURIComponent(email)}`);
+      const data = await res.json();
+      return { enabled: Boolean(data?.enabled) };
+    } catch {
+      return { enabled: false };
+    }
+  };
+
+  const enableTwoFactor = async (email: string, code: string) => {
+    try {
+      const res = await fetch('/api/auth/2fa/enable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || 'Failed to activate Authenticator 2FA.' };
+      }
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Server connection failed.' };
+    }
+  };
+
+  const disableTwoFactor = async (email: string, code: string) => {
+    try {
+      const res = await fetch('/api/auth/2fa/disable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || 'Failed to disable Authenticator 2FA.' };
+      }
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Server connection failed.' };
+    }
+  };
+
   return (
     <ClinicContext.Provider
       value={{
@@ -1173,6 +1423,10 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         authToken,
         login,
         logout,
+        addDoctor,
+        checkTwoFactorStatus,
+        enableTwoFactor,
+        disableTwoFactor,
         pendingAction,
         setPendingAction,
         requestPhoneOtp,

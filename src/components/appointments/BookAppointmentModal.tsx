@@ -23,36 +23,12 @@ interface Props {
   onClose: () => void;
 }
 
-// Master fixed time slots (8:00 AM to 5:30 PM with 30-min intervals)
-export const MASTER_TIME_SLOTS: string[] = [
-  '08:00',
-  '08:30',
-  '09:00',
-  '09:30',
-  '10:00',
-  '10:30',
-  '11:00',
-  '11:30',
-  '13:00',
-  '13:30',
-  '14:00',
-  '14:30',
-  '15:00',
-  '15:30',
-  '16:00',
-  '16:30',
-  '17:00',
-  '17:30',
-];
-
-export function formatTimeSlot(timeStr: string): string {
-  const [hStr, mStr] = timeStr.split(':');
-  const h = parseInt(hStr, 10);
-  const m = mStr || '00';
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return `${hour12}:${m} ${ampm}`;
-}
+import {
+  getDoctorSchedule,
+  isDoctorWorkingOnDate,
+  formatTimeSlot,
+  getDoctorSlotAvailability,
+} from '../../utils/doctorSchedules';
 
 export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClose }) => {
   const {
@@ -75,13 +51,7 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
     return users.filter((u) => u.role === 'doctor');
   }, [users]);
 
-  // Doctor schedules / clinic active days mapping:
-  // e.g. Dr. Reyes (usr-1): Mon - Sat (days 1, 2, 3, 4, 5, 6)
-  // e.g. Dr. Santos (usr-2): Mon, Wed, Thu, Fri, Sat (days 1, 3, 4, 5, 6)
-  const getDoctorWorkDays = (docId: string): number[] => {
-    if (docId === 'usr-2') return [1, 3, 4, 5, 6]; // Cardiology clinics
-    return [1, 2, 3, 4, 5, 6]; // Internal Medicine & Endocrinology
-  };
+
 
   // Extract unique specialties from doctors
   const specialties = useMemo(() => {
@@ -106,6 +76,7 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
   >('Consultation');
   const [reason, setReason] = useState<string>('');
   const [confirmedAppointment, setConfirmedAppointment] = useState<Appointment | null>(null);
+  const [bookingError, setBookingError] = useState<string | null>(null);
 
   // Selected Patient
   const [selectedPatId, setSelectedPatId] = useState<string>(
@@ -114,6 +85,9 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
   const effectivePatId = isPatientLocked ? (linkedPatientId || selectedPatId) : selectedPatId;
   const selectedPatient = patientOptions.find((p) => p.id === effectivePatId) || patients.find((p) => p.id === effectivePatId) || patients[0];
   const selectedDoctor = doctors.find((d) => d.id === selectedDoctorId) || doctors[0];
+  const selectedDoctorSchedule = useMemo(() => {
+    return getDoctorSchedule(selectedDoctorId, selectedDoctor);
+  }, [selectedDoctorId, selectedDoctor]);
 
   // Calendar monthly view navigation
   // Reference date base: October 2026
@@ -152,23 +126,16 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
       availableSlotsCount: number;
     }> = [];
 
-    // Doctor working days
-    const docWorkDays = getDoctorWorkDays(selectedDoctor?.id || '');
-
     const todayDateStr = '2026-10-06';
 
     for (let day = 1; day <= totalDaysInMonth; day++) {
-      const d = new Date(year, month, day);
       const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const dayOfWeek = d.getDay();
-      const isWorkDay = docWorkDays.includes(dayOfWeek);
+      const isWorkDay = isDoctorWorkingOnDate(selectedDoctor?.id || '', dateString);
       const isPast = dateString < todayDateStr;
 
-      // Check slot availability for this doctor on this day
-      const bookedOnThisDay = appointments.filter(
-        (a) => a.doctorId === selectedDoctor?.id && a.date === dateString && a.status !== 'Cancelled'
-      );
-      const availableSlotsCount = (isWorkDay && !isPast) ? Math.max(0, MASTER_TIME_SLOTS.length - bookedOnThisDay.length) : 0;
+      // Check slot availability for this doctor on this day using doctor's personal schedule
+      const daySlots = getDoctorSlotAvailability(selectedDoctor?.id || '', dateString, appointments);
+      const availableSlotsCount = (isWorkDay && !isPast) ? daySlots.filter((s) => s.isAvailable).length : 0;
 
       days.push({
         dateString,
@@ -183,29 +150,10 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
     return { firstDayIndex, days };
   }, [calendarMonth, selectedDoctor, appointments]);
 
-  // Slots for the currently selected date
+  // Slots for the currently selected date: ONLY matching doctor's personal individual schedule
   const slotAvailability = useMemo(() => {
     if (!selectedDate || !selectedDoctor) return [];
-
-    const bookedSlotsForDate = new Set(
-      appointments
-        .filter(
-          (a) =>
-            a.doctorId === selectedDoctor.id &&
-            a.date === selectedDate &&
-            a.status !== 'Cancelled'
-        )
-        .map((a) => a.time)
-    );
-
-    return MASTER_TIME_SLOTS.map((slot) => {
-      const isBooked = bookedSlotsForDate.has(slot);
-      return {
-        slot,
-        formatted: formatTimeSlot(slot),
-        isAvailable: !isBooked,
-      };
-    });
+    return getDoctorSlotAvailability(selectedDoctor.id, selectedDate, appointments);
   }, [selectedDate, selectedDoctor, appointments]);
 
   // Available slots count for selected date
@@ -228,9 +176,10 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
     );
 
     if (isAlreadyBooked) {
-      alert('This time slot was just booked by another patient. Please choose another available slot.');
+      setBookingError('This time slot was just booked by another patient. Please choose another available slot.');
       return;
     }
+    setBookingError(null);
 
     // Map visitType to Appointment type
     const mappedType: Appointment['type'] =
@@ -450,8 +399,7 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {filteredDoctors.map((doc) => {
                   const isSelected = selectedDoctorId === doc.id;
-                  const workDays = getDoctorWorkDays(doc.id);
-                  const isMonToSat = workDays.length === 6;
+                  const docSchedule = getDoctorSchedule(doc.id, doc);
 
                   return (
                     <div
@@ -475,20 +423,26 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
                         </p>
                       </div>
 
-                      <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-[11px]">
-                        <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-teal-500" />
-                          <span>{isMonToSat ? 'Mon - Sat Clinics' : 'Mon, Wed - Sat'}</span>
-                        </span>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            isSelected
-                              ? 'bg-teal-600 text-white'
-                              : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                          }`}
-                        >
-                          {isSelected ? 'Selected' : 'Choose'}
-                        </span>
+                      <div className="pt-2.5 border-t border-slate-200/60 dark:border-slate-700/60 space-y-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-teal-700 dark:text-teal-300 font-bold flex items-center gap-1">
+                            <CalendarIcon className="w-3 h-3 text-teal-500 shrink-0" />
+                            <span>{docSchedule.workDaysLabel}</span>
+                          </span>
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              isSelected
+                                ? 'bg-teal-600 text-white'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                            }`}
+                          >
+                            {isSelected ? 'Selected' : 'Choose'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1 font-mono">
+                          <Clock className="w-3 h-3 text-teal-500 shrink-0" />
+                          <span className="truncate">{docSchedule.hoursLabel}</span>
+                        </p>
                       </div>
                     </div>
                   );
@@ -532,12 +486,16 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
                 <p className="text-[11px] text-teal-700 dark:text-teal-300">
                   {selectedDoctor?.specialty || selectedDoctor?.department} • License: {selectedDoctor?.licenseNumber || 'MD-REG'}
                 </p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1 flex items-center gap-1 font-medium">
+                  <Clock className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                  <span>Personal Schedule: <strong className="text-teal-700 dark:text-teal-300">{selectedDoctorSchedule.workDaysLabel}</strong> ({selectedDoctorSchedule.hoursLabel})</span>
+                </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => setCurrentStep(1)}
-                className="text-xs text-teal-600 dark:text-teal-400 font-bold hover:underline cursor-pointer"
+                className="text-xs text-teal-600 dark:text-teal-400 font-bold hover:underline cursor-pointer shrink-0"
               >
                 Change Doctor
               </button>
@@ -594,7 +552,14 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
 
               {calendarGrid.days.map((dayItem) => {
                 const isSelected = selectedDate === dayItem.dateString;
-                const isUnavailable = !dayItem.isWorkDay || dayItem.availableSlotsCount === 0;
+                const isUnavailable = !dayItem.isWorkDay || dayItem.isPast || dayItem.availableSlotsCount === 0;
+                const badgeLabel = !dayItem.isWorkDay
+                  ? 'Doctor Off'
+                  : dayItem.isPast
+                  ? 'Past'
+                  : dayItem.availableSlotsCount === 0
+                  ? 'Full'
+                  : `${dayItem.availableSlotsCount} open`;
 
                 return (
                   <button
@@ -624,7 +589,7 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
                           : 'bg-teal-50 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800'
                       }`}
                     >
-                      {isUnavailable ? 'Off' : `${dayItem.availableSlotsCount} slots`}
+                      {badgeLabel}
                     </span>
                   </button>
                 );
@@ -666,14 +631,18 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
                 <p className="font-bold text-xs text-slate-900 dark:text-white">
                   {selectedDoctor?.name} • {selectedDate}
                 </p>
-                <p className="text-[11px] text-teal-700 dark:text-teal-300">
+                <p className="text-[11px] text-teal-700 dark:text-teal-300 font-medium flex items-center gap-1 mt-0.5">
+                  <Clock className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                  <span>{selectedDoctorSchedule.workDaysLabel} • {selectedDoctorSchedule.hoursLabel}</span>
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                   {remainingSlotsForSelectedDate} open slots available on this date
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setCurrentStep(2)}
-                className="text-xs text-teal-600 dark:text-teal-400 font-bold hover:underline cursor-pointer"
+                className="text-xs text-teal-600 dark:text-teal-400 font-bold hover:underline cursor-pointer shrink-0"
               >
                 Change Date
               </button>
@@ -683,47 +652,66 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Available Time Slots (30 min)
+                  Doctor Available Time Slots (30 min)
                 </label>
                 <span className="text-[11px] text-slate-400">
                   Single-patient locking enforced
                 </span>
               </div>
 
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
-                {slotAvailability.map((item) => {
-                  const isSelected = selectedTimeSlot === item.slot;
+              {slotAvailability.length === 0 ? (
+                <div className="p-6 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-center space-y-2">
+                  <AlertCircle className="w-6 h-6 text-amber-600 dark:text-amber-400 mx-auto" />
+                  <p className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                    No Consultation Hours on This Date
+                  </p>
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                    {selectedDoctor?.name} is not on duty on this day. Schedule: {selectedDoctorSchedule.workDaysLabel} ({selectedDoctorSchedule.hoursLabel}).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentStep(2)}
+                    className="mt-1 px-3 py-1.5 bg-amber-600 text-white rounded-xl text-xs font-semibold cursor-pointer hover:bg-amber-500 transition"
+                  >
+                    Select Another Date
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+                  {slotAvailability.map((item) => {
+                    const isSelected = selectedTimeSlot === item.slot;
 
-                  return (
-                    <button
-                      key={item.slot}
-                      type="button"
-                      disabled={!item.isAvailable}
-                      onClick={() => setSelectedTimeSlot(item.slot)}
-                      className={`py-2.5 px-2 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center border cursor-pointer ${
-                        isSelected
-                          ? 'bg-teal-600 text-white border-teal-600 shadow-md shadow-teal-900/20 ring-2 ring-teal-400'
-                          : item.isAvailable
-                          ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-teal-400 hover:bg-teal-50 dark:hover:bg-slate-700'
-                          : 'bg-slate-100 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-50'
-                      }`}
-                    >
-                      <span className="text-xs">{item.formatted}</span>
-                      <span
-                        className={`text-[9px] mt-0.5 uppercase tracking-wider ${
+                    return (
+                      <button
+                        key={item.slot}
+                        type="button"
+                        disabled={!item.isAvailable}
+                        onClick={() => setSelectedTimeSlot(item.slot)}
+                        className={`py-2.5 px-2 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center border cursor-pointer ${
                           isSelected
-                            ? 'text-teal-100 font-bold'
+                            ? 'bg-teal-600 text-white border-teal-600 shadow-md shadow-teal-900/20 ring-2 ring-teal-400'
                             : item.isAvailable
-                            ? 'text-teal-600 dark:text-teal-400'
-                            : 'text-slate-400'
+                            ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-teal-400 hover:bg-teal-50 dark:hover:bg-slate-700'
+                            : 'bg-slate-100 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-50'
                         }`}
                       >
-                        {item.isAvailable ? 'Available' : 'Booked'}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+                        <span className="text-xs">{item.formatted}</span>
+                        <span
+                          className={`text-[9px] mt-0.5 uppercase tracking-wider ${
+                            isSelected
+                              ? 'text-teal-100 font-bold'
+                              : item.isAvailable
+                              ? 'text-teal-600 dark:text-teal-400'
+                              : 'text-slate-400'
+                          }`}
+                        >
+                          {item.isAvailable ? 'Available' : 'Booked'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Consultation Details */}
@@ -841,6 +829,13 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
                 </span>
               </div>
             </div>
+
+            {bookingError && (
+              <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl flex items-center gap-2 text-xs text-rose-700 dark:text-rose-300 font-semibold">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{bookingError}</span>
+              </div>
+            )}
 
             {/* Privacy notice banner */}
             <div className="p-3 bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 rounded-xl flex items-start gap-2.5 text-xs text-teal-900 dark:text-teal-200">

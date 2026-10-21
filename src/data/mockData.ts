@@ -12,8 +12,11 @@ import {
 } from '../types/clinic';
 
 export const INITIAL_USERS: User[] = [
-  { id: 'usr-1', name: 'Dr. Maria Cristina Reyes, MD', email: 'maria.reyes@smartclinic.ph', role: 'doctor', avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&auto=format&fit=crop&q=80', department: 'Internal Medicine', specialty: 'Internal Medicine & Endocrinology', licenseNumber: 'MD-892410' },
-  { id: 'usr-2', name: 'Dr. Juan Miguel Santos, MD', email: 'juan.santos@smartclinic.ph', role: 'doctor', avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=150&auto=format&fit=crop&q=80', department: 'Cardiology', specialty: 'Cardiovascular Medicine', licenseNumber: 'MD-741923' },
+  { id: 'usr-1', name: 'Dr. Maria Cristina Reyes, MD', email: 'maria.reyes@smartclinic.ph', role: 'doctor', avatar: '', department: 'Internal Medicine', specialty: 'Internal Medicine & Endocrinology', licenseNumber: 'MD-892410' },
+  { id: 'usr-2', name: 'Dr. Juan Miguel Santos, MD', email: 'juan.santos@smartclinic.ph', role: 'doctor', avatar: '', department: 'Cardiology', specialty: 'Cardiovascular Medicine', licenseNumber: 'MD-741923' },
+  { id: 'usr-9', name: 'Dr. Patricia Gomez, MD', email: 'patricia.gomez@smartclinic.ph', role: 'doctor', avatar: '', department: 'Pediatrics', specialty: 'Pediatrics & Adolescent Care', licenseNumber: 'MD-620194' },
+  { id: 'usr-10', name: 'Dr. Anthony Lee, MD', email: 'anthony.lee@smartclinic.ph', role: 'doctor', avatar: '', department: 'Dermatology', specialty: 'Clinical & Cosmetic Dermatology', licenseNumber: 'MD-519283' },
+  { id: 'usr-11', name: 'Dr. Roberto Tan, MD', email: 'roberto.tan@smartclinic.ph', role: 'doctor', avatar: '', department: 'Pulmonology', specialty: 'Pulmonology & Respiratory Care', licenseNumber: 'MD-481029' },
   { id: 'usr-3', name: 'Nurse Ana Patricia Villanueva, RN', email: 'ana.villanueva@smartclinic.ph', role: 'nurse', avatar: 'https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=150&auto=format&fit=crop&q=80', department: 'Outpatient Triage', licenseNumber: 'RN-382914' },
   { id: 'usr-4', name: 'Claire Mendoza', email: 'reception@smartclinic.ph', role: 'receptionist', avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80', department: 'Front Desk & Patient Access' },
   { id: 'usr-5', name: 'Julian Dela Cruz, RPh', email: 'pharmacy@smartclinic.ph', role: 'pharmacist', avatar: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=150&auto=format&fit=crop&q=80', department: 'Clinic Pharmacy & Dispensary', licenseNumber: 'RPh-102948' },

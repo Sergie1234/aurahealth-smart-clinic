@@ -31,17 +31,18 @@ import {
   X
 } from 'lucide-react';
 import { INITIAL_USERS } from '../../data/mockData';
+import { getDoctorSchedule } from '../../utils/doctorSchedules';
 
 interface HomePageProps {
   onOpenBookAppointment?: () => void;
 }
 
 export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => {
-  const { setActiveTab, appointments, patients, isAuthenticated, currentUser, setPendingAction } = useClinic();
+  const { setActiveTab, appointments, patients, isAuthenticated, currentUser, setPendingAction, users } = useClinic();
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const doctors = INITIAL_USERS.filter((u) => u.role === 'doctor');
+  const doctors = (users && users.length > 0 ? users : INITIAL_USERS).filter((u) => u.role === 'doctor');
   
   // Real-time queue calculations synced directly with clinic core
   const activeInConsult = appointments.filter((a) => a.status === 'In Consultation').length;
@@ -539,40 +540,47 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-            {doctors.map((doc) => (
-              <div
-                key={doc.id}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5 shadow-sm hover:shadow-md transition"
-              >
-                <div className="w-14 h-14 rounded-2xl bg-teal-50 dark:bg-teal-950/80 border border-teal-200 dark:border-teal-800/60 flex items-center justify-center text-teal-600 dark:text-teal-400 shrink-0">
-                  <Stethoscope className="w-7 h-7" />
+            {doctors.map((doc) => {
+              const docSchedule = getDoctorSchedule(doc.id, doc);
+              return (
+                <div
+                  key={doc.id}
+                  className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5 shadow-sm hover:shadow-md transition"
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-teal-50 dark:bg-teal-950/80 border border-teal-200 dark:border-teal-800/60 flex items-center justify-center text-teal-600 dark:text-teal-400 shrink-0">
+                    <Stethoscope className="w-7 h-7" />
+                  </div>
+                  <div className="text-left space-y-1.5 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300">
+                        {doc.department}
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                        <BadgeCheck className="w-3.5 h-3.5" /> Verified
+                      </span>
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">{doc.name}</h3>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">{doc.specialty}</p>
+                    <div className="text-[11px] text-slate-400 font-mono">
+                      PRC License: {doc.licenseNumber || 'Active Clinical License'}
+                    </div>
+                    <div className="text-[11px] text-teal-700 dark:text-teal-300 font-semibold flex items-center gap-1.5 bg-teal-50/70 dark:bg-teal-950/40 p-2 rounded-xl border border-teal-200/60 dark:border-teal-800/50">
+                      <Clock className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                      <span>{docSchedule.workDaysLabel} • {docSchedule.hoursLabel}</span>
+                    </div>
+                    <div className="pt-1">
+                      <button
+                        onClick={onOpenBookAppointment}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 dark:text-teal-400 hover:text-teal-700 hover:underline cursor-pointer"
+                      >
+                        <span>Book Outpatient Visit</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-left space-y-1.5 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300">
-                      {doc.department}
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-                      <BadgeCheck className="w-3.5 h-3.5" /> Verified
-                    </span>
-                  </div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">{doc.name}</h3>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">{doc.specialty}</p>
-                  <div className="text-[11px] text-slate-400 font-mono">
-                    PRC License: {doc.licenseNumber || 'Active Clinical License'}
-                  </div>
-                  <div className="pt-2">
-                    <button
-                      onClick={onOpenBookAppointment}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 dark:text-teal-400 hover:text-teal-700 hover:underline cursor-pointer"
-                    >
-                      <span>Book Outpatient Visit</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>

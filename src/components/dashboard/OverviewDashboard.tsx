@@ -345,12 +345,22 @@ export const OverviewDashboard: React.FC<Props> = ({ onStartConsultation, onOpen
                           </button>
                         )}
                         {apt.status === 'Scheduled' && (
-                          <button
-                            onClick={() => updateAppointmentStatus(apt.id, 'Checked In')}
-                            className="px-2 py-1 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition cursor-pointer"
-                          >
-                            Check-in
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => updateAppointmentStatus(apt.id, 'Confirmed')}
+                              className="px-2.5 py-1 text-xs font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition cursor-pointer flex items-center gap-1"
+                              title="Approve patient appointment"
+                            >
+                              <CheckCircle2 className="w-3 h-3 text-teal-600" />
+                              <span>Approve</span>
+                            </button>
+                            <button
+                              onClick={() => updateAppointmentStatus(apt.id, 'Checked In')}
+                              className="px-2 py-1 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition cursor-pointer"
+                            >
+                              Check-in
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>

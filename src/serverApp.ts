@@ -50,8 +50,9 @@ import {
   INITIAL_INVOICES,
   INITIAL_AUDIT_LOGS,
   INITIAL_NOTIFICATIONS,
-} from './data/mockData';
-import type { Notification } from './types/clinic';
+import type { Notification, User } from './types/clinic';
+import { validatePasswordStrength } from './utils/passwordValidation';
+import { createCustomDoctorSchedule, DOCTOR_SCHEDULES } from './utils/doctorSchedules';
 
 dotenv.config();
 
@@ -96,6 +97,16 @@ let memInventory = [...INITIAL_INVENTORY];
 let memInvoices = [...INITIAL_INVOICES];
 let memAuditLogs = [...INITIAL_AUDIT_LOGS];
 let memNotifications = [...INITIAL_NOTIFICATIONS];
+let memUsers: User[] = [...INITIAL_USERS];
+
+// Two-Factor Authentication (Authenticator App TOTP) Store
+// Tracks accounts with active Authenticator 2FA
+const twoFactorEnabledUsers = new Set<string>([
+  'smartclinicrealacc@gmail.com',
+  'sgt.spartan19@gmail.com',
+  'admin@smartclinic.ph',
+  'elena.vargas@example.com',
+]);
 
 // Supabase cloud integration check
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -313,6 +324,73 @@ app.post('/api/auth/2fa/verify', (req: Request, res: Response) => {
   }
 });
 
+// Check if an account has Authenticator 2FA enabled
+app.get('/api/auth/2fa/status', (req: Request, res: Response) => {
+  const email = String(req.query.email || '').trim().toLowerCase();
+  const enabled = twoFactorEnabledUsers.has(email) || email === ADMIN_EMAIL.toLowerCase();
+  return res.json({ email, enabled, method: 'authenticator' });
+});
+
+// Activate Authenticator 2FA for an account by verifying a test code
+app.post('/api/auth/2fa/enable', (req: Request, res: Response) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const code = String(req.body?.code || '').trim();
+
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ success: false, error: 'Valid email is required to activate Authenticator 2FA.' });
+    }
+    if (!code || code.length !== 6) {
+      return res.status(400).json({ success: false, error: 'Enter the 6-digit verification code from your Authenticator app.' });
+    }
+
+    const secret = getUserTotpSecret(email);
+    const valid = verifyTotpCode(secret, code);
+    if (!valid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid Authenticator code. Ensure your device time is synchronized and enter the current 6-digit rolling code.',
+      });
+    }
+
+    twoFactorEnabledUsers.add(email);
+    return res.json({
+      success: true,
+      message: 'Authenticator App (2FA) has been successfully activated on your account.',
+      enabled: true,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || 'Failed to activate 2FA.' });
+  }
+});
+
+// Disable Authenticator 2FA for an account
+app.post('/api/auth/2fa/disable', (req: Request, res: Response) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const code = String(req.body?.code || '').trim();
+
+    if (email === ADMIN_EMAIL.toLowerCase()) {
+      return res.status(403).json({ success: false, error: 'Administrator accounts must maintain mandatory 2FA.' });
+    }
+
+    const secret = getUserTotpSecret(email);
+    const valid = verifyTotpCode(secret, code);
+    if (!valid) {
+      return res.status(400).json({ success: false, error: 'Invalid Authenticator code. Current code required to disable 2FA.' });
+    }
+
+    twoFactorEnabledUsers.delete(email);
+    return res.json({
+      success: true,
+      message: 'Authenticator App (2FA) has been disabled.',
+      enabled: false,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || 'Failed to disable 2FA.' });
+  }
+});
+
 // Cooldown-enforced OTP resend endpoint
 app.post('/api/auth/otp/resend', async (req: Request, res: Response) => {
   try {
@@ -375,8 +453,13 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     if (!cleanEmail && !cleanPhone) {
       return res.status(400).json({ success: false, error: 'Provide a valid email address.' });
     }
-    if (!password || String(password).length < 6) {
-      return res.status(400).json({ success: false, error: 'Password must be at least 6 characters.' });
+    const pwStrength = validatePasswordStrength(String(password || ''));
+    if (!pwStrength.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: pwStrength.errorMessage,
+        errors: pwStrength.errors,
+      });
     }
 
     // Duplicate check in existing clinic patients
@@ -560,7 +643,18 @@ app.post('/api/auth/password-reset/request', async (req: Request, res: Response)
   }
 });
 
-// Password Reset: Step 2 - Confirm OTP and set New Password
+// Password Reset: Check available recovery methods (Authenticator 2FA vs Email)
+app.get('/api/auth/password-reset/methods', (req: Request, res: Response) => {
+  const identifier = String(req.query.identifier || req.query.email || '').trim().toLowerCase();
+  const hasAuthenticator = twoFactorEnabledUsers.has(identifier) || identifier === ADMIN_EMAIL.toLowerCase();
+  return res.json({
+    identifier,
+    hasAuthenticator,
+    hasEmail: identifier.includes('@'),
+  });
+});
+
+// Password Reset: Step 2 - Confirm OTP/TOTP and set New Password
 app.post('/api/auth/password-reset/confirm', async (req: Request, res: Response) => {
   try {
     const { identifier, code, newPassword } = req.body || {};
@@ -569,15 +663,34 @@ app.post('/api/auth/password-reset/confirm', async (req: Request, res: Response)
     const cleanPass = String(newPassword || '').trim();
 
     if (!cleanId || !cleanCode) {
-      return res.status(400).json({ success: false, error: 'Identifier and reset code are required.' });
-    }
-    if (cleanPass.length < 6) {
-      return res.status(400).json({ success: false, error: 'New password must be at least 6 characters long.' });
+      return res.status(400).json({ success: false, error: 'Identifier and security verification code are required.' });
     }
 
-    const verifyRes = verificationService.verifyPasswordReset(cleanId, cleanCode);
-    if (!verifyRes.success) {
-      return res.status(400).json({ success: false, error: verifyRes.error || 'Invalid or expired password reset code.' });
+    // High-Security Password Strength Validation
+    const pwValidation = validatePasswordStrength(cleanPass);
+    if (!pwValidation.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: pwValidation.errorMessage,
+        errors: pwValidation.errors,
+      });
+    }
+
+    // Check code: Authenticator app TOTP code OR email password-reset OTP
+    const userTotpSec = getUserTotpSecret(cleanId);
+    const isTotpValid = verifyTotpCode(userTotpSec, cleanCode);
+    let isResetValid = isTotpValid;
+
+    if (!isResetValid) {
+      const verifyRes = verificationService.verifyPasswordReset(cleanId, cleanCode);
+      isResetValid = verifyRes.success;
+    }
+
+    if (!isResetValid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or expired recovery code. Enter the 6-digit code from your Authenticator app or password reset email.',
+      });
     }
 
     // Cryptographic PBKDF2 Password Update with New Salt
@@ -728,19 +841,39 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
           }
         }
 
-        if (twoFactorCode || req.body?.otpCode) {
-          const codeToVerify = String(twoFactorCode || req.body?.otpCode || '').trim();
-          const otpResult = verifyOtp({
-            channel: 'email',
-            destination: cleanEmail,
-            code: codeToVerify,
-          });
-          if (!otpResult.success) {
-            const secret = getUserTotpSecret(cleanEmail);
-            const isTotp = verifyTotpCode(secret, codeToVerify);
-            if (!isTotp) {
-              return res.status(401).json({ success: false, error: 'Invalid 2FA code. Please check your Authenticator app.' });
-            }
+        // 2. Authenticator App 2FA Enforcement
+        const has2Fa = twoFactorEnabledUsers.has(cleanEmail);
+        const codeToVerify = String(twoFactorCode || req.body?.otpCode || '').trim();
+
+        if (has2Fa) {
+          if (!codeToVerify) {
+            return res.status(200).json({
+              success: false,
+              requires2FA: true,
+              twoFactorRequired: true,
+              method: 'authenticator',
+              email: cleanEmail,
+              message: 'Authenticator App (2FA) is enabled for this account. Enter the 6-digit code from your Authenticator app.',
+            });
+          }
+
+          // Strictly verify RFC 6238 TOTP from Authenticator app — DO NOT treat as normal email verification!
+          const secret = getUserTotpSecret(cleanEmail);
+          const isTotp = verifyTotpCode(secret, codeToVerify);
+          if (!isTotp) {
+            return res.status(401).json({
+              success: false,
+              error: 'Invalid Authenticator code. Check the rolling 6-digit code in your Authenticator app (e.g. Google Authenticator).',
+            });
+          }
+        } else if (codeToVerify) {
+          const secret = getUserTotpSecret(cleanEmail);
+          const isTotp = verifyTotpCode(secret, codeToVerify);
+          if (!isTotp) {
+            return res.status(401).json({
+              success: false,
+              error: 'Invalid Authenticator code. Check the rolling 6-digit code in your Authenticator app.',
+            });
           }
         }
         patient = memPatients.find((p) => p.email.toLowerCase() === cleanEmail) || null;
@@ -797,7 +930,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     // 2. DOCTOR AUTHENTICATION
     if (primaryRole === 'doctor') {
       const cleanEmail = String(email || '').trim().toLowerCase();
-      const doctor = INITIAL_USERS.find((u) => u.role === 'doctor' && (u.email.toLowerCase() === cleanEmail || cleanEmail.includes('doctor') || cleanEmail.includes('reyes') || cleanEmail.includes('santos'))) || INITIAL_USERS[0];
+      const doctor = memUsers.find((u) => u.role === 'doctor' && (u.email.toLowerCase() === cleanEmail || cleanEmail.includes('doctor') || cleanEmail.includes('reyes') || cleanEmail.includes('santos'))) || memUsers.find((u) => u.role === 'doctor') || INITIAL_USERS[0];
 
       if (password) {
         const pwCheck = verifyUserPassword(doctor.email, String(password));
@@ -806,6 +939,28 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
             success: false,
             error: pwCheck.error || 'Doctor credentials failed.',
             remainingAttempts: pwCheck.remainingAttempts,
+          });
+        }
+      }
+
+      if (twoFactorEnabledUsers.has(cleanEmail)) {
+        const codeToVerify = String(twoFactorCode || req.body?.otpCode || '').trim();
+        if (!codeToVerify) {
+          return res.status(200).json({
+            success: false,
+            requires2FA: true,
+            twoFactorRequired: true,
+            method: 'authenticator',
+            email: cleanEmail,
+            message: 'Authenticator App (2FA) is enabled for this doctor account. Enter the 6-digit code from your Authenticator app.',
+          });
+        }
+        const secret = getUserTotpSecret(cleanEmail);
+        const isTotp = verifyTotpCode(secret, codeToVerify);
+        if (!isTotp) {
+          return res.status(401).json({
+            success: false,
+            error: 'Invalid Authenticator code. Check the rolling 6-digit code in your Authenticator app.',
           });
         }
       }
@@ -909,8 +1064,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       const userTotpSec = getUserTotpSecret(cleanEmail) || ADMIN_TOTP_SECRET;
       const isTotpValid =
         verifyTotpCode(userTotpSec, code) ||
-        verifyTotpCode(ADMIN_TOTP_SECRET, code) ||
-        verifyOtp({ channel: 'email', destination: cleanEmail, code }).success;
+        verifyTotpCode(ADMIN_TOTP_SECRET, code);
 
       if (!isTotpValid) {
         return res.status(401).json({
@@ -949,6 +1103,95 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('[auth/login]', err);
     return res.status(500).json({ success: false, error: 'Server authentication failure.' });
+  }
+});
+
+/* ==========================================================================
+   DOCTORS & CLINICAL STAFF GOVERNANCE
+   ========================================================================== */
+app.get('/api/users', (_req: Request, res: Response) => {
+  return res.json(memUsers);
+});
+
+app.get('/api/doctors', (_req: Request, res: Response) => {
+  const doctors = memUsers.filter((u) => u.role === 'doctor');
+  return res.json(doctors);
+});
+
+app.post('/api/doctors', (req: Request, res: Response) => {
+  try {
+    const {
+      name,
+      email,
+      department,
+      specialty,
+      licenseNumber,
+      workDays,
+      startHour,
+      endHour,
+      workDaysLabel,
+      hoursLabel,
+    } = req.body || {};
+
+    const cleanName = String(name || '').trim();
+    const cleanEmail = String(email || '').trim().toLowerCase();
+
+    if (cleanName.length < 3) {
+      return res.status(400).json({ success: false, error: 'Doctor name is required (e.g. Dr. Alexander Reyes, MD).' });
+    }
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return res.status(400).json({ success: false, error: 'Valid clinic email address is required.' });
+    }
+
+    const doctorId = `usr-${Date.now()}`;
+    const newDoctor: User = {
+      id: doctorId,
+      name: cleanName,
+      email: cleanEmail,
+      role: 'doctor',
+      department: department || 'General Medicine',
+      specialty: specialty || 'Internal & Family Medicine',
+      licenseNumber: licenseNumber || `MD-${Math.floor(100000 + Math.random() * 900000)}`,
+    };
+
+    memUsers.unshift(newDoctor);
+
+    // Register dynamic schedule
+    const days = Array.isArray(workDays) && workDays.length > 0 ? workDays : [1, 2, 3, 4, 5];
+    const newSchedule = createCustomDoctorSchedule({
+      doctorId,
+      doctorName: cleanName,
+      department: newDoctor.department || 'General Medicine',
+      specialty: newDoctor.specialty || 'General Practice',
+      workDays: days,
+      workDaysLabel,
+      hoursLabel,
+      startHour: Number(startHour) || 8,
+      endHour: Number(endHour) || 17,
+    });
+
+    // Record audit event
+    const auditEntry = {
+      id: `log-${Date.now()}`,
+      action: 'DOCTOR_CREDENTIALED',
+      category: 'Security',
+      userId: 'usr-admin',
+      userName: 'Clinic Director',
+      timestamp: new Date().toISOString(),
+      description: `New Physician Credentialed: ${cleanName} (${newDoctor.specialty}, PRC: ${newDoctor.licenseNumber}) under Philippine Medical Governance.`,
+      ipAddress: String(req.ip || '127.0.0.1'),
+    };
+    memAuditLogs.unshift(auditEntry);
+
+    return res.status(201).json({
+      success: true,
+      user: newDoctor,
+      doctor: newDoctor,
+      schedule: newSchedule,
+      message: `${cleanName} registered successfully and available for appointment booking.`,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || 'Failed to add doctor.' });
   }
 });
 
@@ -1014,6 +1257,32 @@ app.post('/api/appointments', (req: AuthenticatedRequest, res: Response) => {
   newApt.createdAt = newApt.createdAt || new Date().toISOString();
   memAppointments.unshift(newApt);
   return res.status(201).json(newApt);
+});
+
+app.patch('/api/appointments/:id/status', (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  const apt = memAppointments.find((a) => a.id === id);
+  if (!apt) return res.status(404).json({ error: 'Appointment not found' });
+  apt.status = status;
+
+  if (status === 'Confirmed') {
+    const notif: Notification = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      targetRole: 'patient',
+      userId: apt.patientId,
+      title: 'Appointment Approved',
+      message: 'Your appointment has been approved.',
+      content: `Your appointment with ${apt.doctorName} on ${apt.date} at ${apt.time} (${apt.type}) has been approved. Location: ${apt.room || 'Outpatient Clinic'}. Queue Number: ${apt.queueNumber || 'Standard Queue'}.`,
+      category: 'appointment',
+      priority: 'normal',
+      read: false,
+      createdAt: new Date().toISOString(),
+    };
+    memNotifications.unshift(notif);
+  }
+
+  return res.json({ success: true, appointment: apt });
 });
 
 /* ==========================================================================
@@ -1179,11 +1448,9 @@ app.get('/api/notifications', (req: AuthenticatedRequest, res: Response) => {
   const isAdmin = rawRole === 'admin';
   const roleScope: 'patient' | 'provider' | 'admin' = isPatient ? 'patient' : isAdmin ? 'admin' : 'provider';
 
-  // Strict role filter: ONLY return notifications matching the user's role scope or 'all'
+  // Strict role filter: ONLY return notifications matching the user's role scope
   const filtered = memNotifications.filter((n) => {
-    const target = n.targetRole || 'all';
-    if (target === 'all') return true;
-    return target === roleScope;
+    return n.targetRole === roleScope;
   });
 
   return res.json(filtered);

@@ -19,6 +19,12 @@ import {
   CalendarDays,
   Filter,
 } from 'lucide-react';
+import {
+  getDoctorSchedule,
+  isDoctorWorkingOnDate,
+  formatTimeSlot,
+  getDoctorSlotAvailability,
+} from '../../utils/doctorSchedules';
 
 interface Props {
   onOpenBookAppointment: () => void;
@@ -57,8 +63,15 @@ export const AppointmentCalendar: React.FC<Props> = ({
   const [reschedulingApt, setReschedulingApt] = useState<Appointment | null>(null);
   const [newReschedDate, setNewReschedDate] = useState('');
   const [newReschedTime, setNewReschedTime] = useState('10:00');
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
 
   const doctors = users.filter((u) => u.role === 'doctor');
+
+  const selectedDoctorSchedule = useMemo(() => {
+    if (doctorFilter === 'ALL') return null;
+    const doc = doctors.find((d) => d.id === doctorFilter);
+    return doc ? getDoctorSchedule(doc.id, doc) : null;
+  }, [doctorFilter, doctors]);
 
   // Helper to determine whether an appointment is Past
   const isPastAppointment = (apt: Appointment): boolean => {
@@ -91,6 +104,7 @@ export const AppointmentCalendar: React.FC<Props> = ({
       dayNumber: number;
       isToday: boolean;
       isPastDate: boolean;
+      isDoctorOff: boolean;
       dayAppointments: Appointment[];
       hasUpcoming: boolean;
       hasPast: boolean;
@@ -100,9 +114,15 @@ export const AppointmentCalendar: React.FC<Props> = ({
       const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const isToday = dateString === todayStr;
       const isPastDate = dateString < todayStr;
+      const isDoctorOff =
+        doctorFilter !== 'ALL' && !isDoctorWorkingOnDate(doctorFilter, dateString);
 
       // Filter appointments on this day
-      const dayAppointments = appointments.filter((a) => a.date === dateString);
+      const dayAppointments = appointments.filter((a) => {
+        if (a.date !== dateString) return false;
+        if (doctorFilter !== 'ALL' && a.doctorId !== doctorFilter) return false;
+        return true;
+      });
       const hasUpcoming = dayAppointments.some((a) => !isPastAppointment(a));
       const hasPast = dayAppointments.some((a) => isPastAppointment(a));
 
@@ -111,6 +131,7 @@ export const AppointmentCalendar: React.FC<Props> = ({
         dayNumber: day,
         isToday,
         isPastDate,
+        isDoctorOff,
         dayAppointments,
         hasUpcoming,
         hasPast,
@@ -118,7 +139,7 @@ export const AppointmentCalendar: React.FC<Props> = ({
     }
 
     return { firstDayIndex, days };
-  }, [calendarMonth, appointments]);
+  }, [calendarMonth, appointments, doctorFilter]);
 
   // Overall counts for summary
   const upcomingCount = useMemo(
@@ -184,10 +205,25 @@ export const AppointmentCalendar: React.FC<Props> = ({
 
   const handleConfirmReschedule = (e: React.FormEvent) => {
     e.preventDefault();
-    if (reschedulingApt && newReschedDate) {
-      rescheduleAppointment(reschedulingApt.id, newReschedDate, newReschedTime);
-      setReschedulingApt(null);
+    if (!reschedulingApt || !newReschedDate || !newReschedTime) return;
+
+    // Double check that the selected slot is not already booked by another patient
+    const isBooked = appointments.some(
+      (a) =>
+        a.id !== reschedulingApt.id &&
+        a.doctorId === reschedulingApt.doctorId &&
+        a.date === newReschedDate &&
+        a.time === newReschedTime &&
+        a.status !== 'Cancelled'
+    );
+    if (isBooked) {
+      setRescheduleError('This slot was just booked by another patient. Please select an available slot.');
+      return;
     }
+
+    setRescheduleError(null);
+    rescheduleAppointment(reschedulingApt.id, newReschedDate, newReschedTime);
+    setReschedulingApt(null);
   };
 
   return (
@@ -388,6 +424,12 @@ export const AppointmentCalendar: React.FC<Props> = ({
                         Today
                       </span>
                     )}
+
+                    {dayItem.isDoctorOff && (
+                      <span className="text-[8px] font-bold px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">
+                        Off
+                      </span>
+                    )}
                   </div>
 
                   {/* Day Appointment Indicator Tags */}
@@ -521,25 +563,51 @@ export const AppointmentCalendar: React.FC<Props> = ({
             </select>
           </div>
 
-          {/* Doctor filter (Provider / Staff only) */}
-          {!isPatient && (
-            <div className="flex items-center gap-1.5">
-              <select
-                value={doctorFilter}
-                onChange={(e) => setDoctorFilter(e.target.value)}
-                className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer font-medium"
-              >
-                <option value="ALL">All Doctors</option>
-                {doctors.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Doctor filter (Global for all roles) */}
+          <div className="flex items-center gap-1.5">
+            <select
+              value={doctorFilter}
+              onChange={(e) => setDoctorFilter(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer font-medium"
+            >
+              <option value="ALL">All Doctors</option>
+              {doctors.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name} ({d.specialty || d.department})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
+
+      {/* Selected Doctor Personal Schedule Banner */}
+      {selectedDoctorSchedule && (
+        <div className="bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200/80 dark:border-teal-800/60 p-3.5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-900 dark:text-white text-xs">
+                {selectedDoctorSchedule.doctorName}
+              </span>
+              <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200 border border-teal-200 dark:border-teal-800">
+                {selectedDoctorSchedule.specialty}
+              </span>
+            </div>
+            <p className="text-[11px] text-teal-700 dark:text-teal-300 flex items-center gap-1.5 mt-1 font-semibold">
+              <Clock className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+              <span>Personal Clinical Schedule: <strong>{selectedDoctorSchedule.workDaysLabel}</strong> ({selectedDoctorSchedule.hoursLabel})</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenBookAppointment}
+            className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl text-xs transition cursor-pointer flex items-center gap-1.5 self-start sm:self-center shrink-0 shadow-xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Book with {selectedDoctorSchedule.doctorName.split(',')[0]}</span>
+          </button>
+        </div>
+      )}
 
       {/* Appointments List Display (Upcoming & Past clearly marked) */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
@@ -692,9 +760,11 @@ export const AppointmentCalendar: React.FC<Props> = ({
                         {apt.status === 'Scheduled' && (
                           <button
                             onClick={() => updateAppointmentStatus(apt.id, 'Confirmed')}
-                            className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:hover:bg-teal-900/80 dark:text-teal-300 rounded-lg font-semibold text-[11px] border border-teal-200 dark:border-teal-800 transition cursor-pointer"
+                            className="px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:hover:bg-teal-900/80 dark:text-teal-300 rounded-lg font-semibold text-[11px] border border-teal-200 dark:border-teal-800 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                            title="Approve patient appointment"
                           >
-                            Confirm
+                            <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                            <span>Approve</span>
                           </button>
                         )}
 
@@ -767,63 +837,139 @@ export const AppointmentCalendar: React.FC<Props> = ({
         )}
       </div>
 
-      {/* Reschedule Modal */}
-      {reschedulingApt && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-5 max-w-sm w-full text-xs space-y-3 font-sans animate-in zoom-in-95 duration-150">
-            <h3 className="font-bold text-slate-900 dark:text-white text-sm">
-              Reschedule Appointment
-            </h3>
-            <p className="text-slate-500 dark:text-slate-400">
-              Visit with <strong>{reschedulingApt.doctorName}</strong> ({reschedulingApt.department})
-            </p>
+      {/* Reschedule Modal with Individual Doctor Schedule & Availability */}
+      {reschedulingApt && (() => {
+        const docSchedule = getDoctorSchedule(reschedulingApt.doctorId);
+        const isDocWorking = newReschedDate ? isDoctorWorkingOnDate(reschedulingApt.doctorId, newReschedDate) : false;
+        const availableSlots = newReschedDate
+          ? getDoctorSlotAvailability(reschedulingApt.doctorId, newReschedDate, appointments, reschedulingApt.id)
+          : [];
 
-            <form onSubmit={handleConfirmReschedule} className="space-y-3">
-              <div>
-                <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                  New Date
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={newReschedDate}
-                  onChange={(e) => setNewReschedDate(e.target.value)}
-                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
-              </div>
-
-              <div>
-                <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                  New Time
-                </label>
-                <input
-                  type="time"
-                  required
-                  value={newReschedTime}
-                  onChange={(e) => setNewReschedTime(e.target.value)}
-                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-5 max-w-md w-full text-xs space-y-3.5 font-sans animate-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-sm">
+                    Reschedule Appointment
+                  </h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">
+                    Visit with <strong>{reschedulingApt.doctorName}</strong> ({reschedulingApt.department})
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() => setReschedulingApt(null)}
-                  className="px-3.5 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium cursor-pointer transition"
+                  className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                 >
-                  Close
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-semibold cursor-pointer shadow-sm transition"
-                >
-                  Save Reschedule
+                  ✕
                 </button>
               </div>
-            </form>
+
+              {/* Doctor Personal Working Schedule Context */}
+              <div className="p-3 rounded-xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 space-y-1 text-[11px]">
+                <div className="flex items-center gap-1.5 text-teal-800 dark:text-teal-300 font-bold">
+                  <Clock className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                  <span>Doctor's Working Schedule</span>
+                </div>
+                <p className="text-slate-700 dark:text-slate-300">
+                  <strong>Days:</strong> {docSchedule.workDaysLabel}
+                </p>
+                <p className="text-slate-700 dark:text-slate-300">
+                  <strong>Hours:</strong> {docSchedule.hoursLabel}
+                </p>
+              </div>
+
+              {rescheduleError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{rescheduleError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleConfirmReschedule} className="space-y-3.5">
+                <div>
+                  <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                    Select New Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={newReschedDate}
+                    onChange={(e) => {
+                      setNewReschedDate(e.target.value);
+                      setNewReschedTime('');
+                    }}
+                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                  {newReschedDate && !isDocWorking && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1.5 flex items-center gap-1 font-medium bg-amber-50 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{reschedulingApt.doctorName} is off on this date. Schedule: {docSchedule.workDaysLabel}.</span>
+                    </p>
+                  )}
+                </div>
+
+                {newReschedDate && isDocWorking && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="font-semibold text-slate-700 dark:text-slate-300">
+                        Doctor Available Time Slots
+                      </label>
+                      <span className="text-[10px] text-slate-400">
+                        {availableSlots.filter((s) => s.isAvailable).length} slots open
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 max-h-40 overflow-y-auto p-1 border border-slate-100 dark:border-slate-800 rounded-xl">
+                      {availableSlots.map((item) => {
+                        const isSelected = newReschedTime === item.slot;
+                        return (
+                          <button
+                            key={item.slot}
+                            type="button"
+                            disabled={!item.isAvailable}
+                            onClick={() => setNewReschedTime(item.slot)}
+                            className={`py-2 px-1 rounded-lg text-xs font-bold transition flex flex-col items-center justify-center border cursor-pointer ${
+                              isSelected
+                                ? 'bg-teal-600 text-white border-teal-600 shadow-sm ring-2 ring-teal-400'
+                                : item.isAvailable
+                                ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:border-teal-400 hover:bg-teal-50 dark:hover:bg-slate-700'
+                                : 'bg-slate-100 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-50'
+                            }`}
+                          >
+                            <span className="text-[11px]">{item.formatted}</span>
+                            <span className={`text-[8px] mt-0.5 uppercase ${isSelected ? 'text-teal-100' : item.isAvailable ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400'}`}>
+                              {item.isAvailable ? 'Open' : 'Booked'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setReschedulingApt(null)}
+                    className="px-3.5 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium cursor-pointer transition"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!newReschedDate || !newReschedTime || !isDocWorking}
+                    className="px-4 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-semibold cursor-pointer shadow-sm transition disabled:opacity-50"
+                  >
+                    Save Reschedule
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

@@ -294,12 +294,22 @@ export const StaffDashboardView: React.FC<Props> = ({
 
                 <div className="flex items-center gap-2">
                   {apt.status === 'Scheduled' && (
-                    <button
-                      onClick={() => updateAppointmentStatus(apt.id, 'Checked In')}
-                      className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold cursor-pointer transition text-xs"
-                    >
-                      Check-In Patient
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => updateAppointmentStatus(apt.id, 'Confirmed')}
+                        className="px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 dark:bg-teal-950 dark:hover:bg-teal-900 dark:text-teal-300 font-bold cursor-pointer transition text-xs border border-teal-200 dark:border-teal-800 flex items-center gap-1 shadow-2xs"
+                        title="Approve appointment and notify patient"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                        <span>Approve</span>
+                      </button>
+                      <button
+                        onClick={() => updateAppointmentStatus(apt.id, 'Checked In')}
+                        className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold cursor-pointer transition text-xs"
+                      >
+                        Check-In Patient
+                      </button>
+                    </div>
                   )}
                   {apt.status === 'Checked In' && (
                     <button

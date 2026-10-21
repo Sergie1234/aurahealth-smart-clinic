@@ -34,6 +34,8 @@ import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
 import { AuthenticatorSetupModal } from './AuthenticatorSetupModal';
 import { PrivacyPolicyModal } from './PrivacyPolicyModal';
+import { validatePasswordStrength } from '../../utils/passwordValidation';
+import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
 
 type AuthMode = 'login' | 'register';
 
@@ -78,6 +80,24 @@ export const LoginPage: React.FC = () => {
   const [showAuthenticatorModal, setShowAuthenticatorModal] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Proactively check if entered email has Authenticator 2FA enabled
+  useEffect(() => {
+    const clean = email.trim().toLowerCase();
+    if (clean && clean.includes('@')) {
+      const timer = setTimeout(() => {
+        fetch(`/api/auth/2fa/status?email=${encodeURIComponent(clean)}`)
+          .then((res) => res.json())
+          .then((d) => {
+            if (d?.enabled) {
+              setEnablePatient2Fa(true);
+            }
+          })
+          .catch(() => {});
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [email]);
 
   const isPatient = primaryRole === 'patient';
   const isDoctor = primaryRole === 'doctor';
@@ -134,8 +154,12 @@ export const LoginPage: React.FC = () => {
           setLoading(false);
           return;
         }
-        if (!password || password.length < 6) {
-          setError('Password must be at least 6 characters.');
+        const pwCheck = validatePasswordStrength(password);
+        if (!pwCheck.isValid) {
+          setError(
+            pwCheck.errorMessage ||
+              'Password must contain at least 8 characters, an uppercase letter, a lowercase letter, a number, and a special character.'
+          );
           setLoading(false);
           return;
         }
@@ -208,12 +232,17 @@ export const LoginPage: React.FC = () => {
         primaryRole: 'patient',
         email: cleanEmail,
         password,
-        twoFactorCode: enablePatient2Fa ? twoFactorCode.trim() : undefined,
+        twoFactorCode: twoFactorCode.trim() || undefined,
         isRegister: false,
       });
 
       setLoading(false);
       if (!res.success) {
+        if (res.requires2FA) {
+          setEnablePatient2Fa(true);
+          setError(res.error || 'Two-Factor Authentication is active on this account. Please enter the 6-digit code from your Authenticator app.');
+          return;
+        }
         setError(res.error || 'Invalid email or password.');
         toastError(res.error || 'Invalid email or password.');
         return;
@@ -235,9 +264,15 @@ export const LoginPage: React.FC = () => {
         primaryRole: 'doctor',
         email: email || 'maria.reyes@smartclinic.ph',
         password: password || 'doctor123',
+        twoFactorCode: twoFactorCode.trim() || undefined,
       });
       setLoading(false);
       if (!res.success) {
+        if (res.requires2FA) {
+          setEnablePatient2Fa(true);
+          setError(res.error || 'Authenticator 2FA is active on this physician account. Please enter the 6-digit code from your Authenticator app.');
+          return;
+        }
         setError(res.error || 'Doctor authentication failed.');
         toastError(res.error || 'Doctor authentication failed.');
         return;
@@ -257,9 +292,15 @@ export const LoginPage: React.FC = () => {
         email: email || `${staffSubRole}@smartclinic.ph`,
         password: password || 'staff123',
         subRole: staffSubRole,
+        twoFactorCode: twoFactorCode.trim() || undefined,
       });
       setLoading(false);
       if (!res.success) {
+        if (res.requires2FA) {
+          setEnablePatient2Fa(true);
+          setError(res.error || 'Authenticator 2FA is active on this staff account. Please enter the 6-digit code from your Authenticator app.');
+          return;
+        }
         setError(res.error || 'Staff authentication failed.');
         toastError(res.error || 'Staff authentication failed.');
         return;
@@ -694,7 +735,7 @@ export const LoginPage: React.FC = () => {
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="block font-bold text-slate-700 dark:text-slate-300">
-                          Password (min. 6 chars) <span className="text-rose-500">*</span>
+                          Password (High Security) <span className="text-rose-500">*</span>
                         </label>
                         <button
                           type="button"
@@ -712,7 +753,7 @@ export const LoginPage: React.FC = () => {
                           required
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          placeholder="••••••••"
+                          placeholder="Min 8 chars, upper, lower, num, special"
                           className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-8 pr-8 py-2 text-xs focus:ring-2 focus:ring-teal-500"
                         />
                       </div>
@@ -739,12 +780,19 @@ export const LoginPage: React.FC = () => {
                           required
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="••••••••"
+                          placeholder="Re-enter password"
                           className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-8 pr-8 py-2 text-xs focus:ring-2 focus:ring-teal-500"
                         />
                       </div>
                     </div>
                   </div>
+
+                  {/* High Security Password Strength Indicator Checklist */}
+                  {password && (
+                    <div className="pt-1">
+                      <PasswordStrengthIndicator password={password} />
+                    </div>
+                  )}
 
                   {/* Philippine Medical Data Privacy Consent (RA 10173) */}
                   <div className="p-3.5 rounded-2xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 space-y-2.5">
@@ -797,6 +845,17 @@ export const LoginPage: React.FC = () => {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    onBlur={() => {
+                      const clean = email.trim().toLowerCase();
+                      if (clean.includes('@')) {
+                        fetch(`/api/auth/2fa/status?email=${encodeURIComponent(clean)}`)
+                          .then((res) => res.json())
+                          .then((d) => {
+                            if (d?.enabled) setEnablePatient2Fa(true);
+                          })
+                          .catch(() => {});
+                      }
+                    }}
                     placeholder={
                       isAdmin
                         ? 'smartclinicrealacc@gmail.com'
@@ -854,46 +913,53 @@ export const LoginPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Optional Patient Authenticator 2FA Toggle for Login */}
+                {/* Patient Authenticator 2FA Verification Card */}
                 {isPatient && mode === 'login' && (
-                  <div>
-                    <div className="flex items-center justify-between pt-1">
+                  <div className="pt-1">
+                    <div className="flex items-center justify-between pb-1">
                       <button
                         type="button"
                         onClick={() => setEnablePatient2Fa(!enablePatient2Fa)}
                         className="text-[11px] font-semibold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 cursor-pointer"
                       >
-                        <Smartphone className="w-3 h-3" />
-                        <span>{enablePatient2Fa ? '✕ Disable Authenticator 2FA' : '+ Sign in with Authenticator App (2FA)'}</span>
+                        <Smartphone className="w-3.5 h-3.5" />
+                        <span>{enablePatient2Fa ? '✓ Authenticator 2FA Enabled' : '+ Sign in with Authenticator App (2FA)'}</span>
                       </button>
-                      {enablePatient2Fa && (
-                        <button
-                          type="button"
-                          onClick={() => setShowAuthenticatorModal(true)}
-                          className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
-                        >
-                          <QrCode className="w-3 h-3" />
-                          <span>Setup / QR Code</span>
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowAuthenticatorModal(true)}
+                        className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
+                      >
+                        <QrCode className="w-3.5 h-3.5" />
+                        <span>Setup / Scan QR</span>
+                      </button>
                     </div>
 
                     {enablePatient2Fa && (
-                      <div className="mt-2.5 p-3 rounded-2xl bg-teal-50/60 dark:bg-slate-800/60 border border-teal-200 dark:border-teal-800 space-y-2">
-                        <label className="block font-bold text-slate-800 dark:text-slate-200">
-                          6-Digit Authenticator App Code
-                        </label>
+                      <div className="mt-1 p-3.5 rounded-2xl bg-teal-50/80 dark:bg-slate-800/80 border border-teal-300 dark:border-teal-700 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-xs font-bold text-teal-950 dark:text-teal-200 flex items-center gap-1.5">
+                            <Smartphone className="w-3.5 h-3.5 text-teal-600" />
+                            <span>Authenticator 6-Digit Code *</span>
+                          </label>
+                          <span className="text-[10px] font-mono text-teal-700 dark:text-teal-300 bg-teal-100 dark:bg-teal-900/60 px-2 py-0.5 rounded-full font-bold">
+                            RFC 6238 TOTP
+                          </span>
+                        </div>
                         <div className="relative">
-                          <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-teal-600" />
                           <input
                             type="text"
                             maxLength={6}
                             value={twoFactorCode}
-                            onChange={(e) => setTwoFactorCode(e.target.value)}
+                            onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
                             placeholder="Enter 6-digit rolling code"
-                            className="w-full rounded-xl border border-teal-300 dark:border-teal-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-3 py-2 text-xs font-mono font-bold tracking-widest focus:ring-2 focus:ring-teal-500"
+                            className="w-full rounded-xl border border-teal-300 dark:border-teal-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 pl-9 pr-3 py-2.5 text-xs font-mono font-bold tracking-widest text-center focus:ring-2 focus:ring-teal-500"
                           />
                         </div>
+                        <p className="text-[11px] text-teal-800 dark:text-teal-300">
+                          Enter the current 6-digit code showing in your Google Authenticator or Microsoft Authenticator app.
+                        </p>
                       </div>
                     )}
                   </div>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import {
   ShieldAlert,
@@ -7,10 +7,13 @@ import {
   TrendingUp,
   CheckCircle2,
   Lock,
-  KeyRound
+  KeyRound,
+  Plus,
+  Stethoscope,
 } from 'lucide-react';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import { formatPeso } from '../../utils/currency';
+import { AddDoctorModal } from './AddDoctorModal';
 
 export const AdminDashboardView: React.FC = () => {
   const {
@@ -21,6 +24,8 @@ export const AdminDashboardView: React.FC = () => {
     auditLogs,
     setActiveTab,
   } = useClinic();
+
+  const [showAddDoctorModal, setShowAddDoctorModal] = useState(false);
 
   const totalRevenue = invoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
   const outstandingRevenue = invoices.reduce((sum, inv) => sum + (inv.totalAmount - inv.paidAmount), 0);
@@ -129,7 +134,18 @@ export const AdminDashboardView: React.FC = () => {
               <Users className="w-4 h-4 text-teal-600" />
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Hospital Staff Access Matrix</h3>
             </div>
-            <span className="text-xs text-slate-500">{users.length} Authorized Users</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowAddDoctorModal(true)}
+                className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 transition shadow-sm shadow-teal-600/20 cursor-pointer"
+                title="Register and Credential New Doctor"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <Stethoscope className="w-3.5 h-3.5" />
+                <span>Add Doctor</span>
+              </button>
+              <span className="text-xs text-slate-500">{users.length} Authorized</span>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -188,6 +204,11 @@ export const AdminDashboardView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <AddDoctorModal
+        isOpen={showAddDoctorModal}
+        onClose={() => setShowAddDoctorModal(false)}
+      />
     </div>
   );
 };
