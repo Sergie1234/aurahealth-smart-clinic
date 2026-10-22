@@ -108,11 +108,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
       toastSuccess(`Password reset security code sent to ${data.destination || cleanId}! Check your inbox.`);
     } catch {
       setLoading(false);
-      // Static Vercel deployment fallback: allow password reset with demo verification code
-      console.warn('[Smart Clinic] Backend API unreachable (static Vercel deployment), activating local reset mode.');
-      setRecoveryMethod('email');
-      setStep('confirm');
-      toastSuccess(`[Static Vercel Mode] Security code (Demo: 123456) dispatched to ${cleanId}!`);
+      setError('Network error: Unable to connect to the authentication server.');
     }
   };
 
@@ -174,41 +170,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
       onClose();
     } catch (err) {
       setLoading(false);
-      // Strictly enforce verification: Only accept demo code '123456' in development mode
-      const isDev = import.meta.env.DEV;
-      if (isDev && cleanCode === '123456') {
-        console.warn('[Smart Clinic] Backend confirm API unreachable, using demo code in development.');
-        try {
-          const savedUsers = localStorage.getItem('smart_clinic_users');
-          if (savedUsers) {
-            const users = JSON.parse(savedUsers);
-            const targetEmail = identifier.trim().toLowerCase();
-            const updated = users.map((u: any) =>
-              u.email && u.email.toLowerCase() === targetEmail ? { ...u, password: newPassword } : u
-            );
-            localStorage.setItem('smart_clinic_users', JSON.stringify(updated));
-          }
-          const savedPatientAccounts = localStorage.getItem('smart_clinic_patient_accounts');
-          if (savedPatientAccounts) {
-            const accounts = JSON.parse(savedPatientAccounts);
-            const targetEmail = identifier.trim().toLowerCase();
-            const updated = accounts.map((acc: any) =>
-              acc.email && acc.email.toLowerCase() === targetEmail ? { ...acc, passwordHash: newPassword } : acc
-            );
-            localStorage.setItem('smart_clinic_patient_accounts', JSON.stringify(updated));
-          }
-        } catch (localErr) {
-          console.warn('Local credential storage update notice:', localErr);
-        }
-
-        toastSuccess('Password successfully updated (Demo Mode)! You can now log in.');
-        if (onPasswordResetSuccess) {
-          onPasswordResetSuccess(newPassword);
-        }
-        onClose();
-      } else {
-        setError('Verification failed: Cannot reach authentication server.');
-      }
+      setError('Verification failed: Cannot reach authentication server.');
     }
   };
 

@@ -390,21 +390,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       clearTimeout(timeoutId);
       const data = await res.json();
       if (!res.ok || !data.success) {
-        return {
-          success: true,
-          code: '123456',
-          liveDispatched: false,
-          devNotice: data.error || 'Verification code generated for instant access.',
-        };
+        return { success: false, error: data.error || 'Failed to dispatch verification code.' };
       }
       return data;
     } catch {
-      return {
-        success: true,
-        code: '123456',
-        liveDispatched: false,
-        devNotice: 'SMS gateway standby: Verification code (123456) ready.',
-      };
+      return { success: false, error: 'Network error communicating with SMS gateway.' };
     }
   };
 
