@@ -153,12 +153,12 @@ export async function sendSmsOtp(params: {
   };
 }
 
-export function verifyOtp(params: {
+export async function verifyOtp(params: {
   channel: OtpChannel;
   destination: string;
   code: string;
-}): { success: boolean; error?: string } {
-  return verificationService.verifyOtp({
+}): Promise<{ success: boolean; error?: string }> {
+  return await verificationService.verifyOtp({
     channel: params.channel,
     destination: params.destination,
     code: params.code,

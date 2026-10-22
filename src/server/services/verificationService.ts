@@ -8,20 +8,12 @@ import crypto from 'crypto';
 import { emailService, emailAuditLogs, type EmailAuditLog } from './emailService';
 import { smsService, smsAuditLogs, normalizePhoneNumber, type SmsAuditLog } from './smsService';
 
+import { authStore, type StoredOtp } from './authStoreService';
+
 export type VerificationChannel = 'email' | 'sms';
 export type VerificationPurpose = 'registration' | 'login' | 'password_reset' | 'admin_2fa';
 
-export interface OtpRecord {
-  codeHash: string;
-  codePlain?: string;
-  channel: VerificationChannel;
-  destination: string;
-  purpose: VerificationPurpose;
-  expiresAt: number;
-  attempts: number;
-  lastSentAt: number;
-  metadata?: Record<string, any>;
-}
+export interface OtpRecord extends StoredOtp {}
 
 export interface PendingRegistration {
   id: string;
@@ -33,64 +25,11 @@ export interface PendingRegistration {
   verified: boolean;
 }
 
-const OTP_TTL_MS = 10 * 60 * 1000;
+const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_ATTEMPTS = 5;
-const RESEND_COOLDOWN_MS = 60 * 1000;
-
-/** Vercel-safe signed reset token so confirm works across serverless instances */
-const RESET_TOKEN_SECRET =
-  process.env.JWT_SECRET ||
-  process.env.AUTH_JWT_SECRET ||
-  'smart_clinic_password_reset_signing_key_2026';
-
-export function createPasswordResetToken(email: string, code: string, ttlMs = 10 * 60 * 1000): string {
-  const exp = Date.now() + ttlMs;
-  const codeHash = crypto.createHash('sha256').update(code.trim()).digest('hex');
-  const payload = Buffer.from(
-    JSON.stringify({ e: email.trim().toLowerCase(), h: codeHash, exp }),
-    'utf8'
-  ).toString('base64url');
-  const sig = crypto.createHmac('sha256', RESET_TOKEN_SECRET).update(payload).digest('base64url');
-  return `${payload}.${sig}`;
-}
-
-export function verifyPasswordResetToken(
-  token: string,
-  email: string,
-  code: string
-): { success: boolean; error?: string } {
-  if (!token || !token.includes('.')) {
-    return { success: false, error: 'Missing or invalid reset token. Request a new code.' };
-  }
-  const [payload, sig] = token.split('.');
-  const expected = crypto.createHmac('sha256', RESET_TOKEN_SECRET).update(payload).digest('base64url');
-  if (sig !== expected) {
-    return { success: false, error: 'Invalid reset token signature.' };
-  }
-  try {
-    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
-      e: string;
-      h: string;
-      exp: number;
-    };
-    if (data.exp < Date.now()) {
-      return { success: false, error: 'Reset code expired. Request a new one.' };
-    }
-    if (data.e !== email.trim().toLowerCase()) {
-      return { success: false, error: 'Reset token does not match this email.' };
-    }
-    const codeHash = crypto.createHash('sha256').update(code.trim()).digest('hex');
-    if (data.h !== codeHash) {
-      return { success: false, error: 'Incorrect reset code.' };
-    }
-    return { success: true };
-  } catch {
-    return { success: false, error: 'Corrupt reset token.' };
-  }
-}
+const RESEND_COOLDOWN_MS = 60 * 1000; // 60 seconds
 
 export class VerificationService {
-  private otpStore = new Map<string, OtpRecord>();
   private pendingRegistrations = new Map<string, PendingRegistration>();
 
   private getStoreKey(channel: VerificationChannel, destination: string, purpose?: string): string {
@@ -106,6 +45,11 @@ export class VerificationService {
     return String(crypto.randomInt(100000, 999999));
   }
 
+  /**
+   * Dispatches a verification OTP via the designated channel.
+   * Enforces 60-second cooldown to prevent spam.
+   * Persisted across Vercel serverless lambdas via authStore.
+   */
   public async sendOtp(params: {
     channel: VerificationChannel;
     destination: string;
@@ -123,8 +67,9 @@ export class VerificationService {
     const purpose = params.purpose || 'login';
     const key = this.getStoreKey(params.channel, params.destination, purpose);
     const now = Date.now();
-    const existing = this.otpStore.get(key);
+    const existing = await authStore.getOtp(key);
 
+    // Enforce resend cooldown
     if (existing && now - existing.lastSentAt < RESEND_COOLDOWN_MS) {
       const waitSeconds = Math.ceil((RESEND_COOLDOWN_MS - (now - existing.lastSentAt)) / 1000);
       return {
@@ -152,12 +97,14 @@ export class VerificationService {
       metadata: params.metadata,
     };
 
-    this.otpStore.set(key, record);
+    await authStore.setOtp(key, record);
 
-    if (params.channel === 'email') {
-      emailService.sendVerificationOtp(record.destination, code, purpose as any).catch(console.error);
-    } else {
-      smsService.sendVerificationOtp(record.destination, code, purpose as any).catch(console.error);
+    if (purpose !== 'password_reset') {
+      if (params.channel === 'email') {
+        emailService.sendVerificationOtp(record.destination, code, purpose as any).catch(console.error);
+      } else {
+        smsService.sendVerificationOtp(record.destination, code, purpose as any).catch(console.error);
+      }
     }
 
     return {
@@ -169,35 +116,36 @@ export class VerificationService {
     };
   }
 
-  public verifyOtp(params: {
+  public async verifyOtp(params: {
     channel: VerificationChannel;
     destination: string;
     code: string;
     purpose?: VerificationPurpose;
-  }): { success: boolean; error?: string } {
+  }): Promise<{ success: boolean; error?: string }> {
     const purpose = params.purpose || 'login';
     const key = this.getStoreKey(params.channel, params.destination, purpose);
-    const record = this.otpStore.get(key);
+    const record = await authStore.getOtp(key);
 
     if (!record) {
       return { success: false, error: 'No active verification code found. Please request a new code.' };
     }
     if (record.expiresAt < Date.now()) {
-      this.otpStore.delete(key);
+      await authStore.deleteOtp(key);
       return { success: false, error: 'Verification code expired. Please request a new one.' };
     }
     if (record.attempts >= MAX_ATTEMPTS) {
-      this.otpStore.delete(key);
+      await authStore.deleteOtp(key);
       return { success: false, error: 'Maximum attempts reached. Please request a new verification code.' };
     }
 
-    record.attempts += 1;
     if (record.codeHash !== this.hashCode(params.code)) {
+      record.attempts += 1;
+      await authStore.setOtp(key, record);
       const remaining = MAX_ATTEMPTS - record.attempts;
       return { success: false, error: `Incorrect code. ${remaining} attempt(s) remaining.` };
     }
 
-    this.otpStore.delete(key);
+    await authStore.deleteOtp(key);
     return { success: true };
   }
 
@@ -265,12 +213,15 @@ export class VerificationService {
     return { success: true, registrationId: pending.id, destination };
   }
 
+  /* =========================================================================
+     PASSWORD RESET FLOW
+     ========================================================================= */
+
   public async requestPasswordReset(identifier: string): Promise<{
     success: boolean;
     channel: VerificationChannel;
     destination: string;
     code: string;
-    resetToken?: string;
     error?: string;
   }> {
     const clean = identifier.trim();
@@ -288,6 +239,20 @@ export class VerificationService {
     const channel: VerificationChannel = isEmail ? 'email' : 'sms';
     const destination = isEmail ? clean.toLowerCase() : normalizePhoneNumber(clean);
 
+    // Check if an unexpired OTP exists within cooldown window
+    const key = this.getStoreKey(channel, destination, 'password_reset');
+    const existing = await authStore.getOtp(key);
+    const now = Date.now();
+    if (existing && existing.expiresAt > now && now - existing.lastSentAt < RESEND_COOLDOWN_MS) {
+      return {
+        success: true,
+        channel,
+        destination,
+        code: existing.codePlain || '',
+      };
+    }
+
+    // Generate + store OTP (sendOtp also fires a verification email/SMS).
     const otpRes = await this.sendOtp({
       channel,
       destination,
@@ -299,11 +264,12 @@ export class VerificationService {
         success: false,
         channel,
         destination,
-        code: '',
+        code: otpRes.code || '',
         error: otpRes.error || 'Unable to issue password reset code. Please try again.',
       };
     }
 
+    // Dedicated password-reset template (OTP already stored; valid 10 minutes).
     if (channel === 'email') {
       emailService.sendPasswordResetEmail(destination, otpRes.code).catch((err) => {
         console.warn('[PasswordReset] Dedicated reset email failed (OTP still valid):', err?.message || err);
@@ -314,39 +280,31 @@ export class VerificationService {
       });
     }
 
-    const resetToken = createPasswordResetToken(destination, otpRes.code);
-
     return {
       success: true,
       channel,
       destination,
       code: otpRes.code,
-      resetToken,
     };
   }
 
-  public verifyPasswordReset(
-    identifier: string,
-    code: string,
-    resetToken?: string
-  ): { success: boolean; error?: string } {
+  public async verifyPasswordReset(identifier: string, code: string): Promise<{ success: boolean; error?: string }> {
     const clean = identifier.trim();
     const isEmail = clean.includes('@');
     const channel: VerificationChannel = isEmail ? 'email' : 'sms';
     const destination = isEmail ? clean.toLowerCase() : normalizePhoneNumber(clean);
 
-    if (resetToken) {
-      const tokenCheck = verifyPasswordResetToken(resetToken, destination, code);
-      if (tokenCheck.success) return tokenCheck;
-    }
-
-    return this.verifyOtp({
+    return await this.verifyOtp({
       channel,
       destination,
       code,
       purpose: 'password_reset',
     });
   }
+
+  /* =========================================================================
+     AUDIT LOGS & HEALTH
+     ========================================================================= */
 
   public getAllCommunicationLogs(): (EmailAuditLog | SmsAuditLog)[] {
     const all = [...emailAuditLogs, ...smsAuditLogs];
@@ -357,7 +315,7 @@ export class VerificationService {
     return {
       email: emailService.getStatus(),
       sms: smsService.getStatus(),
-      activeOtpCount: this.otpStore.size,
+      activeOtpCount: authStore.getOtpCount(),
       standardCompliant: 'RA 10173 Certified',
     };
   }

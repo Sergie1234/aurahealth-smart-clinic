@@ -40,6 +40,7 @@ import {
   enforcePatientIsolation,
   type AuthenticatedRequest,
 } from './server/services/authService';
+import { authStore } from './server/services/authStoreService';
 import {
   INITIAL_PATIENTS,
   INITIAL_USERS,
@@ -102,12 +103,11 @@ let memNotifications = [...INITIAL_NOTIFICATIONS];
 let memUsers: User[] = [...INITIAL_USERS];
 
 // Two-Factor Authentication (Authenticator App TOTP) Store
-// Tracks accounts with active Authenticator 2FA
+// Tracks accounts with active Authenticator 2FA (Strictly Admin / Staff accounts — NEVER patients)
 const twoFactorEnabledUsers = new Set<string>([
   'smartclinicrealacc@gmail.com',
   'sgt.spartan19@gmail.com',
   'admin@smartclinic.ph',
-  'elena.vargas@example.com',
 ]);
 
 // Supabase cloud integration check
@@ -126,6 +126,9 @@ const isSupabaseLive = Boolean(
 export const supabaseServer: SupabaseClient | null = isSupabaseLive
   ? createClient(supabaseUrl, supabaseKey)
   : null;
+
+// Connect authStore with Supabase for cross-instance state synchronization on Vercel
+authStore.setSupabaseClient(supabaseServer);
 
 // Gemini Clinical AI Assistant setup
 const apiKey = process.env.GEMINI_API_KEY || '';
@@ -266,12 +269,12 @@ app.post('/api/auth/otp/sms', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/auth/otp/verify', (req: Request, res: Response) => {
+app.post('/api/auth/otp/verify', async (req: Request, res: Response) => {
   try {
     const channel = (req.body?.channel === 'email' ? 'email' : 'sms') as 'email' | 'sms';
     const destination = String(req.body?.destination || req.body?.email || req.body?.phone || '').trim();
     const code = String(req.body?.code || '').trim();
-    const result = verifyOtp({ channel, destination, code });
+    const result = await verificationService.verifyOtp({ channel, destination, code });
     if (!result.success) return res.status(400).json(result);
     return res.json(result);
   } catch (err: any) {
@@ -329,7 +332,16 @@ app.post('/api/auth/2fa/verify', (req: Request, res: Response) => {
 // Check if an account has Authenticator 2FA enabled
 app.get('/api/auth/2fa/status', (req: Request, res: Response) => {
   const email = String(req.query.email || '').trim().toLowerCase();
-  const enabled = twoFactorEnabledUsers.has(email) || email === ADMIN_EMAIL.toLowerCase();
+  const role = String(req.query.role || '').trim().toLowerCase();
+  // Patients never require Authenticator 2FA at login
+  if (role === 'patient') {
+    return res.json({ email, enabled: false, method: 'none' });
+  }
+  const isAdminAccount =
+    email === ADMIN_EMAIL.toLowerCase() ||
+    email === 'admin@smartclinic.ph' ||
+    email === 'sgt.spartan19@gmail.com';
+  const enabled = isAdminAccount || twoFactorEnabledUsers.has(email);
   return res.json({ email, enabled, method: 'authenticator' });
 });
 
@@ -557,7 +569,7 @@ app.post('/api/auth/verify-registration', async (req: Request, res: Response) =>
     const channel: 'email' | 'sms' = cleanEmail ? 'email' : 'sms';
     const destination = cleanEmail || cleanPhone;
 
-    const verifyRes = verificationService.verifyOtp({
+    const verifyRes = await verificationService.verifyOtp({
       channel,
       destination,
       code: String(code || '').trim(),
@@ -631,6 +643,25 @@ export function isAccountRegistered(identifier: string): boolean {
   return false;
 }
 
+export async function isAccountRegisteredAsync(identifier: string): Promise<boolean> {
+  if (isAccountRegistered(identifier)) return true;
+  const clean = identifier.trim().toLowerCase();
+  if (!clean) return false;
+  const cred = await authStore.getCredential(clean);
+  if (cred) return true;
+  if (supabaseServer) {
+    try {
+      const { data } = await supabaseServer
+        .from('patients')
+        .select('id')
+        .eq('email', clean)
+        .maybeSingle();
+      if (data) return true;
+    } catch {}
+  }
+  return false;
+}
+
 // Password Reset: Step 1 - Request OTP via Email or Phone SMS
 app.post('/api/auth/password-reset/request', async (req: Request, res: Response) => {
   try {
@@ -639,8 +670,9 @@ app.post('/api/auth/password-reset/request', async (req: Request, res: Response)
       return res.status(400).json({ success: false, error: 'Provide your registered email address or mobile number.' });
     }
 
-    // Verify account is actually registered
-    if (!isAccountRegistered(identifier)) {
+    // Verify account is actually registered (checks in-memory, /tmp, and Supabase)
+    const registered = await isAccountRegisteredAsync(identifier);
+    if (!registered) {
       return res.status(404).json({
         success: false,
         isRegistered: false,
@@ -666,14 +698,14 @@ app.post('/api/auth/password-reset/request', async (req: Request, res: Response)
 });
 
 // Password Reset: Check available recovery methods (Authenticator 2FA vs Email)
-app.get('/api/auth/password-reset/methods', (req: Request, res: Response) => {
+app.get('/api/auth/password-reset/methods', async (req: Request, res: Response) => {
   const identifier = String(req.query.identifier || req.query.email || '').trim().toLowerCase();
   if (!identifier) {
     return res.status(400).json({ success: false, error: 'Identifier is required.' });
   }
 
-  // Check if registered
-  const registered = isAccountRegistered(identifier);
+  // Check if registered across serverless instances and Supabase
+  const registered = await isAccountRegisteredAsync(identifier);
   if (!registered) {
     return res.status(404).json({
       success: false,
@@ -688,7 +720,6 @@ app.get('/api/auth/password-reset/methods', (req: Request, res: Response) => {
     isRegistered: true,
     identifier,
     hasAuthenticator,
-    hasEmail: identifier.includes('@'),
   });
 });
 
@@ -722,7 +753,7 @@ app.post('/api/auth/password-reset/confirm', async (req: Request, res: Response)
     let isResetValid = isTotpValid;
 
     if (!isResetValid) {
-      const verifyRes = verificationService.verifyPasswordReset(cleanId, cleanCode);
+      const verifyRes = await verificationService.verifyPasswordReset(cleanId, cleanCode);
       isResetValid = verifyRes.success;
     }
 
@@ -733,8 +764,8 @@ app.post('/api/auth/password-reset/confirm', async (req: Request, res: Response)
       });
     }
 
-    // Cryptographic PBKDF2 Password Update with New Salt
-    resetUserPassword(cleanId, cleanPass);
+    // Cryptographic PBKDF2 Password Update with New Salt (persisted to memory, /tmp & Supabase)
+    await resetUserPassword(cleanId, cleanPass);
 
     // Asynchronously send notification that password was changed
     if (cleanId.includes('@')) {
@@ -832,7 +863,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         }
       } else if (method === 'phone') {
         const cleanPhone = String(phone || email || '').replace(/\D/g, '');
-        const otpResult = verifyOtp({
+        const otpResult = await verificationService.verifyOtp({
           channel: 'sms',
           destination: cleanPhone,
           code: String(twoFactorCode || req.body?.otpCode || '').trim(),
@@ -871,7 +902,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 
         // 1. Check account lockout & verify password using PBKDF2 salted cryptographic hashes
         if (password) {
-          const pwCheck = verifyUserPassword(cleanEmail, String(password));
+          const pwCheck = await verifyUserPassword(cleanEmail, String(password));
           if (!pwCheck.success) {
             return res.status(pwCheck.isLocked ? 429 : 401).json({
               success: false,
@@ -973,7 +1004,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       const doctor = memUsers.find((u) => u.role === 'doctor' && (u.email.toLowerCase() === cleanEmail || cleanEmail.includes('doctor') || cleanEmail.includes('reyes') || cleanEmail.includes('santos'))) || memUsers.find((u) => u.role === 'doctor') || INITIAL_USERS[0];
 
       if (password) {
-        const pwCheck = verifyUserPassword(doctor.email, String(password));
+        const pwCheck = await verifyUserPassword(doctor.email, String(password));
         if (!pwCheck.success) {
           return res.status(pwCheck.isLocked ? 429 : 401).json({
             success: false,
@@ -1039,7 +1070,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       };
 
       if (password) {
-        const pwCheck = verifyUserPassword(staffUser.email, String(password));
+        const pwCheck = await verifyUserPassword(staffUser.email, String(password));
         if (!pwCheck.success) {
           return res.status(pwCheck.isLocked ? 429 : 401).json({
             success: false,
@@ -1082,7 +1113,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       }
 
       if (password) {
-        const pwCheck = verifyUserPassword(cleanEmail, String(password));
+        const pwCheck = await verifyUserPassword(cleanEmail, String(password));
         if (!pwCheck.success) {
           return res.status(pwCheck.isLocked ? 429 : 401).json({
             success: false,

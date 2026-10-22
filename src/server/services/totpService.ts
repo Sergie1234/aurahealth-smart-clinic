@@ -159,17 +159,20 @@ export const PATIENT_DEFAULT_TOTP_SECRET = 'KNWWC4TUINWGS3TJMNIGC5DJMVXHIS3F';
 const userTotpSecrets = new Map<string, string>();
 userTotpSecrets.set('smartclinicrealacc@gmail.com', ADMIN_TOTP_SECRET);
 userTotpSecrets.set('sgt.spartan19@gmail.com', ADMIN_TOTP_SECRET);
-userTotpSecrets.set('elena.vargas@example.com', PATIENT_DEFAULT_TOTP_SECRET);
+userTotpSecrets.set('admin@smartclinic.ph', ADMIN_TOTP_SECRET);
 
 export function getUserTotpSecret(identifier: string): string {
   const key = identifier.trim().toLowerCase();
   if (userTotpSecrets.has(key)) {
     return userTotpSecrets.get(key)!;
   }
-  // Generate and persist secret for new user
-  const newSecret = generateTotpSecret();
-  userTotpSecrets.set(key, newSecret);
-  return newSecret;
+  // Deterministic Base32 secret derived from server secret and email.
+  // Crucial for Vercel Serverless: ensures setup and verification instances compute identical secrets!
+  const serverSeed = process.env.JWT_SECRET || 'smart-clinic-ph-totp-seed-2026';
+  const hmac = crypto.createHmac('sha256', serverSeed).update(key).digest();
+  const derivedSecret = base32Encode(hmac).slice(0, 32);
+  userTotpSecrets.set(key, derivedSecret);
+  return derivedSecret;
 }
 
 export function setUserTotpSecret(identifier: string, secret: string) {

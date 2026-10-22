@@ -10,31 +10,18 @@
  */
 
 import crypto from 'crypto';
+import { authStore, type StoredCredential } from './authStoreService';
 
-export interface UserCredentials {
-  email: string;
-  hash: string;
-  salt: string;
-  role: string;
-  failedAttempts: number;
-  lockedUntil: number | null;
-  lastLoginAt?: string;
-  updatedAt: string;
-}
+export interface UserCredentials extends StoredCredential {}
 
 const MAX_FAILED_ATTEMPTS = 5;
-const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 const PBKDF2_ITERATIONS = 10000;
 const SALT_BYTES = 16;
 const KEY_LENGTH = 64;
 
-/** Credential store — globalThis so warm Vercel isolates share state within instance lifetime. */
-const g = globalThis as typeof globalThis & { __scCredentials?: Map<string, UserCredentials> };
-if (!g.__scCredentials) g.__scCredentials = new Map<string, UserCredentials>();
-const credentialsStore = g.__scCredentials;
-
 export function isCredentialRegistered(email: string): boolean {
-  return credentialsStore.has(email.trim().toLowerCase());
+  return authStore.hasCredentialSync(email.trim().toLowerCase());
 }
 
 export function hashPassword(password: string, customSalt?: string): { hash: string; salt: string } {
@@ -64,7 +51,7 @@ export function registerUserCredentials(email: string, rawPassword: string, role
     lockedUntil: null,
     updatedAt: new Date().toISOString(),
   };
-  credentialsStore.set(cleanEmail, cred);
+  authStore.setCredential(cred);
   return cred;
 }
 
@@ -81,8 +68,9 @@ function initializeDefaultCredentials() {
     ['reception@smartclinic.ph', 'reception123', 'staff'],
     ['lab@smartclinic.ph', 'lab123', 'staff'],
   ];
+
   for (const [em, pw, ro] of defaults) {
-    if (!credentialsStore.has(em.toLowerCase())) {
+    if (!authStore.hasCredentialSync(em.toLowerCase())) {
       registerUserCredentials(em, pw, ro);
     }
   }
@@ -92,16 +80,18 @@ initializeDefaultCredentials();
 
 export function checkAccountLockout(email: string): { isLocked: boolean; minutesRemaining: number } {
   const cleanEmail = email.trim().toLowerCase();
-  const cred = credentialsStore.get(cleanEmail);
+  const cred = authStore.getCredentialSync(cleanEmail);
   if (!cred || !cred.lockedUntil) {
     return { isLocked: false, minutesRemaining: 0 };
   }
   const now = Date.now();
   if (now < cred.lockedUntil) {
-    return { isLocked: true, minutesRemaining: Math.max(1, Math.ceil((cred.lockedUntil - now) / 60000)) };
+    const minutesRemaining = Math.max(1, Math.ceil((cred.lockedUntil - now) / 60000));
+    return { isLocked: true, minutesRemaining };
   }
   cred.lockedUntil = null;
   cred.failedAttempts = 0;
+  authStore.setCredential(cred);
   return { isLocked: false, minutesRemaining: 0 };
 }
 
@@ -111,7 +101,8 @@ export function recordFailedLoginAttempt(email: string): {
   minutesRemaining?: number;
 } {
   const cleanEmail = email.trim().toLowerCase();
-  let cred = credentialsStore.get(cleanEmail);
+  let cred = authStore.getCredentialSync(cleanEmail);
+
   if (!cred) {
     cred = {
       email: cleanEmail,
@@ -122,31 +113,44 @@ export function recordFailedLoginAttempt(email: string): {
       lockedUntil: null,
       updatedAt: new Date().toISOString(),
     };
-    credentialsStore.set(cleanEmail, cred);
   }
+
   cred.failedAttempts += 1;
+
   if (cred.failedAttempts >= MAX_FAILED_ATTEMPTS) {
     cred.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
-    return { isLocked: true, remainingAttempts: 0, minutesRemaining: Math.ceil(LOCKOUT_DURATION_MS / 60000) };
+    authStore.setCredential(cred);
+    return {
+      isLocked: true,
+      remainingAttempts: 0,
+      minutesRemaining: Math.ceil(LOCKOUT_DURATION_MS / 60000),
+    };
   }
-  return { isLocked: false, remainingAttempts: MAX_FAILED_ATTEMPTS - cred.failedAttempts };
+
+  authStore.setCredential(cred);
+  return {
+    isLocked: false,
+    remainingAttempts: MAX_FAILED_ATTEMPTS - cred.failedAttempts,
+  };
 }
 
 export function recordSuccessfulLogin(email: string): void {
   const cleanEmail = email.trim().toLowerCase();
-  const cred = credentialsStore.get(cleanEmail);
+  const cred = authStore.getCredentialSync(cleanEmail);
   if (cred) {
     cred.failedAttempts = 0;
     cred.lockedUntil = null;
     cred.lastLoginAt = new Date().toISOString();
+    authStore.setCredential(cred);
   }
 }
 
-export function verifyUserPassword(
+export async function verifyUserPassword(
   email: string,
   rawPassword: string
-): { success: boolean; error?: string; isLocked?: boolean; remainingAttempts?: number } {
+): Promise<{ success: boolean; error?: string; isLocked?: boolean; remainingAttempts?: number }> {
   const cleanEmail = email.trim().toLowerCase();
+
   const lockout = checkAccountLockout(cleanEmail);
   if (lockout.isLocked) {
     return {
@@ -155,7 +159,9 @@ export function verifyUserPassword(
       error: `Account temporarily locked for security due to multiple failed login attempts. Please try again in ${lockout.minutesRemaining} minute(s), or use "Forgot password?" to reset via 2FA.`,
     };
   }
-  const cred = credentialsStore.get(cleanEmail);
+
+  const cred = await authStore.getCredential(cleanEmail);
+
   if (!cred || !cred.hash) {
     const isKnownFallback =
       (rawPassword === 'SmartClinic@Admin2026' && (cleanEmail.includes('admin') || cleanEmail.includes('spartan'))) ||
@@ -164,11 +170,13 @@ export function verifyUserPassword(
       (rawPassword === 'nurse123' && cleanEmail.includes('ana')) ||
       (rawPassword === 'pharm123' && cleanEmail.includes('pharm')) ||
       (rawPassword === 'reception123' && cleanEmail.includes('reception'));
+
     if (isKnownFallback) {
       registerUserCredentials(cleanEmail, rawPassword);
       recordSuccessfulLogin(cleanEmail);
       return { success: true };
     }
+
     const failure = recordFailedLoginAttempt(cleanEmail);
     if (failure.isLocked) {
       return {
@@ -183,6 +191,7 @@ export function verifyUserPassword(
       error: `Invalid credentials. ${failure.remainingAttempts} attempt(s) remaining before security lockout.`,
     };
   }
+
   const isValid = verifyPassword(rawPassword, cred.hash, cred.salt);
   if (!isValid) {
     const failure = recordFailedLoginAttempt(cleanEmail);
@@ -199,14 +208,22 @@ export function verifyUserPassword(
       error: `Invalid password. ${failure.remainingAttempts} attempt(s) remaining before temporary account lockout.`,
     };
   }
+
   recordSuccessfulLogin(cleanEmail);
   return { success: true };
 }
 
-/** Resets password and clears lockout. Preserves role when known. */
-export function resetUserPassword(email: string, newPassword: string, role?: string): void {
+/**
+ * Resets user password (Forgot Password flow) and clears any lockout.
+ * Preserves existing role when known.
+ * Synchronized across Vercel serverless instances via authStore.
+ */
+export async function resetUserPassword(email: string, newPassword: string, role?: string): Promise<void> {
   const cleanEmail = email.trim().toLowerCase();
-  const existing = credentialsStore.get(cleanEmail);
+  const existing = await authStore.getCredential(cleanEmail);
   const resolvedRole = role || existing?.role || 'patient';
-  registerUserCredentials(cleanEmail, newPassword, resolvedRole);
+  const cred = registerUserCredentials(cleanEmail, newPassword, resolvedRole);
+  cred.failedAttempts = 0;
+  cred.lockedUntil = null;
+  await authStore.setCredential(cred);
 }

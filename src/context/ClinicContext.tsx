@@ -381,7 +381,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (digits.length < 10) return { success: false, error: 'Enter a valid mobile phone number (at least 10 digits).' };
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
       const res = await fetch(`${API_BASE_URL}/api/auth/otp/sms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -389,13 +389,14 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         return { success: false, error: data.error || 'Failed to dispatch verification code.' };
       }
       return data;
-    } catch {
-      return { success: false, error: 'Network error communicating with SMS gateway.' };
+    } catch (err: any) {
+      const isAbort = err?.name === 'AbortError';
+      return { success: false, error: isAbort ? 'SMS gateway request timed out. Please retry.' : err?.message || 'Network error communicating with SMS gateway.' };
     }
   };
 
@@ -407,7 +408,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!emailNorm.includes('@')) return { success: false, error: 'Enter a valid email address.' };
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
       const res = await fetch(`${API_BASE_URL}/api/auth/otp/email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -415,7 +416,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         return {
           success: false,
@@ -423,10 +424,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         };
       }
       return data;
-    } catch {
+    } catch (err: any) {
+      const isAbort = err?.name === 'AbortError';
       return {
         success: false,
-        error: 'Network error communicating with email gateway. Please check connection.',
+        error: isAbort ? 'Email gateway connection timed out during cold start. Please retry.' : err?.message || 'Network error communicating with email gateway.',
       };
     }
   };
@@ -434,7 +436,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const verifyServerOtp = async (input: { channel: 'email' | 'sms'; destination: string; code: string }) => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
       const res = await fetch(`${API_BASE_URL}/api/auth/otp/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -442,13 +444,14 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         return { success: false, error: data.error || 'OTP verification failed.' };
       }
       return { success: true };
-    } catch {
-      return { success: false, error: 'Network error verifying code. Please try again.' };
+    } catch (err: any) {
+      const isAbort = err?.name === 'AbortError';
+      return { success: false, error: isAbort ? 'Verification request timed out. Please try again.' : err?.message || 'Network error verifying code.' };
     }
   };
 
