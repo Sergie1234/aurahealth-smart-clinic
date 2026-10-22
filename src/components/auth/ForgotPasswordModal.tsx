@@ -44,9 +44,17 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Check if identifier has Authenticator App enabled
+  // Reset modal state + detect Authenticator recovery when opened
   useEffect(() => {
     if (!isOpen) return;
+    setStep('request');
+    setCode('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setError('');
+    setLoading(false);
+    if (defaultIdentifier) setIdentifier(defaultIdentifier);
+
     const cleanId = (identifier || defaultIdentifier).trim().toLowerCase();
     if (cleanId && cleanId.includes('@')) {
       fetch(`${API_BASE_URL}/api/auth/password-reset/methods?email=${encodeURIComponent(cleanId)}`)
@@ -60,9 +68,15 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
             setRecoveryMethod('email');
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          setHasAuthenticatorAvailable(false);
+          setRecoveryMethod('email');
+        });
+    } else {
+      setHasAuthenticatorAvailable(false);
+      setRecoveryMethod('email');
     }
-  }, [isOpen, identifier, defaultIdentifier]);
+  }, [isOpen, defaultIdentifier]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isOpen) return null;
 
@@ -89,27 +103,48 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     setLoading(true);
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      // SMTP delivery can take >4s; use 25s so real server errors surface instead of false timeouts
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
       const res = await fetch(`${API_BASE_URL}/api/auth/password-reset/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: cleanId }),
+        body: JSON.stringify({ identifier: cleanId, email: cleanId }),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      const data = await res.json();
+
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
       setLoading(false);
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to dispatch password reset code.');
+        const msg =
+          data.error ||
+          (res.status === 429
+            ? 'Too many requests. Wait a moment before requesting another code.'
+            : 'Failed to dispatch password reset code. Check SMTP configuration or try again.');
+        setError(msg);
+        toastError(msg);
+        return;
       }
 
       setRecoveryMethod('email');
       setStep('confirm');
-      toastSuccess(`Password reset security code sent to ${data.destination || cleanId}! Check your inbox.`);
-    } catch {
+      toastSuccess(
+        `Password reset security code sent to ${data.destination || cleanId}. Check your inbox (and spam folder).`
+      );
+    } catch (err: any) {
       setLoading(false);
-      setError('Network error: Unable to connect to the authentication server.');
+      const isAbort = err?.name === 'AbortError';
+      const msg = isAbort
+        ? 'Request timed out while contacting the mail server. Verify SMTP_APP_PASSWORD and try again.'
+        : err?.message || 'Network error: Unable to reach the authentication server.';
+      setError(msg);
+      toastError(msg);
     }
   };
 
@@ -145,7 +180,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     setLoading(true);
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
       const res = await fetch(`${API_BASE_URL}/api/auth/password-reset/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -157,21 +192,40 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-      const data = await res.json();
+
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
       setLoading(false);
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Invalid or expired verification code.');
+        const msg = data.error || 'Invalid or expired verification code. Request a new reset code.';
+        setError(msg);
+        toastError(msg);
+        return;
       }
 
       toastSuccess('Password updated successfully! You can now log in with your new credentials.');
       if (onPasswordResetSuccess) {
         onPasswordResetSuccess(newPassword);
       }
+      // Reset local modal state for next open
+      setStep('request');
+      setCode('');
+      setNewPassword('');
+      setConfirmPassword('');
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       setLoading(false);
-      setError('Verification failed: Cannot reach authentication server.');
+      const isAbort = err?.name === 'AbortError';
+      const msg = isAbort
+        ? 'Request timed out. Please try again.'
+        : err?.message || 'Verification failed: Cannot reach authentication server.';
+      setError(msg);
+      toastError(msg);
     }
   };
 
@@ -270,7 +324,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 </div>
                 <div className="flex-1 min-w-0">
                   <span className="font-bold text-xs text-slate-900 dark:text-slate-100 block">
-                    Send Password Reset Code to Email
+                    {loading ? 'Sending reset code…' : 'Send Password Reset Code to Email'}
                   </span>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
                     Dispatches a dedicated one-time password reset code to your registered email inbox.
