@@ -31,6 +31,10 @@ const KEY_LENGTH = 64;
 /** In-memory credential store (swap for DB in multi-instance production). */
 const credentialsStore = new Map<string, UserCredentials>();
 
+export function isCredentialRegistered(email: string): boolean {
+  return credentialsStore.has(email.trim().toLowerCase());
+}
+
 export function hashPassword(password: string, customSalt?: string): { hash: string; salt: string } {
   const salt = customSalt || crypto.randomBytes(SALT_BYTES).toString('hex');
   const hash = crypto.pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha512').toString('hex');

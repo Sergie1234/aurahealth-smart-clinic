@@ -105,11 +105,6 @@ export function verifyTotpCode(
 ): boolean {
   const cleanCode = String(code || '').trim();
 
-  // Universal testing/development bypass
-  if (cleanCode === '123456' || cleanCode === '000000') {
-    return true;
-  }
-
   if (!cleanCode || cleanCode.length !== 6 || !/^\d{6}$/.test(cleanCode)) {
     return false;
   }

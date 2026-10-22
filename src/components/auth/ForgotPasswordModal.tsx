@@ -3,7 +3,6 @@ import {
   X,
   KeyRound,
   Lock,
-  Send,
   CheckCircle2,
   AlertCircle,
   Mail,
@@ -12,6 +11,9 @@ import {
   EyeOff,
   Smartphone,
   ArrowLeft,
+  QrCode,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { API_BASE_URL } from '../../lib/config';
@@ -22,7 +24,7 @@ interface ForgotPasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultIdentifier?: string;
-  onPasswordResetSuccess?: (newPass: string) => void;
+  onPasswordResetSuccess?: (newPass: string, resetEmail: string) => void;
 }
 
 export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
@@ -36,7 +38,16 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   const [identifier, setIdentifier] = useState(defaultIdentifier);
   const [recoveryMethod, setRecoveryMethod] = useState<'authenticator' | 'email'>('email');
   const [hasAuthenticatorAvailable, setHasAuthenticatorAvailable] = useState(false);
+  const [isEmailRegistered, setIsEmailRegistered] = useState<boolean | null>(null);
+
+  // Authenticator QR Setup state (strictly conditional: only fetched & shown when Authenticator App is selected)
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
+  const [totpSecret, setTotpSecret] = useState('');
+  const [loadingQr, setLoadingQr] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
+
   const [code, setCode] = useState('');
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -44,7 +55,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Reset modal state + detect Authenticator recovery when opened
+  // Reset modal state when opened
   useEffect(() => {
     if (!isOpen) return;
     setStep('request');
@@ -53,37 +64,112 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     setConfirmPassword('');
     setError('');
     setLoading(false);
-    if (defaultIdentifier) setIdentifier(defaultIdentifier);
-
-    const cleanId = (identifier || defaultIdentifier).trim().toLowerCase();
-    if (cleanId && cleanId.includes('@')) {
-      fetch(`${API_BASE_URL}/api/auth/password-reset/methods?email=${encodeURIComponent(cleanId)}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.hasAuthenticator) {
-            setHasAuthenticatorAvailable(true);
-            setRecoveryMethod('authenticator');
-          } else {
-            setHasAuthenticatorAvailable(false);
-            setRecoveryMethod('email');
-          }
-        })
-        .catch(() => {
-          setHasAuthenticatorAvailable(false);
-          setRecoveryMethod('email');
-        });
-    } else {
-      setHasAuthenticatorAvailable(false);
-      setRecoveryMethod('email');
+    setQrCodeDataUrl('');
+    setTotpSecret('');
+    setIsEmailRegistered(null);
+    if (defaultIdentifier) {
+      setIdentifier(defaultIdentifier);
     }
-  }, [isOpen, defaultIdentifier]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen, defaultIdentifier]);
+
+  // Dynamically check whether the email is registered and which recovery methods are available
+  useEffect(() => {
+    if (!isOpen) return;
+    const cleanId = identifier.trim().toLowerCase();
+    if (cleanId && cleanId.includes('@')) {
+      const timer = setTimeout(() => {
+        fetch(`${API_BASE_URL}/api/auth/password-reset/methods?email=${encodeURIComponent(cleanId)}`)
+          .then(async (res) => {
+            const data = await res.json();
+            if (!res.ok || data?.isRegistered === false) {
+              setIsEmailRegistered(false);
+              setHasAuthenticatorAvailable(false);
+              setError('This email address is not registered in our clinic system.');
+            } else {
+              setIsEmailRegistered(true);
+              setError('');
+              if (data?.hasAuthenticator) {
+                setHasAuthenticatorAvailable(true);
+                setRecoveryMethod('authenticator');
+              } else {
+                setHasAuthenticatorAvailable(false);
+                setRecoveryMethod('email');
+              }
+            }
+          })
+          .catch(() => {
+            setIsEmailRegistered(null);
+            setHasAuthenticatorAvailable(false);
+          });
+      }, 350);
+      return () => clearTimeout(timer);
+    } else {
+      setIsEmailRegistered(null);
+      setHasAuthenticatorAvailable(false);
+      setError('');
+    }
+  }, [isOpen, identifier]);
+
+  // Resend cooldown timer countdown
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setCooldownSeconds((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldownSeconds]);
+
+  // CONDITIONAL QR CODE RENDERING:
+  // Only fetch and render the QR code when the user actively selects 'authenticator' recovery
+  useEffect(() => {
+    if (!isOpen || step !== 'confirm' || recoveryMethod !== 'authenticator') {
+      return;
+    }
+    const cleanId = identifier.trim().toLowerCase();
+    if (!cleanId || !cleanId.includes('@')) return;
+
+    let isMounted = true;
+    setLoadingQr(true);
+    fetch(`${API_BASE_URL}/api/auth/2fa/setup?email=${encodeURIComponent(cleanId)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted) return;
+        if (data?.qrCodeDataUrl) {
+          setQrCodeDataUrl(data.qrCodeDataUrl);
+          setTotpSecret(data.secret || '');
+        }
+      })
+      .catch((err) => {
+        console.warn('[Authenticator QR Fetch Notice]', err);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingQr(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, step, recoveryMethod, identifier]);
 
   if (!isOpen) return null;
 
+  const handleCopySecret = () => {
+    if (!totpSecret) return;
+    navigator.clipboard.writeText(totpSecret);
+    setCopiedKey(true);
+    toastSuccess('Authenticator secret key copied to clipboard.');
+    setTimeout(() => setCopiedKey(false), 2000);
+  };
+
   const handleSelectAuthenticator = () => {
-    const cleanId = identifier.trim();
+    const cleanId = identifier.trim().toLowerCase();
     if (!cleanId || !cleanId.includes('@')) {
       setError('Please enter your registered email address first.');
+      return;
+    }
+    if (isEmailRegistered === false) {
+      setError('This email address is not registered in our clinic system.');
+      toastError('This email address is not registered in our clinic system.');
       return;
     }
     setError('');
@@ -91,19 +177,38 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     setStep('confirm');
   };
 
+  const handleDirectEnterCode = () => {
+    const cleanId = identifier.trim().toLowerCase();
+    if (!cleanId || !cleanId.includes('@')) {
+      setError('Please enter your registered email address first.');
+      return;
+    }
+    if (isEmailRegistered === false) {
+      setError('This email address is not registered in our clinic system.');
+      toastError('This email address is not registered in our clinic system.');
+      return;
+    }
+    setError('');
+    setStep('confirm');
+  };
+
   const handleSendEmailCode = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setError('');
-    const cleanId = identifier.trim();
+    const cleanId = identifier.trim().toLowerCase();
     if (!cleanId || !cleanId.includes('@')) {
       setError('Please enter your registered email address.');
+      return;
+    }
+    if (isEmailRegistered === false) {
+      setError('This email address is not registered in our clinic system.');
+      toastError('This email address is not registered in our clinic system.');
       return;
     }
 
     setLoading(true);
     try {
       const controller = new AbortController();
-      // SMTP delivery can take >4s; use 25s so real server errors surface instead of false timeouts
       const timeoutId = setTimeout(() => controller.abort(), 25000);
       const res = await fetch(`${API_BASE_URL}/api/auth/password-reset/request`, {
         method: 'POST',
@@ -124,14 +229,17 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
       if (!res.ok || !data.success) {
         const msg =
           data.error ||
-          (res.status === 429
+          (res.status === 404
+            ? 'This email address is not registered in our clinic system.'
+            : res.status === 429
             ? 'Too many requests. Wait a moment before requesting another code.'
-            : 'Failed to dispatch password reset code. Check SMTP configuration or try again.');
+            : 'Failed to dispatch password reset code. Please try again.');
         setError(msg);
         toastError(msg);
         return;
       }
 
+      setCooldownSeconds(60);
       setRecoveryMethod('email');
       setStep('confirm');
       toastSuccess(
@@ -141,7 +249,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
       setLoading(false);
       const isAbort = err?.name === 'AbortError';
       const msg = isAbort
-        ? 'Request timed out while contacting the mail server. Verify SMTP_APP_PASSWORD and try again.'
+        ? 'Request timed out while contacting the server. Try entering code directly or retry.'
         : err?.message || 'Network error: Unable to reach the authentication server.';
       setError(msg);
       toastError(msg);
@@ -181,11 +289,12 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const cleanId = identifier.trim().toLowerCase();
       const res = await fetch(`${API_BASE_URL}/api/auth/password-reset/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          identifier: identifier.trim().toLowerCase(),
+          identifier: cleanId,
           code: cleanCode,
           newPassword,
         }),
@@ -210,13 +319,15 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
 
       toastSuccess('Password updated successfully! You can now log in with your new credentials.');
       if (onPasswordResetSuccess) {
-        onPasswordResetSuccess(newPassword);
+        onPasswordResetSuccess(newPassword, cleanId);
       }
       // Reset local modal state for next open
       setStep('request');
       setCode('');
       setNewPassword('');
       setConfirmPassword('');
+      setQrCodeDataUrl('');
+      setTotpSecret('');
       onClose();
     } catch (err: any) {
       setLoading(false);
@@ -265,16 +376,31 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
         {step === 'request' ? (
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Registered Account Email
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Registered Account Email
+                </label>
+                {isEmailRegistered === false && (
+                  <span className="text-[10px] font-bold text-rose-500">Unregistered Email</span>
+                )}
+                {isEmailRegistered === true && (
+                  <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>Registered</span>
+                  </span>
+                )}
+              </div>
               <input
                 type="email"
                 required
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 placeholder="name@example.com"
-                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500"
+                className={`w-full rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500 ${
+                  isEmailRegistered === false
+                    ? 'border-rose-400 dark:border-rose-700 focus:ring-rose-500'
+                    : 'border-slate-200 dark:border-slate-700'
+                }`}
               />
               <p className="mt-1.5 text-[11px] text-slate-400">
                 Choose your preferred recovery pathway below. Authenticator App is recommended if enabled.
@@ -331,6 +457,17 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                   </p>
                 </div>
               </button>
+
+              {/* Direct Code Entry Option */}
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={handleDirectEnterCode}
+                  className="text-[11px] font-semibold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
+                >
+                  Already have a reset code? Enter it directly →
+                </button>
+              </div>
             </div>
           </div>
         ) : (
@@ -346,7 +483,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 ) : (
                   <>
                     <Mail className="w-4 h-4 text-teal-600 shrink-0" />
-                    <span>Reset code dispatched to: <strong>{identifier}</strong></span>
+                    <span>Reset code for: <strong>{identifier}</strong></span>
                   </>
                 )}
               </div>
@@ -359,26 +496,87 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
               </button>
             </div>
 
+            {/* CONDITIONAL QR CODE RENDERING:
+                Completely hidden by default. Only renders when Authenticator App is actively selected */}
+            {recoveryMethod === 'authenticator' && (
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/70 rounded-2xl border border-slate-200 dark:border-slate-700 text-center space-y-2.5">
+                <div className="flex items-center justify-between text-left">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-100 text-xs">
+                    <QrCode className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                    <span>Authenticator App QR Code</span>
+                  </div>
+                  <span className="text-[10px] text-teal-600 dark:text-teal-400 font-medium">
+                    Google / Microsoft Authenticator
+                  </span>
+                </div>
+
+                {loadingQr ? (
+                  <div className="py-6 flex flex-col items-center justify-center gap-2">
+                    <div className="w-6 h-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-[11px] text-slate-400">Loading Authenticator QR Code...</span>
+                  </div>
+                ) : qrCodeDataUrl ? (
+                  <div className="flex flex-col items-center justify-center gap-2 pt-1">
+                    <div className="p-2.5 bg-white rounded-2xl border border-slate-200 shadow-xs inline-block">
+                      <img
+                        src={qrCodeDataUrl}
+                        alt="Authenticator 2FA QR Code"
+                        className="w-36 h-36 object-contain mx-auto"
+                      />
+                    </div>
+                    {totpSecret && (
+                      <div className="flex items-center gap-1.5 mt-1 max-w-full">
+                        <span className="text-[10px] text-slate-400">Secret Key:</span>
+                        <code className="text-[11px] font-mono font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 select-all truncate">
+                          {totpSecret}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={handleCopySecret}
+                          className="p-1 text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 transition cursor-pointer"
+                          title="Copy Secret Key"
+                        >
+                          {copiedKey ? <Check className="w-3.5 h-3.5 text-teal-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            )}
+
             {/* 6-Digit Code */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                {recoveryMethod === 'authenticator'
-                  ? '6-Digit Authenticator App Code'
-                  : '6-Digit Email Reset Code'} *
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  {recoveryMethod === 'authenticator'
+                    ? '6-Digit Authenticator App Code'
+                    : '6-Digit Email Reset Code'} *
+                </label>
+                {recoveryMethod === 'email' && (
+                  <button
+                    type="button"
+                    disabled={loading || cooldownSeconds > 0}
+                    onClick={handleSendEmailCode}
+                    className="text-[10px] text-teal-600 dark:text-teal-400 hover:underline disabled:opacity-50 cursor-pointer"
+                  >
+                    {cooldownSeconds > 0 ? `Resend (${cooldownSeconds}s)` : 'Resend code'}
+                  </button>
+                )}
+              </div>
               <input
                 type="text"
                 maxLength={6}
                 required
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                placeholder={recoveryMethod === 'authenticator' ? 'Enter from Google Authenticator' : '123456'}
+                placeholder={recoveryMethod === 'authenticator' ? 'Enter from Authenticator' : '••••••'}
                 className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-xs font-mono font-bold tracking-widest text-center focus:ring-2 focus:ring-teal-500"
               />
               <p className="mt-1 text-[11px] text-slate-400 text-center">
                 {recoveryMethod === 'authenticator'
-                  ? 'Open your mobile Authenticator app and enter the 6-digit code.'
-                  : 'Check your email inbox for the password reset security code.'}
+                  ? 'Open your mobile Authenticator app (e.g. Google Authenticator) and enter the 6-digit rolling code.'
+                  : 'Check your email inbox or spam folder for the password reset security code.'}
               </p>
             </div>
 

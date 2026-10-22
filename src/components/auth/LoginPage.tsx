@@ -54,6 +54,7 @@ export const LoginPage: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [enablePatient2Fa, setEnablePatient2Fa] = useState(false);
+  const [justResetPassword, setJustResetPassword] = useState(false);
 
   // Patient Intake EMR Demographics
   const [dob, setDob] = useState('1995-05-15');
@@ -98,7 +99,7 @@ export const LoginPage: React.FC = () => {
 
   // Proactively check if entered email has Authenticator 2FA enabled (Admin, Doctor, Staff only)
   useEffect(() => {
-    if (primaryRole === 'patient') {
+    if (primaryRole === 'patient' || justResetPassword) {
       setEnablePatient2Fa(false);
       return;
     }
@@ -108,7 +109,7 @@ export const LoginPage: React.FC = () => {
         fetch(`/api/auth/2fa/status?email=${encodeURIComponent(clean)}`)
           .then((res) => res.json())
           .then((d) => {
-            if (d?.enabled) {
+            if (d?.enabled && !justResetPassword) {
               setEnablePatient2Fa(true);
             }
           })
@@ -116,7 +117,7 @@ export const LoginPage: React.FC = () => {
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [email, primaryRole]);
+  }, [email, primaryRole, justResetPassword]);
 
   const isPatient = primaryRole === 'patient';
   const isDoctor = primaryRole === 'doctor';
@@ -903,8 +904,8 @@ export const LoginPage: React.FC = () => {
                         {showLoginPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                         <span>{showLoginPassword ? 'Hide' : 'See Password'}</span>
                       </button>
-                      {/* Forgot password is ONLY rendered in login mode */}
-                      {!isAdmin && mode === 'login' && (
+                      {/* Forgot password rendered in login mode */}
+                      {mode === 'login' && (
                         <button
                           type="button"
                           onClick={() => setShowForgotPassword(true)}
@@ -1012,7 +1013,7 @@ export const LoginPage: React.FC = () => {
                 )}
 
                 {/* Admin 2FA Code Input & Authenticator App Integration */}
-                {isAdmin && (
+                {isAdmin && !justResetPassword && (
                   <div className="p-4 rounded-2xl bg-amber-50/50 dark:bg-slate-800/60 border border-amber-200 dark:border-amber-800/80 space-y-2.5">
                     <div className="flex items-center justify-between">
                       <label className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
@@ -1243,9 +1244,17 @@ export const LoginPage: React.FC = () => {
         isOpen={showForgotPassword}
         onClose={() => setShowForgotPassword(false)}
         defaultIdentifier={email}
-        onPasswordResetSuccess={(newPass) => {
+        onPasswordResetSuccess={(newPass, resetEmail) => {
+          if (resetEmail) {
+            setEmail(resetEmail);
+          }
           setPassword(newPass);
-          toastSuccess('Password updated. You can now log in.');
+          setTwoFactorCode('');
+          setEnablePatient2Fa(false);
+          setShowAuthenticatorModal(false);
+          setJustResetPassword(true);
+          setError('');
+          toastSuccess('Password updated successfully! Please sign in with your new credentials.');
         }}
       />
 

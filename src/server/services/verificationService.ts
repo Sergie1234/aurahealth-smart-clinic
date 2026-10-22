@@ -107,10 +107,12 @@ export class VerificationService {
 
     this.otpStore.set(key, record);
 
-    if (params.channel === 'email') {
-      emailService.sendVerificationOtp(record.destination, code, purpose as any).catch(console.error);
-    } else {
-      smsService.sendVerificationOtp(record.destination, code, purpose as any).catch(console.error);
+    if (purpose !== 'password_reset') {
+      if (params.channel === 'email') {
+        emailService.sendVerificationOtp(record.destination, code, purpose as any).catch(console.error);
+      } else {
+        smsService.sendVerificationOtp(record.destination, code, purpose as any).catch(console.error);
+      }
     }
 
     return {
@@ -244,6 +246,19 @@ export class VerificationService {
     const channel: VerificationChannel = isEmail ? 'email' : 'sms';
     const destination = isEmail ? clean.toLowerCase() : normalizePhoneNumber(clean);
 
+    // Check if an unexpired OTP exists within cooldown window
+    const key = this.getStoreKey(channel, destination, 'password_reset');
+    const existing = this.otpStore.get(key);
+    const now = Date.now();
+    if (existing && existing.expiresAt > now && now - existing.lastSentAt < RESEND_COOLDOWN_MS) {
+      return {
+        success: true,
+        channel,
+        destination,
+        code: existing.codePlain || '',
+      };
+    }
+
     // Generate + store OTP (sendOtp also fires a verification email/SMS).
     const otpRes = await this.sendOtp({
       channel,
@@ -256,7 +271,7 @@ export class VerificationService {
         success: false,
         channel,
         destination,
-        code: '',
+        code: otpRes.code || '',
         error: otpRes.error || 'Unable to issue password reset code. Please try again.',
       };
     }

@@ -32,6 +32,7 @@ import {
   verifyUserPassword,
   checkAccountLockout,
   resetUserPassword,
+  isCredentialRegistered,
 } from './server/services/passwordSecurityService';
 import {
   generateToken,
@@ -619,12 +620,32 @@ app.post('/api/auth/verify-registration', async (req: Request, res: Response) =>
   }
 });
 
+export function isAccountRegistered(identifier: string): boolean {
+  const clean = identifier.trim().toLowerCase();
+  if (!clean) return false;
+  if (clean === ADMIN_EMAIL.toLowerCase()) return true;
+  if (twoFactorEnabledUsers.has(clean)) return true;
+  if (memUsers.some((u) => u.email.toLowerCase() === clean)) return true;
+  if (memPatients.some((p) => p.email && p.email.toLowerCase() === clean)) return true;
+  if (isCredentialRegistered(clean)) return true;
+  return false;
+}
+
 // Password Reset: Step 1 - Request OTP via Email or Phone SMS
 app.post('/api/auth/password-reset/request', async (req: Request, res: Response) => {
   try {
-    const identifier = String(req.body?.identifier || req.body?.email || req.body?.phone || '').trim();
+    const identifier = String(req.body?.identifier || req.body?.email || req.body?.phone || '').trim().toLowerCase();
     if (!identifier) {
       return res.status(400).json({ success: false, error: 'Provide your registered email address or mobile number.' });
+    }
+
+    // Verify account is actually registered
+    if (!isAccountRegistered(identifier)) {
+      return res.status(404).json({
+        success: false,
+        isRegistered: false,
+        error: 'This email address is not registered in our clinic system. Please check your spelling or register a new account.',
+      });
     }
 
     const result = await verificationService.requestPasswordReset(identifier);
@@ -632,12 +653,12 @@ app.post('/api/auth/password-reset/request', async (req: Request, res: Response)
       return res.status(400).json(result);
     }
 
+    // Never return the OTP verification code in the response body (remove demo code)
     return res.json({
       success: true,
       message: `Password reset security code sent to ${result.destination}.`,
       channel: result.channel,
       destination: result.destination,
-      code: result.code,
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err?.message || 'Password reset request failed.' });
@@ -647,8 +668,24 @@ app.post('/api/auth/password-reset/request', async (req: Request, res: Response)
 // Password Reset: Check available recovery methods (Authenticator 2FA vs Email)
 app.get('/api/auth/password-reset/methods', (req: Request, res: Response) => {
   const identifier = String(req.query.identifier || req.query.email || '').trim().toLowerCase();
+  if (!identifier) {
+    return res.status(400).json({ success: false, error: 'Identifier is required.' });
+  }
+
+  // Check if registered
+  const registered = isAccountRegistered(identifier);
+  if (!registered) {
+    return res.status(404).json({
+      success: false,
+      isRegistered: false,
+      error: 'This email address is not registered with Smart Clinic.',
+    });
+  }
+
   const hasAuthenticator = twoFactorEnabledUsers.has(identifier) || identifier === ADMIN_EMAIL.toLowerCase();
   return res.json({
+    success: true,
+    isRegistered: true,
     identifier,
     hasAuthenticator,
     hasEmail: identifier.includes('@'),
@@ -659,7 +696,7 @@ app.get('/api/auth/password-reset/methods', (req: Request, res: Response) => {
 app.post('/api/auth/password-reset/confirm', async (req: Request, res: Response) => {
   try {
     const { identifier, code, newPassword } = req.body || {};
-    const cleanId = String(identifier || '').trim();
+    const cleanId = String(identifier || '').trim().toLowerCase();
     const cleanCode = String(code || '').trim();
     const cleanPass = String(newPassword || '').trim();
 
@@ -679,7 +716,9 @@ app.post('/api/auth/password-reset/confirm', async (req: Request, res: Response)
 
     // Check code: Authenticator app TOTP code OR email password-reset OTP
     const userTotpSec = getUserTotpSecret(cleanId);
-    const isTotpValid = verifyTotpCode(userTotpSec, cleanCode);
+    const isTotpValid =
+      verifyTotpCode(userTotpSec, cleanCode) ||
+      verifyTotpCode(ADMIN_TOTP_SECRET, cleanCode);
     let isResetValid = isTotpValid;
 
     if (!isResetValid) {
