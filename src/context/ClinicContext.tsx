@@ -694,83 +694,94 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       return { success: false, error: 'Unknown role.' };
     } catch (netErr) {
-      console.warn('[Smart Clinic Auth] Server unreachable, executing offline resilient login fallback:', netErr);
+      console.warn('[Smart Clinic Auth] Server unreachable:', netErr);
+      
+      // Strict verification in offline mode: 
+      // Only allow login if credentials match locally stored hashes (for patients) 
+      // or if it's a specific dev environment scenario.
+      const isDev = import.meta.env.DEV;
 
-      // Resilient local authentication fallback to ensure zero downtime
       if (role === 'patient') {
         const cleanEmail = (credentials.email || '').trim().toLowerCase();
         const cleanPhone = (credentials.phone || '').replace(/\D/g, '');
 
         if (credentials.isRegister) {
-          return registerPatient({
-            fullName: credentials.fullName || cleanEmail.split('@')[0] || 'New Patient',
-            email: cleanEmail,
-            phone: cleanPhone,
-            password: credentials.password,
-          });
+            // Keep registration as is for now if it's not a security issue, 
+            // but registration usually requires server-side validation anyway.
+            return registerPatient({
+                fullName: credentials.fullName || cleanEmail.split('@')[0] || 'New Patient',
+                email: cleanEmail,
+                phone: cleanPhone,
+                password: credentials.password,
+            });
         }
 
-        const matched =
-          patients.find(
-            (p) =>
-              (cleanEmail && p.email.toLowerCase() === cleanEmail) ||
-              (cleanPhone && p.phone.replace(/\D/g, '').includes(cleanPhone))
-          ) || patients[0];
+        const matched = patientAccounts.find(
+          (a) =>
+            (cleanEmail && a.email?.toLowerCase() === cleanEmail) ||
+            (cleanPhone && a.phone === cleanPhone)
+        );
 
-        finishPatientSession(matched.id, matched.fullName, matched.email, matched.id);
-        return { success: true };
+        if (matched && matched.passwordHash === simpleHash(credentials.password || '')) {
+            finishPatientSession(matched.id, matched.fullName, matched.email || '', matched.patientId);
+            return { success: true };
+        }
       }
 
-      if (role === 'doctor') {
-        const doc = users.find((u) => u.role === 'doctor') || users[0];
-        setCurrentUser(doc);
-        setActiveRole('doctor');
-        setPrimaryRole('doctor');
-        setStaffSubRole(null);
-        setIsAuthenticated(true);
-        setActiveTab(pendingAction === 'queue' ? 'queue' : 'consultations');
-        return { success: true };
+      // Strictly fail for staff/admin in offline mode for production.
+      // Allow for dev if hardcoded credentials are used.
+      if (isDev) {
+        if (role === 'doctor' && credentials.password === 'doctor123') {
+           // ... (same as before but only if password matches)
+           const doc = users.find((u) => u.role === 'doctor') || users[0];
+           setCurrentUser(doc);
+           setActiveRole('doctor');
+           setPrimaryRole('doctor');
+           setStaffSubRole(null);
+           setIsAuthenticated(true);
+           setActiveTab(pendingAction === 'queue' ? 'queue' : 'consultations');
+           return { success: true };
+        }
+        // ... (similar for staff and admin)
+        if (role === 'staff' && credentials.password === 'staff123') {
+           const staffSub = subRole || 'nurse';
+           const st = users.find((u) => u.role === staffSub) || {
+             id: `usr-${staffSub}`,
+             name: `${staffSub.toUpperCase()} Practitioner`,
+             email: `${staffSub}@smartclinic.ph`,
+             role: staffSub as UserRole,
+           };
+           setCurrentUser(st);
+           setActiveRole(staffSub as UserRole);
+           setPrimaryRole('staff');
+           setStaffSubRole(staffSub);
+           setIsAuthenticated(true);
+           if (pendingAction === 'queue') setActiveTab('queue');
+           else if (staffSub === 'nurse') setActiveTab('queue');
+           else if (staffSub === 'pharmacist') setActiveTab('inventory');
+           else if (staffSub === 'receptionist') setActiveTab('appointments');
+           else if (staffSub === 'lab_technician') setActiveTab('laboratory');
+           else setActiveTab('dashboard');
+           return { success: true };
+        }
+        if (role === 'admin' && credentials.password === 'SmartClinic@Admin2026') {
+          const adm = users.find((u) => u.role === 'admin') || {
+            id: 'usr-admin',
+            name: 'Administrator',
+            email: 'smartclinicrealacc@gmail.com',
+            role: 'admin' as UserRole,
+          };
+          setCurrentUser(adm);
+          setActiveRole('admin');
+          setPrimaryRole('admin');
+          setStaffSubRole(null);
+          setIsAuthenticated(true);
+          setActiveTab(pendingAction === 'queue' ? 'queue' : 'dashboard');
+          return { success: true };
+        }
       }
 
-      if (role === 'staff') {
-        const staffSub = subRole || 'nurse';
-        const st = users.find((u) => u.role === staffSub) || {
-          id: `usr-${staffSub}`,
-          name: `${staffSub.toUpperCase()} Practitioner`,
-          email: `${staffSub}@smartclinic.ph`,
-          role: staffSub as UserRole,
-        };
-        setCurrentUser(st);
-        setActiveRole(staffSub as UserRole);
-        setPrimaryRole('staff');
-        setStaffSubRole(staffSub);
-        setIsAuthenticated(true);
-        if (pendingAction === 'queue') setActiveTab('queue');
-        else if (staffSub === 'nurse') setActiveTab('queue');
-        else if (staffSub === 'pharmacist') setActiveTab('inventory');
-        else if (staffSub === 'receptionist') setActiveTab('appointments');
-        else if (staffSub === 'lab_technician') setActiveTab('laboratory');
-        else setActiveTab('dashboard');
-        return { success: true };
-      }
-
-      if (role === 'admin') {
-        const adm = users.find((u) => u.role === 'admin') || {
-          id: 'usr-admin',
-          name: 'Administrator',
-          email: 'smartclinicrealacc@gmail.com',
-          role: 'admin' as UserRole,
-        };
-        setCurrentUser(adm);
-        setActiveRole('admin');
-        setPrimaryRole('admin');
-        setStaffSubRole(null);
-        setIsAuthenticated(true);
-        setActiveTab(pendingAction === 'queue' ? 'queue' : 'dashboard');
-        return { success: true };
-      }
-
-      return { success: false, error: 'Unable to reach authentication server. Please check connection.' };
+      return { success: false, error: 'Authentication server unreachable.' };
     }
   };
 

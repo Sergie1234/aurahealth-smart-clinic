@@ -172,38 +172,43 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
         onPasswordResetSuccess(newPassword);
       }
       onClose();
-    } catch {
+    } catch (err) {
       setLoading(false);
-      // Static Vercel deployment fallback: update password locally in localStorage
-      console.warn('[Smart Clinic] Backend confirm API unreachable, updating credentials locally in Vercel static mode.');
-      try {
-        const savedUsers = localStorage.getItem('smart_clinic_users');
-        if (savedUsers) {
-          const users = JSON.parse(savedUsers);
-          const targetEmail = identifier.trim().toLowerCase();
-          const updated = users.map((u: any) =>
-            u.email && u.email.toLowerCase() === targetEmail ? { ...u, password: newPassword } : u
-          );
-          localStorage.setItem('smart_clinic_users', JSON.stringify(updated));
+      // Strictly enforce verification: Only accept demo code '123456' in development mode
+      const isDev = import.meta.env.DEV;
+      if (isDev && cleanCode === '123456') {
+        console.warn('[Smart Clinic] Backend confirm API unreachable, using demo code in development.');
+        try {
+          const savedUsers = localStorage.getItem('smart_clinic_users');
+          if (savedUsers) {
+            const users = JSON.parse(savedUsers);
+            const targetEmail = identifier.trim().toLowerCase();
+            const updated = users.map((u: any) =>
+              u.email && u.email.toLowerCase() === targetEmail ? { ...u, password: newPassword } : u
+            );
+            localStorage.setItem('smart_clinic_users', JSON.stringify(updated));
+          }
+          const savedPatientAccounts = localStorage.getItem('smart_clinic_patient_accounts');
+          if (savedPatientAccounts) {
+            const accounts = JSON.parse(savedPatientAccounts);
+            const targetEmail = identifier.trim().toLowerCase();
+            const updated = accounts.map((acc: any) =>
+              acc.email && acc.email.toLowerCase() === targetEmail ? { ...acc, passwordHash: newPassword } : acc
+            );
+            localStorage.setItem('smart_clinic_patient_accounts', JSON.stringify(updated));
+          }
+        } catch (localErr) {
+          console.warn('Local credential storage update notice:', localErr);
         }
-        const savedPatientAccounts = localStorage.getItem('smart_clinic_patient_accounts');
-        if (savedPatientAccounts) {
-          const accounts = JSON.parse(savedPatientAccounts);
-          const targetEmail = identifier.trim().toLowerCase();
-          const updated = accounts.map((acc: any) =>
-            acc.email && acc.email.toLowerCase() === targetEmail ? { ...acc, passwordHash: newPassword } : acc
-          );
-          localStorage.setItem('smart_clinic_patient_accounts', JSON.stringify(updated));
-        }
-      } catch (localErr) {
-        console.warn('Local credential storage update notice:', localErr);
-      }
 
-      toastSuccess('Password successfully updated (Vercel Static Mode)! You can now log in.');
-      if (onPasswordResetSuccess) {
-        onPasswordResetSuccess(newPassword);
+        toastSuccess('Password successfully updated (Demo Mode)! You can now log in.');
+        if (onPasswordResetSuccess) {
+          onPasswordResetSuccess(newPassword);
+        }
+        onClose();
+      } else {
+        setError('Verification failed: Cannot reach authentication server.');
       }
-      onClose();
     }
   };
 
