@@ -19,6 +19,7 @@ import { useToast } from '../../context/ToastContext';
 import { API_BASE_URL } from '../../lib/config';
 import { validatePasswordStrength } from '../../utils/passwordValidation';
 import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
+import QRCode from 'qrcode';
 
 interface ForgotPasswordModalProps {
   isOpen: boolean;
@@ -39,13 +40,10 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   const [recoveryMethod, setRecoveryMethod] = useState<'authenticator' | 'email'>('email');
   const [hasAuthenticatorAvailable, setHasAuthenticatorAvailable] = useState(false);
   const [isEmailRegistered, setIsEmailRegistered] = useState<boolean | null>(null);
-
-  // Authenticator QR Setup state (strictly conditional: only fetched & shown when Authenticator App is selected)
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
   const [totpSecret, setTotpSecret] = useState('');
   const [loadingQr, setLoadingQr] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
-
   const [code, setCode] = useState('');
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [newPassword, setNewPassword] = useState('');
@@ -54,8 +52,8 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [resetToken, setResetToken] = useState('');
 
-  // Reset modal state when opened
   useEffect(() => {
     if (!isOpen) return;
     setStep('request');
@@ -66,13 +64,11 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     setLoading(false);
     setQrCodeDataUrl('');
     setTotpSecret('');
+    setResetToken('');
     setIsEmailRegistered(null);
-    if (defaultIdentifier) {
-      setIdentifier(defaultIdentifier);
-    }
+    if (defaultIdentifier) setIdentifier(defaultIdentifier);
   }, [isOpen, defaultIdentifier]);
 
-  // Dynamically check whether the email is registered and which recovery methods are available
   useEffect(() => {
     if (!isOpen) return;
     const cleanId = identifier.trim().toLowerCase();
@@ -90,7 +86,6 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
               setError('');
               if (data?.hasAuthenticator) {
                 setHasAuthenticatorAvailable(true);
-                setRecoveryMethod('authenticator');
               } else {
                 setHasAuthenticatorAvailable(false);
                 setRecoveryMethod('email');
@@ -110,38 +105,56 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     }
   }, [isOpen, identifier]);
 
-  // Resend cooldown timer countdown
   useEffect(() => {
     if (cooldownSeconds <= 0) return;
-    const timer = setInterval(() => {
-      setCooldownSeconds((prev) => Math.max(0, prev - 1));
-    }, 1000);
+    const timer = setInterval(() => setCooldownSeconds((p) => Math.max(0, p - 1)), 1000);
     return () => clearInterval(timer);
   }, [cooldownSeconds]);
 
-  // CONDITIONAL QR CODE RENDERING:
-  // Only fetch and render the QR code when the user actively selects 'authenticator' recovery
+  // QR only when Authenticator recovery is selected on confirm step
   useEffect(() => {
-    if (!isOpen || step !== 'confirm' || recoveryMethod !== 'authenticator') {
-      return;
-    }
+    if (!isOpen || step !== 'confirm' || recoveryMethod !== 'authenticator') return;
     const cleanId = identifier.trim().toLowerCase();
     if (!cleanId || !cleanId.includes('@')) return;
 
     let isMounted = true;
     setLoadingQr(true);
+
+    const buildClientQr = async (otpAuthUrl: string, secret: string) => {
+      try {
+        const dataUrl = await QRCode.toDataURL(otpAuthUrl, {
+          errorCorrectionLevel: 'M',
+          margin: 2,
+          scale: 6,
+          color: { dark: '#0f172a', light: '#ffffff' },
+        });
+        if (isMounted) {
+          setQrCodeDataUrl(dataUrl);
+          setTotpSecret(secret);
+        }
+      } catch (e) {
+        console.warn('[QR client gen]', e);
+      }
+    };
+
     fetch(`${API_BASE_URL}/api/auth/2fa/setup?email=${encodeURIComponent(cleanId)}`)
-      .then((res) => res.json())
-      .then((data) => {
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
         if (!isMounted) return;
+        const secret = data?.secret || '';
+        const otpAuthUrl =
+          data?.otpAuthUrl ||
+          (secret
+            ? `otpauth://totp/Smart%20Clinic:${encodeURIComponent(cleanId)}?secret=${secret}&issuer=Smart%20Clinic&algorithm=SHA1&digits=6&period=30`
+            : '');
         if (data?.qrCodeDataUrl) {
           setQrCodeDataUrl(data.qrCodeDataUrl);
-          setTotpSecret(data.secret || '');
+          setTotpSecret(secret);
+        } else if (otpAuthUrl) {
+          await buildClientQr(otpAuthUrl, secret);
         }
       })
-      .catch((err) => {
-        console.warn('[Authenticator QR Fetch Notice]', err);
-      })
+      .catch(() => console.warn('[Authenticator QR] setup endpoint unreachable'))
       .finally(() => {
         if (isMounted) setLoadingQr(false);
       });
@@ -153,23 +166,25 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleCopySecret = () => {
+  const handleCopySecret = async () => {
     if (!totpSecret) return;
-    navigator.clipboard.writeText(totpSecret);
-    setCopiedKey(true);
-    toastSuccess('Authenticator secret key copied to clipboard.');
-    setTimeout(() => setCopiedKey(false), 2000);
+    try {
+      await navigator.clipboard.writeText(totpSecret);
+      setCopiedKey(true);
+      setTimeout(() => setCopiedKey(false), 2000);
+    } catch {
+      /* ignore */
+    }
   };
 
   const handleSelectAuthenticator = () => {
-    const cleanId = identifier.trim().toLowerCase();
+    const cleanId = identifier.trim();
     if (!cleanId || !cleanId.includes('@')) {
       setError('Please enter your registered email address first.');
       return;
     }
     if (isEmailRegistered === false) {
       setError('This email address is not registered in our clinic system.');
-      toastError('This email address is not registered in our clinic system.');
       return;
     }
     setError('');
@@ -177,32 +192,16 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     setStep('confirm');
   };
 
-  const handleDirectEnterCode = () => {
-    const cleanId = identifier.trim().toLowerCase();
-    if (!cleanId || !cleanId.includes('@')) {
-      setError('Please enter your registered email address first.');
-      return;
-    }
-    if (isEmailRegistered === false) {
-      setError('This email address is not registered in our clinic system.');
-      toastError('This email address is not registered in our clinic system.');
-      return;
-    }
-    setError('');
-    setStep('confirm');
-  };
-
   const handleSendEmailCode = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setError('');
-    const cleanId = identifier.trim().toLowerCase();
+    const cleanId = identifier.trim();
     if (!cleanId || !cleanId.includes('@')) {
       setError('Please enter your registered email address.');
       return;
     }
     if (isEmailRegistered === false) {
       setError('This email address is not registered in our clinic system.');
-      toastError('This email address is not registered in our clinic system.');
       return;
     }
 
@@ -217,7 +216,6 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-
       let data: any = {};
       try {
         data = await res.json();
@@ -240,6 +238,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
       }
 
       setCooldownSeconds(60);
+      setResetToken(data.resetToken || '');
       setRecoveryMethod('email');
       setStep('confirm');
       toastSuccess(
@@ -249,7 +248,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
       setLoading(false);
       const isAbort = err?.name === 'AbortError';
       const msg = isAbort
-        ? 'Request timed out while contacting the server. Try entering code directly or retry.'
+        ? 'Request timed out while contacting the server. Try again.'
         : err?.message || 'Network error: Unable to reach the authentication server.';
       setError(msg);
       toastError(msg);
@@ -259,7 +258,6 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   const handleConfirmReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
     const cleanCode = code.trim();
     if (!cleanCode || cleanCode.length !== 6) {
       setError(
@@ -269,17 +267,11 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
       );
       return;
     }
-
-    // High Security Password Strength Rule Enforcement
     const pwResult = validatePasswordStrength(newPassword);
     if (!pwResult.isValid) {
-      setError(
-        pwResult.errorMessage ||
-          'Password does not meet high-security requirements. Please fulfill all rule requirements below.'
-      );
+      setError(pwResult.errorMessage || 'Password does not meet high-security requirements.');
       return;
     }
-
     if (newPassword !== confirmPassword) {
       setError('Passwords do not match. Please re-enter.');
       return;
@@ -297,11 +289,12 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
           identifier: cleanId,
           code: cleanCode,
           newPassword,
+          resetToken: resetToken || undefined,
+          recoveryMethod,
         }),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-
       let data: any = {};
       try {
         data = await res.json();
@@ -318,16 +311,12 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
       }
 
       toastSuccess('Password updated successfully! You can now log in with your new credentials.');
-      if (onPasswordResetSuccess) {
-        onPasswordResetSuccess(newPassword, cleanId);
-      }
-      // Reset local modal state for next open
+      if (onPasswordResetSuccess) onPasswordResetSuccess(newPassword, cleanId);
       setStep('request');
       setCode('');
       setNewPassword('');
       setConfirmPassword('');
-      setQrCodeDataUrl('');
-      setTotpSecret('');
+      setResetToken('');
       onClose();
     } catch (err: any) {
       setLoading(false);
@@ -359,9 +348,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
               {step === 'request' ? 'Reset Account Password' : 'Create New Password'}
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              {step === 'request'
-                ? 'Select your secure account recovery pathway'
-                : `Account: ${identifier}`}
+              {step === 'request' ? 'Select your secure account recovery pathway' : `Account: ${identifier}`}
             </p>
           </div>
         </div>
@@ -376,39 +363,21 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
         {step === 'request' ? (
           <div className="space-y-4">
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Registered Account Email
-                </label>
-                {isEmailRegistered === false && (
-                  <span className="text-[10px] font-bold text-rose-500">Unregistered Email</span>
-                )}
-                {isEmailRegistered === true && (
-                  <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" />
-                    <span>Registered</span>
-                  </span>
-                )}
-              </div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Registered Account Email</label>
               <input
                 type="email"
                 required
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 placeholder="name@example.com"
-                className={`w-full rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500 ${
-                  isEmailRegistered === false
-                    ? 'border-rose-400 dark:border-rose-700 focus:ring-rose-500'
-                    : 'border-slate-200 dark:border-slate-700'
-                }`}
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500"
               />
               <p className="mt-1.5 text-[11px] text-slate-400">
-                Choose your preferred recovery pathway below. Authenticator App is recommended if enabled.
+                Choose recovery below. Authenticator App shows a QR code when selected.
               </p>
             </div>
 
             <div className="space-y-2.5 pt-1">
-              {/* Option 1: Authenticator App */}
               <button
                 type="button"
                 onClick={handleSelectAuthenticator}
@@ -423,22 +392,17 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
-                      Use Authenticator App (2FA)
-                    </span>
+                    <span className="font-bold text-xs text-slate-900 dark:text-slate-100">Use Authenticator App (2FA)</span>
                     {hasAuthenticatorAvailable && (
-                      <span className="text-[10px] font-bold text-teal-700 dark:text-teal-300 bg-teal-100 dark:bg-teal-900/60 px-2 py-0.5 rounded-full">
-                        Active
-                      </span>
+                      <span className="text-[10px] font-bold text-teal-700 dark:text-teal-300 bg-teal-100 dark:bg-teal-900/60 px-2 py-0.5 rounded-full">Active</span>
                     )}
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                    Instant recovery with your 6-digit rolling code from Google Authenticator, Microsoft Authenticator, or Authy.
+                    Scan QR / enter secret, then use the 6-digit code from Google Authenticator, Microsoft Authenticator, or Authy.
                   </p>
                 </div>
               </button>
 
-              {/* Option 2: Email Reset Code */}
               <button
                 type="button"
                 disabled={loading}
@@ -453,76 +417,48 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                     {loading ? 'Sending reset code…' : 'Send Password Reset Code to Email'}
                   </span>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                    Dispatches a dedicated one-time password reset code to your registered email inbox.
+                    Dispatches a one-time password reset code to your registered email inbox.
                   </p>
                 </div>
               </button>
-
-              {/* Direct Code Entry Option */}
-              <div className="text-center pt-2">
-                <button
-                  type="button"
-                  onClick={handleDirectEnterCode}
-                  className="text-[11px] font-semibold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
-                >
-                  Already have a reset code? Enter it directly →
-                </button>
-              </div>
             </div>
           </div>
         ) : (
           <form onSubmit={handleConfirmReset} className="space-y-4">
-            {/* Active Pathway Badge */}
             <div className="p-3 rounded-2xl bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200/80 dark:border-teal-800 flex items-center justify-between text-xs text-teal-900 dark:text-teal-200">
               <div className="flex items-center gap-2 font-medium">
                 {recoveryMethod === 'authenticator' ? (
                   <>
                     <Smartphone className="w-4 h-4 text-teal-600 shrink-0" />
-                    <span>Recovery Method: <strong>Authenticator App (2FA)</strong></span>
+                    <span>Recovery: <strong>Authenticator App</strong></span>
                   </>
                 ) : (
                   <>
                     <Mail className="w-4 h-4 text-teal-600 shrink-0" />
-                    <span>Reset code for: <strong>{identifier}</strong></span>
+                    <span>Code sent to: <strong>{identifier}</strong></span>
                   </>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => setStep('request')}
-                className="text-[11px] font-bold text-teal-700 dark:text-teal-300 hover:underline cursor-pointer"
-              >
+              <button type="button" onClick={() => setStep('request')} className="text-[11px] font-bold text-teal-700 dark:text-teal-300 hover:underline cursor-pointer">
                 Change
               </button>
             </div>
 
-            {/* CONDITIONAL QR CODE RENDERING:
-                Completely hidden by default. Only renders when Authenticator App is actively selected */}
             {recoveryMethod === 'authenticator' && (
-              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/70 rounded-2xl border border-slate-200 dark:border-slate-700 text-center space-y-2.5">
-                <div className="flex items-center justify-between text-left">
-                  <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-100 text-xs">
-                    <QrCode className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                    <span>Authenticator App QR Code</span>
-                  </div>
-                  <span className="text-[10px] text-teal-600 dark:text-teal-400 font-medium">
-                    Google / Microsoft Authenticator
-                  </span>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3">
+                <div className="flex items-center gap-2 mb-2 text-xs font-bold text-slate-700 dark:text-slate-200">
+                  <QrCode className="w-4 h-4 text-teal-600" />
+                  <span>Scan with Authenticator App</span>
                 </div>
-
                 {loadingQr ? (
-                  <div className="py-6 flex flex-col items-center justify-center gap-2">
+                  <div className="flex flex-col items-center justify-center py-6 gap-2">
                     <div className="w-6 h-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
                     <span className="text-[11px] text-slate-400">Loading Authenticator QR Code...</span>
                   </div>
                 ) : qrCodeDataUrl ? (
                   <div className="flex flex-col items-center justify-center gap-2 pt-1">
                     <div className="p-2.5 bg-white rounded-2xl border border-slate-200 shadow-xs inline-block">
-                      <img
-                        src={qrCodeDataUrl}
-                        alt="Authenticator 2FA QR Code"
-                        className="w-36 h-36 object-contain mx-auto"
-                      />
+                      <img src={qrCodeDataUrl} alt="Authenticator 2FA QR Code" className="w-36 h-36 object-contain mx-auto" />
                     </div>
                     {totpSecret && (
                       <div className="flex items-center gap-1.5 mt-1 max-w-full">
@@ -530,37 +466,26 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                         <code className="text-[11px] font-mono font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 select-all truncate">
                           {totpSecret}
                         </code>
-                        <button
-                          type="button"
-                          onClick={handleCopySecret}
-                          className="p-1 text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 transition cursor-pointer"
-                          title="Copy Secret Key"
-                        >
+                        <button type="button" onClick={handleCopySecret} className="p-1 text-slate-400 hover:text-teal-600 transition cursor-pointer" title="Copy Secret Key">
                           {copiedKey ? <Check className="w-3.5 h-3.5 text-teal-600" /> : <Copy className="w-3.5 h-3.5" />}
                         </button>
                       </div>
                     )}
                   </div>
-                ) : null}
+                ) : (
+                  <p className="text-[11px] text-slate-500 text-center py-4">QR unavailable. Use email recovery or try again.</p>
+                )}
               </div>
             )}
 
-            {/* 6-Digit Code */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                  {recoveryMethod === 'authenticator'
-                    ? '6-Digit Authenticator App Code'
-                    : '6-Digit Email Reset Code'} *
+                  {recoveryMethod === 'authenticator' ? '6-Digit Authenticator App Code' : '6-Digit Email Reset Code'} *
                 </label>
                 {recoveryMethod === 'email' && (
-                  <button
-                    type="button"
-                    disabled={loading || cooldownSeconds > 0}
-                    onClick={handleSendEmailCode}
-                    className="text-[10px] text-teal-600 dark:text-teal-400 hover:underline disabled:opacity-50 cursor-pointer"
-                  >
-                    {cooldownSeconds > 0 ? `Resend (${cooldownSeconds}s)` : 'Resend code'}
+                  <button type="button" disabled={loading || cooldownSeconds > 0} onClick={handleSendEmailCode} className="text-[11px] font-bold text-teal-600 disabled:opacity-50 cursor-pointer">
+                    {cooldownSeconds > 0 ? `Resend in ${cooldownSeconds}s` : 'Resend code'}
                   </button>
                 )}
               </div>
@@ -573,41 +498,20 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 placeholder={recoveryMethod === 'authenticator' ? 'Enter from Authenticator' : '••••••'}
                 className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-xs font-mono font-bold tracking-widest text-center focus:ring-2 focus:ring-teal-500"
               />
-              <p className="mt-1 text-[11px] text-slate-400 text-center">
-                {recoveryMethod === 'authenticator'
-                  ? 'Open your mobile Authenticator app (e.g. Google Authenticator) and enter the 6-digit rolling code.'
-                  : 'Check your email inbox or spam folder for the password reset security code.'}
-              </p>
             </div>
 
-            {/* New Password */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                  New Password *
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="flex items-center gap-1 text-[11px] font-medium text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
-                >
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">New Password *</label>
+                <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="flex items-center gap-1 text-[11px] font-medium text-teal-600 cursor-pointer">
                   {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   <span>{showNewPassword ? 'Hide' : 'Show'}</span>
                 </button>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type={showNewPassword ? 'text' : 'password'}
-                  required
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Create high-security password"
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-9 py-2 text-xs focus:ring-2 focus:ring-teal-500"
-                />
+                <input type={showNewPassword ? 'text' : 'password'} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Create high-security password" className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-9 py-2 text-xs focus:ring-2 focus:ring-teal-500" />
               </div>
-
-              {/* Password Strength Checklist */}
               {newPassword && (
                 <div className="mt-2.5">
                   <PasswordStrengthIndicator password={newPassword} />
@@ -615,48 +519,26 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
               )}
             </div>
 
-            {/* Confirm New Password */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Confirm New Password *
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="flex items-center gap-1 text-[11px] font-medium text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
-                >
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">Confirm New Password *</label>
+                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="flex items-center gap-1 text-[11px] font-medium text-teal-600 cursor-pointer">
                   {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   <span>{showConfirmPassword ? 'Hide' : 'Show'}</span>
                 </button>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Re-type new password"
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-9 py-2 text-xs focus:ring-2 focus:ring-teal-500"
-                />
+                <input type={showConfirmPassword ? 'text' : 'password'} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Re-type new password" className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-9 py-2 text-xs focus:ring-2 focus:ring-teal-500" />
               </div>
             </div>
 
             <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setStep('request')}
-                className="flex-1 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center gap-1"
-              >
+              <button type="button" onClick={() => setStep('request')} className="flex-1 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center gap-1">
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Back</span>
               </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex-2 py-2 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-teal-600/20 transition cursor-pointer disabled:opacity-60"
-              >
+              <button type="submit" disabled={loading} className="flex-2 py-2 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-teal-600/20 transition cursor-pointer disabled:opacity-60">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>{loading ? 'Updating Credentials…' : 'Save New Password'}</span>
               </button>
