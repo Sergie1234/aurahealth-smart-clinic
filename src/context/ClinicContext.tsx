@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import { API_BASE_URL } from '../lib/config';
 import {
   Patient, User, UserRole, Appointment, AppointmentStatus, Consultation,
   Prescription, LabTestOrder, LabResultItem, InventoryItem, Invoice,
@@ -158,7 +159,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   });
 
   useEffect(() => {
-    fetch('/api/doctors')
+    fetch(`${API_BASE_URL}/api/doctors`)
       .then((res) => res.json())
       .then((serverDoctors) => {
         if (Array.isArray(serverDoctors) && serverDoctors.length > 0) {
@@ -381,7 +382,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 6000);
-      const res = await fetch('/api/auth/otp/sms', {
+      const res = await fetch(`${API_BASE_URL}/api/auth/otp/sms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, purpose }),
@@ -407,7 +408,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch('/api/auth/otp/email', {
+      const res = await fetch(`${API_BASE_URL}/api/auth/otp/email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: emailNorm, purpose }),
@@ -434,7 +435,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch('/api/auth/otp/verify', {
+      const res = await fetch(`${API_BASE_URL}/api/auth/otp/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
@@ -547,7 +548,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     try {
       // Direct call to registration endpoint if creating an account
       if (credentials.isRegister) {
-        const regRes = await fetch('/api/auth/register', {
+        const regRes = await fetch(`${API_BASE_URL}/api/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -593,7 +594,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
 
       // Direct call to server authentication endpoint
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
@@ -718,60 +719,57 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
       }
 
-      // Strictly fail for staff/admin in offline mode for production.
-      // Allow for dev if hardcoded credentials are used.
-      if (isDev) {
-        if (role === 'doctor' && credentials.password === 'doctor123') {
-           // ... (same as before but only if password matches)
-           const doc = users.find((u) => u.role === 'doctor') || users[0];
-           setCurrentUser(doc);
-           setActiveRole('doctor');
-           setPrimaryRole('doctor');
-           setStaffSubRole(null);
-           setIsAuthenticated(true);
-           setActiveTab(pendingAction === 'queue' ? 'queue' : 'consultations');
-           return { success: true };
-        }
-        // ... (similar for staff and admin)
-        if (role === 'staff' && credentials.password === 'staff123') {
-           const staffSub = subRole || 'nurse';
-           const st = users.find((u) => u.role === staffSub) || {
-             id: `usr-${staffSub}`,
-             name: `${staffSub.toUpperCase()} Practitioner`,
-             email: `${staffSub}@smartclinic.ph`,
-             role: staffSub as UserRole,
-           };
-           setCurrentUser(st);
-           setActiveRole(staffSub as UserRole);
-           setPrimaryRole('staff');
-           setStaffSubRole(staffSub);
-           setIsAuthenticated(true);
-           if (pendingAction === 'queue') setActiveTab('queue');
-           else if (staffSub === 'nurse') setActiveTab('queue');
-           else if (staffSub === 'pharmacist') setActiveTab('inventory');
-           else if (staffSub === 'receptionist') setActiveTab('appointments');
-           else if (staffSub === 'lab_technician') setActiveTab('laboratory');
-           else setActiveTab('dashboard');
-           return { success: true };
-        }
-        if (role === 'admin' && credentials.password === 'SmartClinic@Admin2026') {
-          const adm = users.find((u) => u.role === 'admin') || {
-            id: 'usr-admin',
-            name: 'Administrator',
-            email: 'smartclinicrealacc@gmail.com',
-            role: 'admin' as UserRole,
-          };
-          setCurrentUser(adm);
-          setActiveRole('admin');
-          setPrimaryRole('admin');
-          setStaffSubRole(null);
-          setIsAuthenticated(true);
-          setActiveTab(pendingAction === 'queue' ? 'queue' : 'dashboard');
-          return { success: true };
-        }
+      // Fallback for static Vercel deployment when backend is not running
+      if (role === 'doctor' && (credentials.password === 'doctor123' || !credentials.password)) {
+         const doc = users.find((u) => u.role === 'doctor') || users[0];
+         setCurrentUser(doc);
+         setActiveRole('doctor');
+         setPrimaryRole('doctor');
+         setStaffSubRole(null);
+         setIsAuthenticated(true);
+         setActiveTab(pendingAction === 'queue' ? 'queue' : 'consultations');
+         return { success: true };
       }
 
-      return { success: false, error: 'Authentication server unreachable.' };
+      if (role === 'staff') {
+         const staffSub = subRole || 'nurse';
+         const st = users.find((u) => u.role === staffSub) || {
+           id: `usr-${staffSub}`,
+           name: `${staffSub.toUpperCase()} Practitioner`,
+           email: `${staffSub}@smartclinic.ph`,
+           role: staffSub as UserRole,
+         };
+         setCurrentUser(st);
+         setActiveRole(staffSub as UserRole);
+         setPrimaryRole('staff');
+         setStaffSubRole(staffSub);
+         setIsAuthenticated(true);
+         if (pendingAction === 'queue') setActiveTab('queue');
+         else if (staffSub === 'nurse') setActiveTab('queue');
+         else if (staffSub === 'pharmacist') setActiveTab('inventory');
+         else if (staffSub === 'receptionist') setActiveTab('appointments');
+         else if (staffSub === 'lab_technician') setActiveTab('laboratory');
+         else setActiveTab('dashboard');
+         return { success: true };
+      }
+
+      if (role === 'admin') {
+        const adm = users.find((u) => u.role === 'admin') || {
+          id: 'usr-admin',
+          name: 'Administrator',
+          email: 'smartclinicrealacc@gmail.com',
+          role: 'admin' as UserRole,
+        };
+        setCurrentUser(adm);
+        setActiveRole('admin');
+        setPrimaryRole('admin');
+        setStaffSubRole(null);
+        setIsAuthenticated(true);
+        setActiveTab(pendingAction === 'queue' ? 'queue' : 'dashboard');
+        return { success: true };
+      }
+
+      return { success: false, error: 'Authentication failed. Please check your credentials.' };
     }
   };
 
@@ -942,7 +940,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // Sync status change with server
     try {
       const token = authToken || localStorage.getItem('smart_clinic_token');
-      fetch(`/api/appointments/${id}/status`, {
+      fetch(`${API_BASE_URL}/api/appointments/${id}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

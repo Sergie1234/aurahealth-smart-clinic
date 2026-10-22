@@ -14,6 +14,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
+import { API_BASE_URL } from '../../lib/config';
 import { validatePasswordStrength } from '../../utils/passwordValidation';
 import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
 
@@ -48,7 +49,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     if (!isOpen) return;
     const cleanId = (identifier || defaultIdentifier).trim().toLowerCase();
     if (cleanId && cleanId.includes('@')) {
-      fetch(`/api/auth/password-reset/methods?email=${encodeURIComponent(cleanId)}`)
+      fetch(`${API_BASE_URL}/api/auth/password-reset/methods?email=${encodeURIComponent(cleanId)}`)
         .then((res) => res.json())
         .then((data) => {
           if (data?.hasAuthenticator) {
@@ -89,7 +90,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
-      const res = await fetch('/api/auth/password-reset/request', {
+      const res = await fetch(`${API_BASE_URL}/api/auth/password-reset/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier: cleanId }),
@@ -145,7 +146,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
-      const res = await fetch('/api/auth/password-reset/confirm', {
+      const res = await fetch(`${API_BASE_URL}/api/auth/password-reset/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
