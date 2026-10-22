@@ -297,8 +297,7 @@ export const ScanHealthIdModal: React.FC<Props> = ({
 
       const container = document.getElementById(scannerContainerId);
       if (!container) {
-        // Container might not be mounted in DOM yet, schedule start
-        setTimeout(() => startCameraScanner(cameraDeviceOverride), 120);
+        setTimeout(() => startCameraScanner(cameraDeviceOverride), 150);
         return;
       }
 
@@ -312,22 +311,19 @@ export const ScanHealthIdModal: React.FC<Props> = ({
         });
         scannerRef.current = html5Qr;
 
-        // Discover and select back camera
-        let cameraConfig: string | MediaTrackConstraints = {
-          facingMode: { ideal: 'environment' },
-        };
+        // Mobile-friendly camera configuration: environment facingMode
+        let cameraConfig: string | MediaTrackConstraints = cameraDeviceOverride
+          ? cameraDeviceOverride
+          : { facingMode: { ideal: 'environment' } };
 
+        // Try getting cameras list for dropdown without blocking
         try {
           const devices = await Html5Qrcode.getCameras();
           if (devices && devices.length > 0) {
             setAvailableCameras(devices);
-            if (cameraDeviceOverride) {
-              cameraConfig = cameraDeviceOverride;
-              setSelectedCameraId(cameraDeviceOverride);
-            } else {
-              // Prefer back/rear camera for mobile phones
+            if (!cameraDeviceOverride) {
               const backCam = devices.find((d) => {
-                const label = d.label.toLowerCase();
+                const label = (d.label || '').toLowerCase();
                 return (
                   label.includes('back') ||
                   label.includes('rear') ||
@@ -338,17 +334,16 @@ export const ScanHealthIdModal: React.FC<Props> = ({
               if (backCam) {
                 cameraConfig = backCam.id;
                 setSelectedCameraId(backCam.id);
-              } else {
-                // On phones, back camera is typically the last device in the array
+              } else if (devices.length > 0) {
                 const preferred = devices[devices.length - 1];
                 cameraConfig = preferred.id;
                 setSelectedCameraId(preferred.id);
               }
             }
           }
-        } catch {
-          // getCameras might throw before permissions; default to facingMode ideal environment
-          cameraConfig = { facingMode: { ideal: 'environment' } };
+        } catch (camErr) {
+          console.warn('getCameras notice (permission prompt pending):', camErr);
+          cameraConfig = { facingMode: 'environment' };
         }
 
         await html5Qr.start(
@@ -357,16 +352,15 @@ export const ScanHealthIdModal: React.FC<Props> = ({
             fps: 15,
             qrbox: (w, h) => {
               const minDim = Math.min(w, h);
-              const size = Math.max(200, Math.min(280, Math.floor(minDim * 0.72)));
+              const size = Math.max(180, Math.min(260, Math.floor(minDim * 0.75)));
               return { width: size, height: size };
             },
-            aspectRatio: 1.333333,
           },
           (decodedText) => {
             handleProcessScan(decodedText);
           },
           () => {
-            // Per-frame scanning attempts miss until QR aligned
+            // Scanning frame attempts miss until aligned
           }
         );
 
@@ -375,21 +369,44 @@ export const ScanHealthIdModal: React.FC<Props> = ({
       } catch (err: any) {
         console.warn('Mobile camera scanner startup exception:', err);
         const errStr = (err?.message || err?.name || String(err)).toLowerCase();
+        
+        // Fallback attempt with simple string facingMode if object constraint failed
+        if (errStr.includes('constraint') || errStr.includes('overconstrained') || errStr.includes('notfound')) {
+          try {
+            if (scannerRef.current) {
+              await scannerRef.current.start(
+                { facingMode: 'environment' },
+                { fps: 15, qrbox: 220 },
+                (decodedText) => handleProcessScan(decodedText),
+                () => {}
+              );
+              setIsScannerRunning(true);
+              setCameraPermissionState('granted');
+              return;
+            }
+          } catch (fallbackErr: any) {
+            console.warn('Fallback facingMode: environment failed:', fallbackErr);
+          }
+        }
+
         if (
           errStr.includes('notallowed') ||
           errStr.includes('permission') ||
-          errStr.includes('denied')
+          errStr.includes('denied') ||
+          errStr.includes('securityerror')
         ) {
           setCameraPermissionState('denied');
+          setCameraErrorMessage('Camera permission was denied. Please allow camera access in your mobile browser settings.');
         } else if (
           errStr.includes('notfound') ||
           errStr.includes('devicesnotfound') ||
           errStr.includes('requested device not found')
         ) {
           setCameraPermissionState('no_camera');
+          setCameraErrorMessage('No camera device found on this device.');
         } else {
           setCameraPermissionState('error');
-          setCameraErrorMessage(err?.message || 'Unable to start camera.');
+          setCameraErrorMessage(err?.message || 'Unable to start camera. Please tap retry or use manual keypad.');
         }
         setIsScannerRunning(false);
       }
@@ -407,10 +424,11 @@ export const ScanHealthIdModal: React.FC<Props> = ({
       setResultType(null);
       setNoAppointmentReason(null);
       setManualInput('');
+      setCameraPermissionState('idle');
 
       const timer = setTimeout(() => {
         startCameraScanner();
-      }, 150);
+      }, 200);
 
       return () => {
         clearTimeout(timer);
