@@ -23,43 +23,32 @@ export interface UserCredentials {
 }
 
 const MAX_FAILED_ATTEMPTS = 5;
-const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes lockout
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+const PBKDF2_ITERATIONS = 10000;
+const SALT_BYTES = 16;
+const KEY_LENGTH = 64;
 
-// In-memory credentials store
+/** In-memory credential store (swap for DB in multi-instance production). */
 const credentialsStore = new Map<string, UserCredentials>();
 
-/**
- * Computes cryptographically secure PBKDF2 hash with unique salt
- */
 export function hashPassword(password: string, customSalt?: string): { hash: string; salt: string } {
-  const salt = customSalt || crypto.randomBytes(16).toString('hex');
-  const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+  const salt = customSalt || crypto.randomBytes(SALT_BYTES).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha512').toString('hex');
   return { hash, salt };
 }
 
-/**
- * Constant-time verification preventing timing side-channel attacks
- */
 export function verifyPassword(password: string, storedHash: string, storedSalt: string): boolean {
+  const { hash } = hashPassword(password, storedSalt);
   try {
-    const testHash = crypto.pbkdf2Sync(password, storedSalt, 10000, 64, 'sha512').toString('hex');
-    const bufA = Buffer.from(testHash, 'hex');
-    const bufB = Buffer.from(storedHash, 'hex');
-    if (bufA.length !== bufB.length) return false;
-    return crypto.timingSafeEqual(bufA, bufB);
+    return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(storedHash, 'hex'));
   } catch {
     return false;
   }
 }
 
-/**
- * Initializes or updates credentials for an account
- */
 export function registerUserCredentials(email: string, rawPassword: string, role: string = 'patient'): UserCredentials {
   const cleanEmail = email.trim().toLowerCase();
   const { hash, salt } = hashPassword(rawPassword);
-  const existing = credentialsStore.get(cleanEmail);
-
   const cred: UserCredentials = {
     email: cleanEmail,
     hash,
@@ -69,14 +58,10 @@ export function registerUserCredentials(email: string, rawPassword: string, role
     lockedUntil: null,
     updatedAt: new Date().toISOString(),
   };
-
   credentialsStore.set(cleanEmail, cred);
   return cred;
 }
 
-/**
- * Pre-seed default system accounts with secure salted hashes
- */
 function initializeDefaultCredentials() {
   const defaults: [string, string, string][] = [
     ['smartclinicrealacc@gmail.com', 'SmartClinic@Admin2026', 'admin'],
@@ -98,34 +83,24 @@ function initializeDefaultCredentials() {
   }
 }
 
-// Seed on startup
 initializeDefaultCredentials();
 
-/**
- * Checks if account is currently locked out
- */
 export function checkAccountLockout(email: string): { isLocked: boolean; minutesRemaining: number } {
   const cleanEmail = email.trim().toLowerCase();
   const cred = credentialsStore.get(cleanEmail);
   if (!cred || !cred.lockedUntil) {
     return { isLocked: false, minutesRemaining: 0 };
   }
-
   const now = Date.now();
   if (now < cred.lockedUntil) {
     const minutesRemaining = Math.max(1, Math.ceil((cred.lockedUntil - now) / 60000));
     return { isLocked: true, minutesRemaining };
   }
-
-  // Lockout expired, reset
   cred.lockedUntil = null;
   cred.failedAttempts = 0;
   return { isLocked: false, minutesRemaining: 0 };
 }
 
-/**
- * Records a failed login attempt and calculates remaining attempts / triggers lockout
- */
 export function recordFailedLoginAttempt(email: string): {
   isLocked: boolean;
   remainingAttempts: number;
@@ -135,7 +110,6 @@ export function recordFailedLoginAttempt(email: string): {
   let cred = credentialsStore.get(cleanEmail);
 
   if (!cred) {
-    // Track failed attempts even for unknown accounts to prevent username enumeration / brute forcing
     cred = {
       email: cleanEmail,
       hash: '',
@@ -165,9 +139,6 @@ export function recordFailedLoginAttempt(email: string): {
   };
 }
 
-/**
- * Resets failed attempts counter upon successful login
- */
 export function recordSuccessfulLogin(email: string): void {
   const cleanEmail = email.trim().toLowerCase();
   const cred = credentialsStore.get(cleanEmail);
@@ -178,16 +149,12 @@ export function recordSuccessfulLogin(email: string): void {
   }
 }
 
-/**
- * Authenticates a password against stored salted hash
- */
 export function verifyUserPassword(
   email: string,
   rawPassword: string
 ): { success: boolean; error?: string; isLocked?: boolean; remainingAttempts?: number } {
   const cleanEmail = email.trim().toLowerCase();
 
-  // 1. Check account lockout status
   const lockout = checkAccountLockout(cleanEmail);
   if (lockout.isLocked) {
     return {
@@ -199,9 +166,7 @@ export function verifyUserPassword(
 
   const cred = credentialsStore.get(cleanEmail);
 
-  // If no credentials found or unhashed, allow checking fallback defaults
   if (!cred || !cred.hash) {
-    // Check known default fallbacks
     const isKnownFallback =
       (rawPassword === 'SmartClinic@Admin2026' && (cleanEmail.includes('admin') || cleanEmail.includes('spartan'))) ||
       (rawPassword === 'patient123' && cleanEmail.includes('elena')) ||
@@ -231,7 +196,6 @@ export function verifyUserPassword(
     };
   }
 
-  // 2. Perform timing-safe cryptographic verification
   const isValid = verifyPassword(rawPassword, cred.hash, cred.salt);
   if (!isValid) {
     const failure = recordFailedLoginAttempt(cleanEmail);
@@ -249,14 +213,17 @@ export function verifyUserPassword(
     };
   }
 
-  // 3. Clear failed attempts on success
   recordSuccessfulLogin(cleanEmail);
   return { success: true };
 }
 
 /**
- * Resets user password (e.g. from Forgot Password flow) and removes any lockout
+ * Resets user password (Forgot Password flow) and clears any lockout.
+ * Preserves existing role when known.
  */
-export function resetUserPassword(email: string, newPassword: string): void {
-  registerUserCredentials(email, newPassword);
+export function resetUserPassword(email: string, newPassword: string, role?: string): void {
+  const cleanEmail = email.trim().toLowerCase();
+  const existing = credentialsStore.get(cleanEmail);
+  const resolvedRole = role || existing?.role || 'patient';
+  registerUserCredentials(cleanEmail, newPassword, resolvedRole);
 }

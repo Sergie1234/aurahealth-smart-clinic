@@ -82,7 +82,7 @@ export class VerificationService {
       const waitSeconds = Math.ceil((RESEND_COOLDOWN_MS - (now - existing.lastSentAt)) / 1000);
       return {
         success: false,
-        code: existing.codePlain || '123456',
+        code: existing.codePlain || '',
         expiresInSec: Math.max(0, Math.ceil((existing.expiresAt - now) / 1000)),
         cooldownRemaining: waitSeconds,
         error: `Please wait ${waitSeconds}s before requesting a new code.`,
@@ -94,7 +94,10 @@ export class VerificationService {
       codeHash: this.hashCode(code),
       codePlain: code,
       channel: params.channel,
-      destination: params.channel === 'email' ? params.destination.trim().toLowerCase() : normalizePhoneNumber(params.destination),
+      destination:
+        params.channel === 'email'
+          ? params.destination.trim().toLowerCase()
+          : normalizePhoneNumber(params.destination),
       purpose,
       expiresAt: now + OTP_TTL_MS,
       attempts: 0,
@@ -119,104 +122,100 @@ export class VerificationService {
     };
   }
 
-  /**
-   * Validates an OTP code with anti-brute-force attempt limits.
-   */
   public verifyOtp(params: {
     channel: VerificationChannel;
     destination: string;
     code: string;
     purpose?: VerificationPurpose;
-  }): { success: boolean; error?: string; metadata?: Record<string, any> } {
-    const inputCode = String(params.code || '').trim();
-
-    const key = this.getStoreKey(params.channel, params.destination, params.purpose);
-    // Also check wildcard key if specific purpose key is not found
-    const record = this.otpStore.get(key) || this.otpStore.get(this.getStoreKey(params.channel, params.destination));
+  }): { success: boolean; error?: string } {
+    const purpose = params.purpose || 'login';
+    const key = this.getStoreKey(params.channel, params.destination, purpose);
+    const record = this.otpStore.get(key);
 
     if (!record) {
       return { success: false, error: 'No active verification code found. Please request a new code.' };
     }
-
     if (record.expiresAt < Date.now()) {
       this.otpStore.delete(key);
       return { success: false, error: 'Verification code expired. Please request a new one.' };
     }
-
     if (record.attempts >= MAX_ATTEMPTS) {
       this.otpStore.delete(key);
       return { success: false, error: 'Maximum attempts reached. Please request a new verification code.' };
     }
 
     record.attempts += 1;
-
-    if (record.codeHash !== this.hashCode(inputCode)) {
+    if (record.codeHash !== this.hashCode(params.code)) {
       const remaining = MAX_ATTEMPTS - record.attempts;
       return { success: false, error: `Incorrect code. ${remaining} attempt(s) remaining.` };
     }
 
-    const metadata = record.metadata;
     this.otpStore.delete(key);
-    return { success: true, metadata };
+    return { success: true };
   }
 
-  /* =========================================================================
-     ACCOUNT REGISTRATION & WELCOME FLOW
-     ========================================================================= */
-
-  public async registerPendingUser(input: {
+  public createPendingRegistration(data: {
     fullName: string;
     email?: string;
     phone?: string;
     passwordHash?: string;
-  }): Promise<{ success: boolean; code?: string; error?: string }> {
-    const fullName = (input.fullName || '').trim();
-    const email = input.email ? input.email.trim().toLowerCase() : '';
-    const phone = input.phone ? normalizePhoneNumber(input.phone) : '';
+  }): PendingRegistration {
+    const id = `reg-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+    const pending: PendingRegistration = {
+      id,
+      fullName: data.fullName,
+      email: data.email,
+      phone: data.phone,
+      passwordHash: data.passwordHash,
+      createdAt: Date.now(),
+      verified: false,
+    };
+    this.pendingRegistrations.set(id, pending);
+    return pending;
+  }
 
-    if (!email && !phone) {
+  public getPendingRegistration(id: string): PendingRegistration | undefined {
+    return this.pendingRegistrations.get(id);
+  }
+
+  public markRegistrationVerified(id: string): void {
+    const p = this.pendingRegistrations.get(id);
+    if (p) p.verified = true;
+  }
+
+  public async requestRegistrationOtp(params: {
+    fullName: string;
+    email?: string;
+    phone?: string;
+    password?: string;
+  }): Promise<{ success: boolean; registrationId?: string; error?: string; destination?: string }> {
+    if (!params.email && !params.phone) {
       return { success: false, error: 'Provide an email address or mobile phone number.' };
     }
+    const channel: VerificationChannel = params.email ? 'email' : 'sms';
+    const destination = params.email
+      ? params.email.trim().toLowerCase()
+      : normalizePhoneNumber(params.phone || '');
 
-    const channel: VerificationChannel = email ? 'email' : 'sms';
-    const destination = email || phone;
+    const pending = this.createPendingRegistration({
+      fullName: params.fullName,
+      email: params.email?.trim().toLowerCase(),
+      phone: params.phone ? normalizePhoneNumber(params.phone) : undefined,
+      passwordHash: params.password,
+    });
 
     const res = await this.sendOtp({
       channel,
       destination,
       purpose: 'registration',
-      metadata: { fullName, email, phone, passwordHash: input.passwordHash },
+      metadata: { registrationId: pending.id },
     });
 
-    return {
-      success: true,
-      code: res.code,
-    };
-  }
-
-  /**
-   * Finalizes verification and triggers Welcome notifications via Email & SMS
-   */
-  public async finalizeVerification(user: {
-    fullName: string;
-    email?: string;
-    phone?: string;
-    mrn?: string;
-  }) {
-    if (user.email) {
-      emailService.queueMail({
-        to: user.email,
-        subject: `Welcome to Smart Clinic, ${user.fullName}! Your Account is Verified`,
-        text: `Welcome to Smart Clinic, ${user.fullName}!\nYour account has been verified. MRN: ${user.mrn || 'Assigned'}`,
-        html: '', // Will be hydrated by sendWelcomeEmail
-      });
-      // Fire dedicated welcome template
-      emailService.sendWelcomeEmail(user.email, user.fullName, user.mrn).catch(console.error);
+    if (!res.success) {
+      return { success: false, error: res.error, destination };
     }
 
-    if (user.phone) {
-      smsService.sendWelcomeSms(user.phone, user.fullName).catch(console.error);
-    }
+    return { success: true, registrationId: pending.id, destination };
   }
 
   /* =========================================================================
@@ -231,20 +230,46 @@ export class VerificationService {
     error?: string;
   }> {
     const clean = identifier.trim();
+    if (!clean) {
+      return {
+        success: false,
+        channel: 'email',
+        destination: '',
+        code: '',
+        error: 'Provide your registered email address or mobile number.',
+      };
+    }
+
     const isEmail = clean.includes('@');
     const channel: VerificationChannel = isEmail ? 'email' : 'sms';
     const destination = isEmail ? clean.toLowerCase() : normalizePhoneNumber(clean);
 
+    // Generate + store OTP (sendOtp also fires a verification email/SMS).
     const otpRes = await this.sendOtp({
       channel,
       destination,
       purpose: 'password_reset',
     });
 
+    if (!otpRes.success) {
+      return {
+        success: false,
+        channel,
+        destination,
+        code: '',
+        error: otpRes.error || 'Unable to issue password reset code. Please try again.',
+      };
+    }
+
+    // Dedicated password-reset template (OTP already stored; valid 10 minutes).
     if (channel === 'email') {
-      emailService.sendPasswordResetEmail(destination, otpRes.code).catch(console.error);
+      emailService.sendPasswordResetEmail(destination, otpRes.code).catch((err) => {
+        console.warn('[PasswordReset] Dedicated reset email failed (OTP still valid):', err?.message || err);
+      });
     } else {
-      smsService.sendPasswordResetSms(destination, otpRes.code).catch(console.error);
+      smsService.sendPasswordResetSms(destination, otpRes.code).catch((err) => {
+        console.warn('[PasswordReset] Dedicated reset SMS failed (OTP still valid):', err?.message || err);
+      });
     }
 
     return {
