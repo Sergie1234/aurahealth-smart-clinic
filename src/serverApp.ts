@@ -571,7 +571,7 @@ app.post('/api/auth/verify-registration', async (req: Request, res: Response) =>
     const newPatient = {
       id: `pat-${Date.now()}`,
       mrn,
-      fullName: fullName || verifyRes.metadata?.fullName || 'Verified Patient',
+      fullName: fullName || 'Verified Patient',
       dob: '1990-01-01',
       age: 34,
       gender: 'Other' as const,
@@ -591,12 +591,12 @@ app.post('/api/auth/verify-registration', async (req: Request, res: Response) =>
     memPatients.unshift(newPatient);
 
     // Asynchronously dispatch Welcome Email and Welcome SMS
-    verificationService.finalizeVerification({
-      fullName: newPatient.fullName,
-      email: cleanEmail || undefined,
-      phone: cleanPhone || undefined,
-      mrn: newPatient.mrn,
-    }).catch(console.error);
+    if (cleanEmail) {
+      emailService.sendWelcomeEmail(cleanEmail, newPatient.fullName, newPatient.mrn).catch(console.error);
+    }
+    if (cleanPhone) {
+      smsService.sendWelcomeSms(cleanPhone, newPatient.fullName).catch(console.error);
+    }
 
     const token = generateToken({
       userId: newPatient.id,
