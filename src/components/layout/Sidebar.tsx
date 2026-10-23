@@ -1,6 +1,5 @@
 import React from 'react';
 import { useClinic } from '../../context/ClinicContext';
-import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import {
   LayoutDashboard,
   Users,
@@ -217,27 +216,7 @@ export const Sidebar: React.FC = () => {
 
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 min-h-screen text-slate-300 select-none">
-      <div className="p-4 border-b border-slate-800/80">
-        <div className="flex items-center gap-2.5">
-          <SmartClinicLogo className="w-8 h-8" glow={true} />
-          <div>
-            <h2 className="text-xs font-bold text-white tracking-wide">Smart Clinic</h2>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              <span className="text-[10px] text-slate-400 font-medium capitalize">
-                {isPatient ? 'Patient Portal' : `${activeRole} Workspace`}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        <div className="px-3 pb-2 flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-          <span>Authorized Modules</span>
-          <span className="text-[9px] text-teal-400 font-semibold">{visibleItems.length} Active</span>
-        </div>
-
+      <div className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
         {visibleItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;

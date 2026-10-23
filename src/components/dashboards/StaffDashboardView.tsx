@@ -97,28 +97,6 @@ export const StaffDashboardView: React.FC<Props> = ({
             </p>
           </div>
         </div>
-
-        <div className="flex items-center gap-2.5 self-start md:self-auto">
-          {onOpenNewPatient && (
-            <button
-              onClick={onOpenNewPatient}
-              className="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold flex items-center gap-2 border border-white/20 transition cursor-pointer"
-            >
-              <Users className="w-4 h-4 text-teal-300" />
-              <span>Register Patient</span>
-            </button>
-          )}
-
-          {onOpenBookAppointment && (
-            <button
-              onClick={onOpenBookAppointment}
-              className="px-4 py-2.5 bg-teal-400 hover:bg-teal-300 text-slate-950 rounded-xl font-bold flex items-center gap-2 transition shadow-md shadow-teal-500/20 cursor-pointer"
-            >
-              <Calendar className="w-4 h-4" />
-              <span>Book Appointment</span>
-            </button>
-          )}
-        </div>
       </div>
 
       {/* Operational Metrics */}

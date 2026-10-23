@@ -1296,6 +1296,87 @@ app.post('/api/patients', (req: AuthenticatedRequest, res: Response) => {
   return res.status(201).json(newPat);
 });
 
+app.patch('/api/patients/:id', enforcePatientIsolation, (req: AuthenticatedRequest, res: Response) => {
+  const patientIdx = memPatients.findIndex((p) => p.id === req.params.id);
+  if (patientIdx === -1) return res.status(404).json({ error: 'Patient not found.' });
+
+  const updates = req.body || {};
+  const isPatient = (req.userRole || req.user?.role) === 'patient';
+
+  if (isPatient) {
+    const allowed = ['fullName', 'email', 'phone', 'address', 'emergencyContact', 'bloodType', 'allergies', 'chronicConditions', 'avatar', 'dob', 'gender'];
+    const safeUpdates: any = {};
+    for (const key of allowed) {
+      if (updates[key] !== undefined) {
+        safeUpdates[key] = updates[key];
+      }
+    }
+    memPatients[patientIdx] = { ...memPatients[patientIdx], ...safeUpdates };
+
+    // Also sync with memUsers if patient user exists
+    const userIdx = memUsers.findIndex((u) => u.id === req.params.id || u.email.toLowerCase() === memPatients[patientIdx].email.toLowerCase());
+    if (userIdx !== -1) {
+      if (safeUpdates.fullName) memUsers[userIdx].name = safeUpdates.fullName;
+      if (safeUpdates.email) memUsers[userIdx].email = safeUpdates.email;
+      if (safeUpdates.avatar) memUsers[userIdx].avatar = safeUpdates.avatar;
+    }
+  } else {
+    memPatients[patientIdx] = { ...memPatients[patientIdx], ...updates };
+  }
+
+  if (supabaseServer) {
+    (async () => {
+      try {
+        await supabaseServer.from('patients').upsert(memPatients[patientIdx]);
+      } catch (err) {
+        console.error('Supabase patient upsert error:', err);
+      }
+    })();
+  }
+
+  return res.json({ success: true, message: 'Profile updated successfully', patient: memPatients[patientIdx] });
+});
+
+app.put('/api/patients/:id', enforcePatientIsolation, (req: AuthenticatedRequest, res: Response) => {
+  const patientIdx = memPatients.findIndex((p) => p.id === req.params.id);
+  if (patientIdx === -1) return res.status(404).json({ error: 'Patient not found.' });
+
+  const updates = req.body || {};
+  const isPatient = (req.userRole || req.user?.role) === 'patient';
+
+  if (isPatient) {
+    const allowed = ['fullName', 'email', 'phone', 'address', 'emergencyContact', 'bloodType', 'allergies', 'chronicConditions', 'avatar', 'dob', 'gender'];
+    const safeUpdates: any = {};
+    for (const key of allowed) {
+      if (updates[key] !== undefined) {
+        safeUpdates[key] = updates[key];
+      }
+    }
+    memPatients[patientIdx] = { ...memPatients[patientIdx], ...safeUpdates };
+
+    const userIdx = memUsers.findIndex((u) => u.id === req.params.id || u.email.toLowerCase() === memPatients[patientIdx].email.toLowerCase());
+    if (userIdx !== -1) {
+      if (safeUpdates.fullName) memUsers[userIdx].name = safeUpdates.fullName;
+      if (safeUpdates.email) memUsers[userIdx].email = safeUpdates.email;
+      if (safeUpdates.avatar) memUsers[userIdx].avatar = safeUpdates.avatar;
+    }
+  } else {
+    memPatients[patientIdx] = { ...memPatients[patientIdx], ...updates };
+  }
+
+  if (supabaseServer) {
+    (async () => {
+      try {
+        await supabaseServer.from('patients').upsert(memPatients[patientIdx]);
+      } catch (err) {
+        console.error('Supabase patient upsert error:', err);
+      }
+    })();
+  }
+
+  return res.json({ success: true, message: 'Profile updated successfully', patient: memPatients[patientIdx] });
+});
+
 /* ==========================================================================
    APPOINTMENTS & SCHEDULING
    ========================================================================== */

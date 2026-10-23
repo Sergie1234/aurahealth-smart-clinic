@@ -7,7 +7,8 @@ import React, { useState, useEffect } from 'react';
 import { ClinicProvider, useClinic } from './context/ClinicContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider, ToastViewport } from './context/ToastContext';
-import { ThemeToggle } from './components/common/ThemeToggle';
+import { GlobalSystemControls } from './components/common/GlobalSystemControls';
+import { SessionWarningModal } from './components/common/SessionWarningModal';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 import { SmartClinicLogo } from './components/common/SmartClinicLogo';
@@ -43,6 +44,7 @@ import { AdminDashboardView } from './components/dashboards/AdminDashboardView';
 import { NotificationsPage } from './components/notifications/NotificationsPage';
 import { ScanHealthIdModal } from './components/patients/ScanHealthIdModal';
 import { ScanHealthIdPage } from './components/patients/ScanHealthIdPage';
+import { PatientProfileSettingsModal } from './components/patient_portal/PatientProfileSettingsModal';
 import { canUserScanQR } from './utils/qrPermissions';
 import type { Patient, Prescription, LabTestOrder } from './types/clinic';
 
@@ -62,6 +64,8 @@ const ClinicAppContent: React.FC = () => {
     authReady,
     pendingAction,
     setPendingAction,
+    isBookAppointmentOpen,
+    setIsBookAppointmentOpen,
   } = useClinic();
 
   const [pendingBook, setPendingBook] = useState(false);
@@ -77,6 +81,7 @@ const ClinicAppContent: React.FC = () => {
   const [labOrderForResults, setLabOrderForResults] = useState<LabTestOrder | null>(null);
   const [labOrderForReport, setLabOrderForReport] = useState<LabTestOrder | null>(null);
   const [consultPatientId, setConsultPatientId] = useState<string | undefined>(undefined);
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
 
   const openBookAppointment = () => {
     if (!isAuthenticated) {
@@ -208,7 +213,8 @@ const ClinicAppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col text-slate-900 dark:text-slate-100 font-sans selection:bg-teal-500 selection:text-white">
-      <ThemeToggle />
+      <GlobalSystemControls />
+      <SessionWarningModal />
       <NetworkAwarePageTransition
         isNavigating={isNavigating}
         destinationTitle={navigatingTargetTitle}
@@ -227,6 +233,7 @@ const ClinicAppContent: React.FC = () => {
               setScanQRMode(mode || 'checkin');
               setShowScanQRModal(true);
             }}
+            onOpenProfileSettings={() => setShowProfileSettings(true)}
           />
           <div className="flex flex-1 overflow-hidden">
             <Sidebar />
@@ -240,6 +247,7 @@ const ClinicAppContent: React.FC = () => {
                   }}
                   onOpenLabReport={(o: LabTestOrder) => setLabOrderForReport(o)}
                   onOpenPrescription={(rx: Prescription) => setPrintingRx(rx)}
+                  onOpenProfileSettings={() => setShowProfileSettings(true)}
                 />
               )}
               {activeTab === 'dashboard' && primaryRole === 'staff' && (
@@ -342,8 +350,13 @@ const ClinicAppContent: React.FC = () => {
       )}
 
       {showNewPatient && <NewPatientModal onClose={() => setShowNewPatient(false)} />}
-      {showBookAppointment && (
-        <BookAppointmentModal onClose={() => setShowBookAppointment(false)} />
+      {(showBookAppointment || isBookAppointmentOpen) && (
+        <BookAppointmentModal
+          onClose={() => {
+            setShowBookAppointment(false);
+            setIsBookAppointmentOpen(false);
+          }}
+        />
       )}
       {showNewPrescription && (
         <NewPrescriptionModal onClose={() => setShowNewPrescription(false)} />
@@ -368,6 +381,9 @@ const ClinicAppContent: React.FC = () => {
         initialMode={scanQRMode}
         onStartConsultation={handleStartConsultation}
       />
+      {showProfileSettings && (
+        <PatientProfileSettingsModal onClose={() => setShowProfileSettings(false)} />
+      )}
     </div>
   );
 };

@@ -41,6 +41,8 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
     visiblePatients,
     addNotification,
     setActiveTab,
+    triageDraftForBooking,
+    setTriageDraftForBooking,
   } = useClinic();
 
   const isPatientLocked = primaryRole === 'patient' && !!linkedPatientId;
@@ -51,7 +53,31 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
     return users.filter((u) => u.role === 'doctor');
   }, [users]);
 
-
+  // Match doctor based on triage specialty if available
+  const matchingDoctor = useMemo(() => {
+    if (!triageDraftForBooking) return null;
+    if (triageDraftForBooking.recommendedDoctorId) {
+      const match = doctors.find((d) => d.id === triageDraftForBooking.recommendedDoctorId);
+      if (match) return match;
+    }
+    const spec = (triageDraftForBooking.specialty || triageDraftForBooking.department || '').toLowerCase();
+    if (!spec) return null;
+    return (
+      doctors.find(
+        (d) =>
+          (d.department && d.department.toLowerCase().includes(spec)) ||
+          (d.specialty && d.specialty.toLowerCase().includes(spec)) ||
+          (spec.includes('cardio') && d.department?.toLowerCase().includes('cardio')) ||
+          (spec.includes('pulmon') && d.department?.toLowerCase().includes('pulmon')) ||
+          (spec.includes('respiratory') && d.department?.toLowerCase().includes('pulmon')) ||
+          (spec.includes('derm') && d.department?.toLowerCase().includes('derm')) ||
+          (spec.includes('pediat') && d.department?.toLowerCase().includes('pediat')) ||
+          (spec.includes('child') && d.department?.toLowerCase().includes('pediat')) ||
+          (spec.includes('internal') && d.department?.toLowerCase().includes('internal')) ||
+          (spec.includes('general') && d.department?.toLowerCase().includes('internal'))
+      ) || doctors[0] || null
+    );
+  }, [triageDraftForBooking, doctors]);
 
   // Extract unique specialties from doctors
   const specialties = useMemo(() => {
@@ -66,15 +92,40 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
   // Steps state: 1. Doctor -> 2. Date -> 3. Time -> 4. Review & Confirm -> 5. Success
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
 
-  // Form selections
-  const [selectedSpecialty, setSelectedSpecialty] = useState<string>('all');
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(doctors[0]?.id || 'usr-1');
+  // Form selections prefilled from triage draft if available
+  const [selectedSpecialty, setSelectedSpecialty] = useState<string>(() => {
+    if (triageDraftForBooking?.specialty) {
+      const found = doctors.find(
+        (d) =>
+          d.department?.toLowerCase().includes(triageDraftForBooking.specialty!.toLowerCase()) ||
+          d.specialty?.toLowerCase().includes(triageDraftForBooking.specialty!.toLowerCase())
+      );
+      if (found?.department) return found.department;
+    }
+    return 'all';
+  });
+
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(() => {
+    if (matchingDoctor) return matchingDoctor.id;
+    return doctors[0]?.id || 'usr-1';
+  });
+
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
   const [visitType, setVisitType] = useState<
     'Consultation' | 'Follow-up' | 'Check-up' | 'Emergency' | 'Telehealth'
-  >('Consultation');
-  const [reason, setReason] = useState<string>('');
+  >(() => {
+    if (triageDraftForBooking?.urgencyBand === 'yellow') return 'Consultation';
+    if (triageDraftForBooking?.urgencyBand === 'red') return 'Emergency';
+    return 'Consultation';
+  });
+
+  const [reason, setReason] = useState<string>(() => {
+    if (triageDraftForBooking?.reason) return triageDraftForBooking.reason;
+    if (triageDraftForBooking?.symptoms) return `Symptoms: ${triageDraftForBooking.symptoms}`;
+    return '';
+  });
+
   const [confirmedAppointment, setConfirmedAppointment] = useState<Appointment | null>(null);
   const [bookingError, setBookingError] = useState<string | null>(null);
 
@@ -238,6 +289,11 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
+  const handleModalClose = () => {
+    setTriageDraftForBooking(null);
+    onClose();
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div
@@ -266,7 +322,7 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleModalClose}
             className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
             aria-label="Close"
           >
@@ -312,6 +368,61 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* AI Triage Pre-filled Banner */}
+        {triageDraftForBooking && currentStep !== 5 && (
+          <div className="mx-4 sm:mx-6 mt-3 p-3 rounded-2xl bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-950/60 dark:to-emerald-950/60 border border-teal-200 dark:border-teal-800/80 shadow-2xs flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              <div
+                className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 shadow-2xs ${
+                  triageDraftForBooking.urgencyBand === 'red'
+                    ? 'bg-rose-500 text-white'
+                    : triageDraftForBooking.urgencyBand === 'yellow'
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-emerald-600 text-white'
+                }`}
+              >
+                {triageDraftForBooking.urgencyScore ? `${triageDraftForBooking.urgencyScore}/10` : <Sparkles className="w-4 h-4" />}
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                    Pre-filled from AI Triage:
+                  </span>
+                  <span className="font-black text-teal-700 dark:text-teal-300">
+                    {triageDraftForBooking.specialty || selectedDoctor.department}
+                  </span>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                      triageDraftForBooking.urgencyBand === 'red'
+                        ? 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                        : triageDraftForBooking.urgencyBand === 'yellow'
+                        ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                        : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                    }`}
+                  >
+                    {triageDraftForBooking.urgencyLabel || `Urgency ${triageDraftForBooking.urgencyScore || 3}/10`}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 line-clamp-1">
+                  Reason: &ldquo;{triageDraftForBooking.reason || triageDraftForBooking.symptoms}&rdquo;
+                </p>
+              </div>
+            </div>
+
+            {currentStep === 1 && (
+              <button
+                type="button"
+                onClick={() => setCurrentStep(2)}
+                className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-xs shrink-0 transition shadow-2xs cursor-pointer flex items-center gap-1"
+              >
+                <span>Pick Date & Time</span>
+                <span>&rarr;</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -921,7 +1032,7 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
               <button
                 type="button"
                 onClick={() => {
-                  onClose();
+                  handleModalClose();
                   setActiveTab('appointments');
                 }}
                 className="px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-md shadow-teal-900/20"
@@ -930,7 +1041,7 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
               </button>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleModalClose}
                 className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition cursor-pointer"
               >
                 Close

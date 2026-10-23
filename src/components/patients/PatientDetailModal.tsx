@@ -418,6 +418,58 @@ export const PatientDetailModal: React.FC<Props> = ({
                   <p className="text-slate-400 italic">No vitals recorded yet.</p>
                 )}
               </div>
+
+              {/* AI Clinical Triage History */}
+              {patient.triageHistory && patient.triageHistory.length > 0 && (
+                <div className="bg-white p-4 rounded-xl border border-teal-200/90 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-teal-600" />
+                      <h3 className="font-bold text-slate-800 text-xs">
+                        AI Clinical Triage History ({patient.triageHistory.length} intake{patient.triageHistory.length > 1 ? 's' : ''})
+                      </h3>
+                    </div>
+                    <span className="text-[10px] text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full font-bold border border-teal-200">
+                      EMR Linked
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {patient.triageHistory.map((trg) => (
+                      <div
+                        key={trg.id}
+                        className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5 text-xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                                trg.urgencyBand === 'red'
+                                  ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                  : trg.urgencyBand === 'yellow'
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                  : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              }`}
+                            >
+                              Score: {trg.urgencyScore}/10 ({trg.urgencyBand.toUpperCase()})
+                            </span>
+                            <span className="font-bold text-slate-800">{trg.suggestedSpecialty}</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {new Date(trg.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="text-slate-700 leading-snug">
+                          <strong>Reported Symptoms:</strong> {trg.symptoms} • <strong>Timeline:</strong> Started {trg.timelineStarted} ({trg.timelineTrajectory})
+                        </p>
+                        <p className="text-slate-500 text-[11px] leading-snug">
+                          {trg.summary}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

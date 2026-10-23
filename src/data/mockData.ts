@@ -17,11 +17,11 @@ export const INITIAL_USERS: User[] = [
   { id: 'usr-9', name: 'Dr. Patricia Gomez, MD', email: 'patricia.gomez@smartclinic.ph', role: 'doctor', avatar: '', department: 'Pediatrics', specialty: 'Pediatrics & Adolescent Care', licenseNumber: 'MD-620194' },
   { id: 'usr-10', name: 'Dr. Anthony Lee, MD', email: 'anthony.lee@smartclinic.ph', role: 'doctor', avatar: '', department: 'Dermatology', specialty: 'Clinical & Cosmetic Dermatology', licenseNumber: 'MD-519283' },
   { id: 'usr-11', name: 'Dr. Roberto Tan, MD', email: 'roberto.tan@smartclinic.ph', role: 'doctor', avatar: '', department: 'Pulmonology', specialty: 'Pulmonology & Respiratory Care', licenseNumber: 'MD-481029' },
-  { id: 'usr-3', name: 'Nurse Ana Patricia Villanueva, RN', email: 'ana.villanueva@smartclinic.ph', role: 'nurse', avatar: 'https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=150&auto=format&fit=crop&q=80', department: 'Outpatient Triage', licenseNumber: 'RN-382914' },
-  { id: 'usr-4', name: 'Claire Mendoza', email: 'reception@smartclinic.ph', role: 'receptionist', avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80', department: 'Front Desk & Patient Access' },
-  { id: 'usr-5', name: 'Julian Dela Cruz, RPh', email: 'pharmacy@smartclinic.ph', role: 'pharmacist', avatar: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=150&auto=format&fit=crop&q=80', department: 'Clinic Pharmacy & Dispensary', licenseNumber: 'RPh-102948' },
-  { id: 'usr-6', name: 'Amina Bautista, RMT', email: 'lab@smartclinic.ph', role: 'lab_technician', avatar: 'https://images.unsplash.com/photo-1594824813682-beec138c5ec1?w=150&auto=format&fit=crop&q=80', department: 'Diagnostic Pathology & Laboratory', licenseNumber: 'RMT-559102' },
-  { id: 'usr-7', name: 'Admin Smart Clinic', email: 'smartclinicrealacc@gmail.com', role: 'admin', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80', department: 'Clinical Operations Administration' },
+  { id: 'usr-3', name: 'Nurse Ana Patricia Villanueva, RN', email: 'ana.villanueva@smartclinic.ph', role: 'nurse', avatar: '', department: 'Outpatient Triage', licenseNumber: 'RN-382914' },
+  { id: 'usr-4', name: 'Claire Mendoza', email: 'reception@smartclinic.ph', role: 'receptionist', avatar: '', department: 'Front Desk & Patient Access' },
+  { id: 'usr-5', name: 'Julian Dela Cruz, RPh', email: 'pharmacy@smartclinic.ph', role: 'pharmacist', avatar: '', department: 'Clinic Pharmacy & Dispensary', licenseNumber: 'RPh-102948' },
+  { id: 'usr-6', name: 'Amina Bautista, RMT', email: 'lab@smartclinic.ph', role: 'lab_technician', avatar: '', department: 'Diagnostic Pathology & Laboratory', licenseNumber: 'RMT-559102' },
+  { id: 'usr-7', name: 'Admin Smart Clinic', email: 'smartclinicrealacc@gmail.com', role: 'admin', avatar: '', department: 'Clinical Operations Administration' },
   { id: 'usr-8', name: 'Elena Vargas (Patient)', email: 'elena.vargas@example.com', role: 'patient', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80', department: 'Patient Portal' }
 ];
 
@@ -39,6 +39,26 @@ export const INITIAL_PATIENTS: Patient[] = [
     vitalsHistory: [
       { id: 'vit-1', recordedAt: '2026-10-06T09:15:00Z', recordedBy: 'Nurse Ana Patricia Villanueva', bloodPressureSystolic: 138, bloodPressureDiastolic: 86, heartRate: 74, respiratoryRate: 16, temperature: 36.8, oxygenSaturation: 98, height: 165, weight: 71.5, bmi: 26.3, notes: 'Patient reports mild fatigue after morning walk.' },
       { id: 'vit-0', recordedAt: '2026-09-02T10:00:00Z', recordedBy: 'Nurse Ana Patricia Villanueva', bloodPressureSystolic: 142, bloodPressureDiastolic: 90, heartRate: 78, respiratoryRate: 18, temperature: 36.7, oxygenSaturation: 97, height: 165, weight: 72.8, bmi: 26.7, notes: 'Baseline check.' }
+    ],
+    triageHistory: [
+      {
+        id: 'trg-01',
+        patientId: 'pat-1',
+        patientName: 'Elena Vargas',
+        timestamp: '2026-10-04T14:20:00Z',
+        symptoms: 'Mild dizziness when standing up and occasional blurred vision after meals.',
+        timelineStarted: '1-3 days ago',
+        timelineTrajectory: 'stable',
+        previousEpisodes: 'Recurring',
+        urgencyScore: 4,
+        urgencyBand: 'yellow',
+        urgencyLabel: 'Yellow (4-6): Should be seen today',
+        suggestedSpecialty: 'Internal Medicine',
+        summary: 'Patient reports orthostatic lightheadedness and postprandial visual blurring. Known diabetic on Metformin. Vital signs and glycemic curve evaluation recommended.',
+        actionRecommended: 'Same-day outpatient consultation with Internal Medicine specialist.',
+        isEmergency: false,
+        language: 'en',
+      }
     ]
   },
   {

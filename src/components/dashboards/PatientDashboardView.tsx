@@ -12,6 +12,7 @@ import {
   Activity,
   AlertTriangle,
   Sparkles,
+  User,
 } from 'lucide-react';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import { EmergencyDisclaimerBanner } from '../common/EmergencyDisclaimerBanner';
@@ -22,6 +23,7 @@ interface Props {
   onOpenQR?: () => void;
   onOpenLabReport?: (lab: any) => void;
   onOpenPrescription?: (rx: any) => void;
+  onOpenProfileSettings?: () => void;
 }
 
 export const PatientDashboardView: React.FC<Props> = ({
@@ -29,6 +31,7 @@ export const PatientDashboardView: React.FC<Props> = ({
   onOpenQR,
   onOpenLabReport,
   onOpenPrescription,
+  onOpenProfileSettings,
 }) => {
   const { patients, appointments, prescriptions, labOrders, invoices, linkedPatientId, currentUser, setActiveTab } = useClinic();
 
@@ -65,7 +68,13 @@ export const PatientDashboardView: React.FC<Props> = ({
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               Patient Health Portal
             </div>
-            <h1 className="text-xl sm:text-2xl font-black text-white mt-1">
+            <h1
+              onClick={onOpenProfileSettings}
+              className={`text-xl sm:text-2xl font-black text-white mt-1 ${
+                onOpenProfileSettings ? 'cursor-pointer hover:text-teal-200 transition' : ''
+              }`}
+              title={onOpenProfileSettings ? 'Click to open Profile Settings' : undefined}
+            >
               Welcome, {patient.fullName}
             </h1>
             <p className="text-teal-100 text-xs mt-0.5">
@@ -75,14 +84,16 @@ export const PatientDashboardView: React.FC<Props> = ({
         </div>
 
         <div className="flex items-center gap-2.5 self-start md:self-auto flex-wrap">
-          <button
-            onClick={() => setActiveTab('ai-assistant')}
-            className="px-3.5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl font-bold flex items-center gap-2 transition shadow-md shadow-emerald-500/20 cursor-pointer"
-            title="Chat with SmartClinic AI Triage Chatbot"
-          >
-            <Sparkles className="w-4 h-4 text-slate-950" />
-            <span>AI Triage Chatbot</span>
-          </button>
+          {onOpenProfileSettings && (
+            <button
+              onClick={onOpenProfileSettings}
+              className="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold flex items-center gap-2 border border-white/20 transition cursor-pointer"
+              title="View and edit your personal information and EMR details"
+            >
+              <User className="w-4 h-4 text-teal-300" />
+              <span>Profile Settings</span>
+            </button>
+          )}
 
           {onOpenQR && (
             <button

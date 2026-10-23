@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../lib/config';
 import {
   Patient, User, UserRole, Appointment, AppointmentStatus, Consultation,
   Prescription, LabTestOrder, LabResultItem, InventoryItem, Invoice,
-  Notification, AuditLog, Vitals,
+  Notification, AuditLog, Vitals, TriageRecord, UrgencyBand,
 } from '../types/clinic';
 import {
   INITIAL_PATIENTS, INITIAL_USERS, INITIAL_APPOINTMENTS, INITIAL_CONSULTATIONS,
@@ -53,6 +53,18 @@ export interface PatientAccount {
   phone?: string;
   passwordHash: string;
   patientId: string;
+}
+
+export interface TriageBookingDraft {
+  specialty?: string;
+  department?: string;
+  urgencyScore?: number;
+  urgencyBand?: UrgencyBand;
+  urgencyLabel?: string;
+  reason?: string;
+  symptoms?: string;
+  recommendedDoctorId?: string;
+  patientId?: string;
 }
 
 interface ClinicContextType {
@@ -108,6 +120,12 @@ interface ClinicContextType {
   addPatient: (patient: Omit<Patient, 'id' | 'createdAt' | 'mrn'>) => Patient;
   updatePatient: (id: string, updates: Partial<Patient>) => void;
   addVitals: (patientId: string, vitals: Omit<Vitals, 'id' | 'recordedAt'>) => void;
+  saveTriageRecord: (patientId: string, record: Omit<TriageRecord, 'id' | 'timestamp'>) => TriageRecord;
+  triageDraftForBooking: TriageBookingDraft | null;
+  setTriageDraftForBooking: (draft: TriageBookingDraft | null) => void;
+  isBookAppointmentOpen: boolean;
+  setIsBookAppointmentOpen: (open: boolean) => void;
+  openBookAppointmentWithDraft: (draft: TriageBookingDraft) => void;
   appointments: Appointment[];
   addAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt'>) => Appointment;
   updateAppointmentStatus: (id: string, status: AppointmentStatus) => void;
@@ -139,6 +157,11 @@ interface ClinicContextType {
   supabaseInfo: { isConfigured: boolean; url: string; domain: string; hasKey: boolean };
   syncAllToSupabase: () => Promise<{ success: boolean; syncedCounts: Record<string, number>; message: string }>;
   refreshSupabaseConfig: () => void;
+  language: 'en' | 'fil';
+  setLanguage: (lang: 'en' | 'fil') => void;
+  showSessionWarning: boolean;
+  sessionSecondsRemaining: number;
+  resetSessionTimer: () => void;
 }
 
 const ClinicContext = createContext<ClinicContextType | undefined>(undefined);
@@ -186,6 +209,87 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [linkedPatientId, setLinkedPatientId] = useState<string | null>(null);
+  const [triageDraftForBooking, setTriageDraftForBooking] = useState<TriageBookingDraft | null>(null);
+  const [isBookAppointmentOpen, setIsBookAppointmentOpen] = useState<boolean>(false);
+
+  const openBookAppointmentWithDraft = useCallback((draft: TriageBookingDraft) => {
+    setTriageDraftForBooking(draft);
+    setIsBookAppointmentOpen(true);
+  }, []);
+
+  // Global Language state (English / Tagalog)
+  const [language, setLanguageState] = useState<'en' | 'fil'>(() => {
+    try {
+      const saved = localStorage.getItem('smart_clinic_language');
+      if (saved === 'en' || saved === 'fil') return saved;
+    } catch {}
+    return 'en';
+  });
+
+  const setLanguage = (lang: 'en' | 'fil') => {
+    setLanguageState(lang);
+    try {
+      localStorage.setItem('smart_clinic_language', lang);
+    } catch {}
+  };
+
+  // Session Timeout (Auto Logout) implementation
+  const [lastActivityTime, setLastActivityTime] = useState<number>(Date.now());
+  const [showSessionWarning, setShowSessionWarning] = useState<boolean>(false);
+  const [sessionSecondsRemaining, setSessionSecondsRemaining] = useState<number>(120);
+
+  const resetSessionTimer = useCallback(() => {
+    setLastActivityTime(Date.now());
+    setShowSessionWarning(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const handleUserActivity = () => {
+      resetSessionTimer();
+    };
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    events.forEach((ev) => window.addEventListener(ev, handleUserActivity, { passive: true }));
+
+    // Timeout durations based on sensitivity & role:
+    // 1. Patient: 15 minutes (900,000 ms)
+    // 2. Nurse / Staff: 20 minutes (1,200,000 ms)
+    // 3. Doctor: 25 minutes (1,500,000 ms)
+    // 4. Admin: 30 minutes (1,800,000 ms)
+    const getTimeoutMs = () => {
+      if (primaryRole === 'patient' || activeRole === 'patient') return 15 * 60 * 1000;
+      if (staffSubRole === 'nurse' || activeRole === 'nurse' || primaryRole === 'staff') return 20 * 60 * 1000;
+      if (activeRole === 'doctor' || primaryRole === 'doctor') return 25 * 60 * 1000;
+      if (activeRole === 'admin' || primaryRole === 'admin') return 30 * 60 * 1000;
+      return 20 * 60 * 1000;
+    };
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const timeoutMs = getTimeoutMs();
+      const elapsed = now - lastActivityTime;
+      const remainingMs = timeoutMs - elapsed;
+      const remainingSecs = Math.max(0, Math.floor(remainingMs / 1000));
+
+      setSessionSecondsRemaining(remainingSecs);
+
+      if (remainingSecs <= 0) {
+        logout();
+        setShowSessionWarning(false);
+      } else if (remainingSecs <= 120) {
+        setShowSessionWarning(true);
+      } else {
+        setShowSessionWarning(false);
+      }
+    }, 1000);
+
+    return () => {
+      events.forEach((ev) => window.removeEventListener(ev, handleUserActivity));
+      clearInterval(interval);
+    };
+  }, [isAuthenticated, primaryRole, activeRole, staffSubRole, lastActivityTime, resetSessionTimer]);
 
   const [patientAccounts, setPatientAccounts] = useState<PatientAccount[]>(() => {
     try {
@@ -889,7 +993,48 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const updatePatient = (id: string, updates: Partial<Patient>) => {
     if (primaryRole === 'patient' && linkedPatientId && id !== linkedPatientId) return;
-    setPatients((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
+
+    let updatedPatientRecord: Patient | undefined;
+    setPatients((prev) =>
+      prev.map((p) => {
+        if (p.id === id) {
+          updatedPatientRecord = { ...p, ...updates };
+          return updatedPatientRecord;
+        }
+        return p;
+      })
+    );
+
+    // If this is the current logged-in patient, sync currentUser
+    if (primaryRole === 'patient' || currentUser.id === id) {
+      setCurrentUser((prev) => ({
+        ...prev,
+        name: updates.fullName || prev.name,
+        email: updates.email || prev.email,
+        avatar: updates.avatar !== undefined ? updates.avatar : prev.avatar,
+      }));
+    }
+
+    logAction('PATIENT_UPDATE', 'Patient', id, `Updated patient information: ${updates.fullName || id}`);
+
+    if (updatedPatientRecord) {
+      syncPatientToSupabase(updatedPatientRecord);
+    }
+
+    // Persist to server API
+    try {
+      const token = authToken || localStorage.getItem('smart_clinic_token');
+      fetch(`${API_BASE_URL}/api/patients/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': activeRole,
+          'x-linked-patient-id': id,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(updates),
+      }).catch((err) => console.error('Patient API sync error:', err));
+    } catch {}
   };
 
   const addVitals = (patientId: string, vitalsData: Omit<Vitals, 'id' | 'recordedAt'>) => {
@@ -903,6 +1048,71 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       prev.map((p) => (p.id === patientId ? { ...p, vitalsHistory: [newVitals, ...p.vitalsHistory] } : p))
     );
     logAction('VITALS_RECORDED', 'Patient', patientId, `Vitals recorded: BP ${newVitals.bloodPressureSystolic}/${newVitals.bloodPressureDiastolic}, HR ${newVitals.heartRate}`);
+  };
+
+  const saveTriageRecord = (
+    patientId: string,
+    recordData: Omit<TriageRecord, 'id' | 'timestamp'>
+  ): TriageRecord => {
+    const newRecord: TriageRecord = {
+      ...recordData,
+      id: `trg-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+    };
+
+    let updatedPatientRecord: Patient | undefined;
+
+    setPatients((prev) =>
+      prev.map((p) => {
+        if (p.id === patientId) {
+          const existingHistory = p.triageHistory || [];
+          const updatedHistory = [newRecord, ...existingHistory];
+          updatedPatientRecord = { ...p, triageHistory: updatedHistory };
+          return updatedPatientRecord;
+        }
+        return p;
+      })
+    );
+
+    logAction(
+      'AI_TRIAGE_SAVED',
+      'Patient',
+      patientId,
+      `AI Triage Recorded: Score ${newRecord.urgencyScore}/10 (${newRecord.urgencyBand.toUpperCase()}) - Specialty: ${newRecord.suggestedSpecialty}`
+    );
+
+    // If yellow or red urgency, trigger clinical notification for staff and provider awareness
+    if (newRecord.urgencyBand === 'yellow' || newRecord.urgencyBand === 'red') {
+      const isRed = newRecord.urgencyBand === 'red';
+      addNotification({
+        targetRole: 'provider',
+        category: 'triage',
+        priority: isRed ? 'urgent' : 'high',
+        title: `${isRed ? '🚨 EMERGENCY TRIAGE DETECTED' : '⚠️ HIGH URGENCY TRIAGE'}: ${newRecord.patientName || 'Patient'}`,
+        message: `Urgency Score ${newRecord.urgencyScore}/10 (${newRecord.suggestedSpecialty}). ${newRecord.summary.slice(0, 90)}...`,
+        content: newRecord.summary,
+      });
+    }
+
+    // Persist to server API and Supabase
+    if (updatedPatientRecord) {
+      syncPatientToSupabase(updatedPatientRecord);
+      try {
+        const token = authToken || localStorage.getItem('smart_clinic_token');
+        fetch(`${API_BASE_URL}/api/patients/${patientId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-role': activeRole,
+            'x-linked-patient-id': patientId,
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ triageHistory: updatedPatientRecord.triageHistory }),
+        }).catch((err) => console.error('Triage API sync error:', err));
+      } catch {}
+    }
+
+    return newRecord;
   };
 
   const addAppointment = (aptData: Omit<Appointment, 'id' | 'createdAt'>) => {
@@ -1455,6 +1665,12 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         addPatient,
         updatePatient,
         addVitals,
+        saveTriageRecord,
+        triageDraftForBooking,
+        setTriageDraftForBooking,
+        isBookAppointmentOpen,
+        setIsBookAppointmentOpen,
+        openBookAppointmentWithDraft,
         appointments: isolatedAppointments,
         addAppointment,
         updateAppointmentStatus,
@@ -1486,6 +1702,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         supabaseInfo,
         syncAllToSupabase,
         refreshSupabaseConfig,
+        language,
+        setLanguage,
+        showSessionWarning,
+        sessionSecondsRemaining,
+        resetSessionTimer,
       }}
     >
       {children}

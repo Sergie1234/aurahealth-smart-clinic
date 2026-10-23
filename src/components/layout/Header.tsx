@@ -5,7 +5,7 @@ import { NotificationDetailModal } from '../notifications/NotificationDetailModa
 import { canUserScanQR } from '../../utils/qrPermissions';
 import type { Notification } from '../../types/clinic';
 import {
-  Search, Bell, Clock, Sparkles, CheckCircle2, AlertTriangle, User, X, Plus, Database, Home, LogOut, Lock, ShieldCheck, QrCode
+  Search, Bell, Clock, CheckCircle2, AlertTriangle, User, X, Plus, Database, LogOut, Lock, ShieldCheck, QrCode
 } from 'lucide-react';
 
 interface Props {
@@ -13,9 +13,16 @@ interface Props {
   onOpenNewPatient?: () => void;
   onOpenSupabaseModal?: () => void;
   onOpenScanQR?: (mode?: 'checkin' | 'emergency') => void;
+  onOpenProfileSettings?: () => void;
 }
 
-export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatient, onOpenSupabaseModal, onOpenScanQR }) => {
+export const Header: React.FC<Props> = ({
+  onOpenBookAppointment,
+  onOpenNewPatient,
+  onOpenSupabaseModal,
+  onOpenScanQR,
+  onOpenProfileSettings,
+}) => {
   const {
     currentUser, activeRole, primaryRole, staffSubRole, notifications, unreadNotificationCount, markNotificationAsRead, markAllNotificationsAsRead,
     searchQuery, setSearchQuery, patients, appointments, inventory, selectPatient, setActiveTab, logout
@@ -169,22 +176,8 @@ export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatien
                   <span>Scan Health ID</span>
                 </button>
               )}
-              {onOpenNewPatient && activeRole !== 'pharmacist' && (
-                <button onClick={onOpenNewPatient} className="px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition flex items-center gap-1 cursor-pointer">
-                  <Plus className="w-3.5 h-3.5" /><span>Register Patient</span>
-                </button>
-              )}
-              {onOpenBookAppointment && (
-                <button onClick={onOpenBookAppointment} className="px-3 py-1.5 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-500 rounded-lg transition flex items-center gap-1.5 shadow-sm cursor-pointer">
-                  <Clock className="w-3.5 h-3.5" /><span>Book Visit</span>
-                </button>
-              )}
             </div>
           )}
-
-          <button onClick={() => setActiveTab('home')} className="p-1.5 text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg transition flex items-center gap-1 text-xs font-semibold cursor-pointer" title="Go to Public Homepage">
-            <Home className="w-3.5 h-3.5 text-teal-600" /><span className="hidden sm:inline text-[11px]">Home</span>
-          </button>
 
           {/* Supabase Hub: STRICT CONDITIONAL RENDERING - ONLY for Admin role */}
           {isAdmin && onOpenSupabaseModal && (
@@ -193,19 +186,6 @@ export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatien
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
             </button>
           )}
-
-
-          {/* AI Assistant Navigation Button */}
-          <button
-            onClick={() => setActiveTab('ai-assistant')}
-            className="p-1.5 text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/30 hover:bg-teal-100 dark:hover:bg-teal-900/50 border border-teal-200/80 dark:border-teal-700/50 rounded-lg transition flex items-center gap-1 text-xs font-medium cursor-pointer"
-            title={isPatient ? 'AI Triage Chatbot' : 'SmartClinic AI Engine'}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-            <span className="hidden lg:inline text-[11px] font-semibold">
-              {isPatient ? 'AI Triage' : 'AI Engine'}
-            </span>
-          </button>
 
           {/* Notifications Dropdown */}
           <div className="relative" ref={notifRef}>
@@ -301,17 +281,44 @@ export const Header: React.FC<Props> = ({ onOpenBookAppointment, onOpenNewPatien
             )}
           </div>
 
-          {/* User Account / Sign Out */}
+          {/* User Account / Profile Settings / Sign Out */}
           <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-700">
-            <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 font-bold text-[10px] flex items-center justify-center border border-teal-200/60 dark:border-teal-700/50" title={currentUser.name}>
-              {initials || <User className="w-4 h-4" />}
-            </div>
-            <div className="hidden xl:block text-left">
-              <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 leading-tight">{currentUser.name}</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight capitalize">
-                {isPatient ? 'Patient' : (currentUser.department || activeRole)}
-              </p>
-            </div>
+            {isPatient ? (
+              <button
+                type="button"
+                onClick={onOpenProfileSettings}
+                className="flex items-center gap-2 text-left rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/80 p-1 -m-1 transition cursor-pointer group"
+                title="Click to view & edit Profile Settings"
+              >
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 font-bold text-[10px] flex items-center justify-center border border-teal-200/60 dark:border-teal-700/50 shadow-2xs group-hover:border-teal-500 transition">
+                  {currentUser.avatar ? (
+                    <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
+                  ) : (
+                    initials || <User className="w-4 h-4" />
+                  )}
+                </div>
+                <div className="hidden xl:block text-left">
+                  <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 leading-tight group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+                    {currentUser.name}
+                  </p>
+                  <p className="text-[10px] text-teal-600 dark:text-teal-400 leading-tight font-medium">
+                    Profile Settings
+                  </p>
+                </div>
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 font-bold text-[10px] flex items-center justify-center border border-teal-200/60 dark:border-teal-700/50 shadow-2xs" title={currentUser.name}>
+                  {initials || <User className="w-4 h-4" />}
+                </div>
+                <div className="hidden xl:block text-left">
+                  <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 leading-tight">{currentUser.name}</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight capitalize">
+                    {currentUser.department || activeRole}
+                  </p>
+                </div>
+              </div>
+            )}
             <button onClick={logout} className="ml-1 p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition flex items-center gap-1 cursor-pointer" title="Sign Out">
               <LogOut className="w-3.5 h-3.5 text-rose-500" />
               <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 hidden md:inline">Sign Out</span>

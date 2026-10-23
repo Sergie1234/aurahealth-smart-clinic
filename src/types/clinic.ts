@@ -40,6 +40,28 @@ export interface Allergy {
   reaction: string;
 }
 
+export type UrgencyBand = 'green' | 'yellow' | 'red';
+
+export interface TriageRecord {
+  id: string;
+  patientId: string;
+  patientName?: string;
+  timestamp: string;
+  symptoms: string;
+  timelineStarted: string; // e.g. "Today", "1-3 days ago", "1 week ago", "Weeks/months ago"
+  timelineTrajectory: 'improving' | 'worsening' | 'stable';
+  previousEpisodes: string; // e.g. "First time", "Recurring", "Chronic/ongoing"
+  urgencyScore: number; // 1 to 10
+  urgencyBand: UrgencyBand;
+  urgencyLabel: string; // e.g. "Green (1-3): Can wait for regular appointment", etc.
+  suggestedSpecialty: string; // e.g. "Cardiology", "Pulmonology", "General Medicine"
+  summary: string;
+  actionRecommended: string;
+  isEmergency: boolean;
+  language: 'en' | 'fil';
+  followUpStatus?: string;
+}
+
 export interface Patient {
   id: string;
   mrn: string; // Medical Record Number e.g. MRN-2026-081
@@ -65,6 +87,8 @@ export interface Patient {
   createdAt: string;
   vitalsHistory: Vitals[];
   tags?: string[];
+  avatar?: string;
+  triageHistory?: TriageRecord[];
 }
 
 export type AppointmentStatus =

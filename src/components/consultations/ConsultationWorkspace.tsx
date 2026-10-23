@@ -407,6 +407,58 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
 
       <AIDisclaimerBanner />
 
+      {/* Latest AI Triage Assessment from EMR */}
+      {patient.triageHistory && patient.triageHistory.length > 0 && (
+        <div className="bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-950/40 dark:to-emerald-950/40 border border-teal-200 dark:border-teal-800 rounded-xl p-3.5 shadow-2xs space-y-2 text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Sparkles className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+              <span className="font-bold text-slate-900 dark:text-white">
+                Latest AI Triage Assessment (EMR Record)
+              </span>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                  patient.triageHistory[0].urgencyBand === 'red'
+                    ? 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                    : patient.triageHistory[0].urgencyBand === 'yellow'
+                    ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                    : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                }`}
+              >
+                Score {patient.triageHistory[0].urgencyScore}/10 ({patient.triageHistory[0].urgencyBand.toUpperCase()})
+              </span>
+              <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">
+                Suggested Specialty: {patient.triageHistory[0].suggestedSpecialty}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                const latest = patient.triageHistory![0];
+                setChiefComplaint(`[AI Triage Intake] ${latest.symptoms}`);
+                setDoctorRawNotes((prev) =>
+                  prev
+                    ? `${prev}\n\n[Triage Assessment Summary]: ${latest.summary}\nTimeline: Started ${latest.timelineStarted} (${latest.timelineTrajectory})`
+                    : `[Triage Assessment Summary]: ${latest.summary}\nTimeline: Started ${latest.timelineStarted} (${latest.timelineTrajectory})`
+                );
+              }}
+              className="text-[11px] font-bold text-teal-700 hover:text-teal-800 dark:text-teal-300 bg-white dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-teal-300 dark:border-teal-700 shadow-2xs flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+            >
+              <span>Import into Chief Complaint</span>
+              <span>&darr;</span>
+            </button>
+          </div>
+
+          <p className="text-slate-700 dark:text-slate-300 leading-snug">
+            <strong>Intake Symptoms:</strong> {patient.triageHistory[0].symptoms} • <strong>Timeline:</strong> Started {patient.triageHistory[0].timelineStarted}, progression: {patient.triageHistory[0].timelineTrajectory}.
+          </p>
+          <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-snug">
+            <strong>Clinical Synthesis:</strong> {patient.triageHistory[0].summary}
+          </p>
+        </div>
+      )}
+
       {/* Consultation 2-Column Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 text-xs">
         {/* Left Column (2 spans): Clinical Notes & SOAP */}
