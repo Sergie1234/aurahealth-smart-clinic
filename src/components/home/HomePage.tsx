@@ -28,7 +28,7 @@ import {
   Hospital,
   BadgeCheck,
   Menu,
-  X
+  X,
 } from 'lucide-react';
 import { INITIAL_USERS } from '../../data/mockData';
 import { getDoctorSchedule } from '../../utils/doctorSchedules';
@@ -38,7 +38,7 @@ interface HomePageProps {
 }
 
 export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => {
-  const { setActiveTab, appointments, patients, isAuthenticated, currentUser, setPendingAction, users } = useClinic();
+  const { setActiveTab, appointments, patients, isAuthenticated, currentUser, setPendingAction, users, language, t } = useClinic();
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -85,29 +85,29 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
           <div className="flex items-center gap-2.5 font-medium flex-wrap justify-center sm:justify-start">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 text-white/95 text-[10px] font-bold tracking-wider uppercase border border-white/20 shadow-2xs backdrop-blur-xs">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
-              Notice
+              {t.common.status}
             </span>
             <span className="text-white/95 text-[11px] sm:text-xs">
-              Accredited with PhilHealth & Major HMOs <span className="opacity-60 mx-1">•</span>{' '}
+              {t.home.bannerNotice} <span className="opacity-60 mx-1">•</span>{' '}
               <button
                 type="button"
                 onClick={() => setShowPrivacyModal(true)}
                 className="inline-flex items-center gap-1 font-semibold text-white hover:text-teal-100 transition cursor-pointer hover:underline decoration-teal-200/60"
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-teal-200 inline" />
-                <span>Data Privacy Act (RA 10173) Certified</span>
+                <span>{t.common.privacyCertified}</span>
               </button>
             </span>
           </div>
           <div className="flex items-center gap-3.5 text-[11px] text-white/90 shrink-0">
             <span className="flex items-center gap-1.5 font-medium">
               <Clock className="w-3.5 h-3.5 text-teal-200" />
-              <span>Open 24 Hours • 7 Days a Week</span>
+              <span>{t.common.open24Hours}</span>
             </span>
             <span className="hidden md:inline opacity-40">|</span>
             <span className="flex items-center gap-1.5 font-medium">
               <Phone className="w-3.5 h-3.5 text-teal-200" />
-              <span>Emergency Hotline: Globe +639154050623</span>
+              <span>{t.common.emergencyHotline}</span>
             </span>
           </div>
         </div>
@@ -125,32 +125,32 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
                 </span>
               </div>
               <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-widest font-semibold">
-                Outpatient & Clinical Management
+                {language === 'fil' ? 'Pangangalagang Pangkalusugan' : 'Outpatient & Clinical Management'}
               </p>
             </div>
           </div>
 
           <nav className="hidden lg:flex items-center gap-6 xl:gap-7 text-sm font-medium text-slate-600 dark:text-slate-300">
-            <a href="#services" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Services</a>
-            <a href="#specialties" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Clinical Specialties</a>
-            <a href="#portals" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Clinic Portals</a>
-            <a href="#standards" className="hover:text-teal-600 dark:hover:text-teal-400 transition">Standards</a>
+            <a href="#services" className="hover:text-teal-600 dark:hover:text-teal-400 transition">{language === 'fil' ? 'Mga Serbisyo' : 'Services'}</a>
+            <a href="#specialties" className="hover:text-teal-600 dark:hover:text-teal-400 transition">{language === 'fil' ? 'Mga Espesyalista' : 'Clinical Specialties'}</a>
+            <a href="#portals" className="hover:text-teal-600 dark:hover:text-teal-400 transition">{language === 'fil' ? 'Portal ng Klinika' : 'Clinic Portals'}</a>
+            <a href="#standards" className="hover:text-teal-600 dark:hover:text-teal-400 transition">{language === 'fil' ? 'Seguridad ng Datos' : 'Standards'}</a>
             <button
               type="button"
               onClick={() => setShowPrivacyModal(true)}
               className="hover:text-teal-600 dark:hover:text-teal-400 transition cursor-pointer font-medium"
             >
-              Privacy Policy
+              {language === 'fil' ? 'Patakaran sa Privacy' : 'Privacy Policy'}
             </button>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             {isAuthenticated ? (
               <button
                 onClick={() => setActiveTab('dashboard')}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 rounded-lg shadow-sm transition cursor-pointer"
               >
-                <span>My Dashboard</span>
+                <span>{t.nav.dashboard}</span>
                 <span className="text-xs font-normal opacity-90 capitalize">({currentUser.role})</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
@@ -161,15 +161,15 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
                 >
                   <LogIn className="w-4 h-4" />
-                  <span>Login</span>
+                  <span>{t.nav.signIn}</span>
                 </button>
                 <button
                   onClick={onOpenBookAppointment}
                   className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 rounded-lg shadow-sm hover:shadow transition cursor-pointer"
                 >
                   <Calendar className="w-4 h-4" />
-                  <span className="hidden sm:inline">Book Now</span>
-                  <span className="sm:hidden">Book</span>
+                  <span className="hidden sm:inline">{t.common.bookAppointment}</span>
+                  <span className="sm:hidden">{language === 'fil' ? 'Mag-book' : 'Book'}</span>
                 </button>
               </>
             )}
@@ -242,37 +242,35 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
             <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-teal-100/80 dark:bg-teal-950/80 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300 text-xs font-semibold tracking-wide">
                 <Sparkles className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                <span>Next-Gen Smart Outpatient Clinic Platform</span>
+                <span>{t.home.heroBadge}</span>
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-[1.15]">
-                Modern Outpatient Care, <br />
+                {t.home.heroTitlePart1} <br />
                 <span className="bg-gradient-to-r from-teal-600 to-cyan-500 bg-clip-text text-transparent">
-                  Intelligent Clinical Flow.
+                  {t.home.heroTitlePart2}
                 </span>
               </h1>
 
               <p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-                Streamline patient consults, electronic health records (EMR), live triage queueing, 
-                e-prescriptions, and diagnostic laboratory tracking — backed by Philippine Health Data 
-                Security Standards (RA 10173).
+                {t.home.heroSubtitle}
               </p>
 
               {/* CTAs */}
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3.5 pt-2">
                 <button
                   onClick={onOpenBookAppointment}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 text-base font-semibold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 rounded-xl shadow-md hover:shadow-lg transition-all"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 text-base font-semibold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer"
                 >
                   <Calendar className="w-5 h-5" />
-                  <span>Book Outpatient Appointment</span>
+                  <span>{t.home.btnBookNow}</span>
                 </button>
                 <button
-                  onClick={() => setActiveTab('login')}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 text-base font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl shadow-sm transition-all"
+                  onClick={handleViewLiveQueue}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 text-base font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl shadow-sm transition-all cursor-pointer"
                 >
-                  <UserCheck className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-                  <span>Sign In to Clinic Portal</span>
+                  <Clock className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                  <span>{t.home.btnViewQueue}</span>
                 </button>
               </div>
 
@@ -280,15 +278,15 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
               <div className="pt-6 border-t border-slate-200 dark:border-slate-800 grid grid-cols-3 gap-4 text-center lg:text-left">
                 <div>
                   <div className="text-2xl font-bold text-slate-900 dark:text-white">100%</div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">Digital Health Records</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">{language === 'fil' ? 'Digital na Rekord' : 'Digital Health Records'}</div>
                 </div>
                 <div>
                   <div className="text-2xl font-bold text-teal-600 dark:text-teal-400">{avgWaitMinutes} min</div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">Avg. Outpatient Wait</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">{t.home.avgWaitTime}</div>
                 </div>
                 <div>
                   <div className="text-2xl font-bold text-slate-900 dark:text-white">RA 10173</div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">Data Privacy Certified</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">{t.common.privacyCertified}</div>
                 </div>
               </div>
             </div>
@@ -305,36 +303,36 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
                       <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                     </span>
                     <div>
-                      <span className="text-sm font-bold text-slate-800 dark:text-slate-100 block leading-tight">Live Clinic Operations</span>
+                      <span className="text-sm font-bold text-slate-800 dark:text-slate-100 block leading-tight">{t.home.liveQueueTitle}</span>
                       <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                        Synced Live with Inside EMR
+                        {language === 'fil' ? 'Direktang Nakakonekta sa Klinika' : 'Synced Live with Inside EMR'}
                       </span>
                     </div>
                   </div>
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800">
-                    Open Now • PST
+                    {language === 'fil' ? 'Bukas Ngayon' : 'Open Now • PST'}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 my-4">
                   <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800">
                     <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
-                      <span>Waiting in Queue</span>
+                      <span>{t.home.waitingInQueue}</span>
                       <Clock className="w-3.5 h-3.5 text-teal-600" />
                     </div>
                     <div className="text-2xl font-bold text-slate-900 dark:text-white">
-                      {waitingInQueue} <span className="text-xs font-normal text-slate-500">patients</span>
+                      {waitingInQueue} <span className="text-xs font-normal text-slate-500">{language === 'fil' ? 'pasyente' : 'patients'}</span>
                     </div>
                   </div>
 
                   <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800">
                     <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
-                      <span>In Consultation</span>
+                      <span>{t.home.inConsultation}</span>
                       <Activity className="w-3.5 h-3.5 text-cyan-600" />
                     </div>
                     <div className="text-2xl font-bold text-slate-900 dark:text-white">
-                      {activeInConsult} <span className="text-xs font-normal text-slate-500">active</span>
+                      {activeInConsult} <span className="text-xs font-normal text-slate-500">{language === 'fil' ? 'aktibo' : 'active'}</span>
                     </div>
                   </div>
                 </div>

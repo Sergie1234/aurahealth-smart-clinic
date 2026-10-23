@@ -18,6 +18,8 @@ import {
 } from '../lib/supabase';
 import { formatTimeSlot, createCustomDoctorSchedule, registerDoctorSchedule } from '../utils/doctorSchedules';
 
+import { getTranslation, type AppLanguage, type Translations } from '../utils/translations';
+
 export type PrimaryAuthRole = 'patient' | 'staff' | 'doctor' | 'admin';
 export type StaffSubRole = 'nurse' | 'pharmacist' | 'receptionist' | 'lab_technician';
 
@@ -83,7 +85,7 @@ interface ClinicContextType {
     requires2FA?: boolean;
     twoFactorRequired?: boolean;
   }>;
-  logout: () => void;
+  logout: (redirectTab?: string) => void;
   addDoctor: (doctorData: {
     name: string;
     email: string;
@@ -157,10 +159,12 @@ interface ClinicContextType {
   supabaseInfo: { isConfigured: boolean; url: string; domain: string; hasKey: boolean };
   syncAllToSupabase: () => Promise<{ success: boolean; syncedCounts: Record<string, number>; message: string }>;
   refreshSupabaseConfig: () => void;
-  language: 'en' | 'fil';
-  setLanguage: (lang: 'en' | 'fil') => void;
+  language: AppLanguage;
+  setLanguage: (lang: AppLanguage) => void;
+  t: Translations;
   showSessionWarning: boolean;
   sessionSecondsRemaining: number;
+  sessionTimeoutTotal: number;
   resetSessionTimer: () => void;
 }
 
@@ -218,7 +222,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   // Global Language state (English / Tagalog)
-  const [language, setLanguageState] = useState<'en' | 'fil'>(() => {
+  const [language, setLanguageState] = useState<AppLanguage>(() => {
     try {
       const saved = localStorage.getItem('smart_clinic_language');
       if (saved === 'en' || saved === 'fil') return saved;
@@ -226,59 +230,127 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return 'en';
   });
 
-  const setLanguage = (lang: 'en' | 'fil') => {
+  const setLanguage = (lang: AppLanguage) => {
     setLanguageState(lang);
     try {
       localStorage.setItem('smart_clinic_language', lang);
     } catch {}
   };
 
+  const t = useMemo(() => getTranslation(language), [language]);
+
   // Session Timeout (Auto Logout) implementation
-  const [lastActivityTime, setLastActivityTime] = useState<number>(Date.now());
+  // Exact user requirements:
+  // - Doctor: 3 minutes of inactivity (180 seconds)
+  // - Staff: 5 minutes of inactivity (300 seconds)
+  // - Patient: 10 minutes of inactivity (600 seconds)
+  // - Admin: 15 minutes of inactivity (900 seconds)
+  // - Show warning before logout and automatically redirect to login page when time is up.
+  // - Reset timer when user is active.
+  const lastActivityRef = React.useRef<number>(Date.now());
   const [showSessionWarning, setShowSessionWarning] = useState<boolean>(false);
-  const [sessionSecondsRemaining, setSessionSecondsRemaining] = useState<number>(120);
+  const showSessionWarningRef = React.useRef<boolean>(false);
+  showSessionWarningRef.current = showSessionWarning;
+
+  const getTimeoutSeconds = useCallback(() => {
+    // 1. Doctor: 3 minutes of inactivity
+    if (activeRole === 'doctor' || primaryRole === 'doctor') {
+      return 3 * 60;
+    }
+    // 2. Staff: 5 minutes of inactivity (Nurse, Pharmacist, Receptionist, Lab Tech)
+    if (
+      primaryRole === 'staff' ||
+      activeRole === 'nurse' ||
+      activeRole === 'pharmacist' ||
+      activeRole === 'receptionist' ||
+      activeRole === 'lab_technician' ||
+      staffSubRole !== null
+    ) {
+      return 5 * 60;
+    }
+    // 3. Patient: 10 minutes of inactivity
+    if (primaryRole === 'patient' || activeRole === 'patient') {
+      return 10 * 60;
+    }
+    // 4. Admin: 15 minutes of inactivity
+    if (activeRole === 'admin' || primaryRole === 'admin') {
+      return 15 * 60;
+    }
+    return 5 * 60;
+  }, [primaryRole, activeRole, staffSubRole]);
+
+  const [sessionTimeoutTotal, setSessionTimeoutTotal] = useState<number>(() => 10 * 60);
+  const [sessionSecondsRemaining, setSessionSecondsRemaining] = useState<number>(() => 10 * 60);
 
   const resetSessionTimer = useCallback(() => {
-    setLastActivityTime(Date.now());
+    lastActivityRef.current = Date.now();
     setShowSessionWarning(false);
-  }, []);
+    const totalSecs = getTimeoutSeconds();
+    setSessionTimeoutTotal(totalSecs);
+    setSessionSecondsRemaining(totalSecs);
+  }, [getTimeoutSeconds]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      setShowSessionWarning(false);
+      return;
+    }
 
-    const handleUserActivity = () => {
-      resetSessionTimer();
+    const totalSecs = getTimeoutSeconds();
+    setSessionTimeoutTotal(totalSecs);
+    setSessionSecondsRemaining(totalSecs);
+    lastActivityRef.current = Date.now();
+
+    let lastLoggedActivity = Date.now();
+    const handleUserActivity = (ev: Event) => {
+      const now = Date.now();
+      if (showSessionWarningRef.current) {
+        // While the warning modal is up, deliberate interaction (click, keydown, touch) resets
+        if (ev.type === 'mousemove' || ev.type === 'scroll') {
+          return;
+        }
+        lastLoggedActivity = now;
+        lastActivityRef.current = now;
+        setShowSessionWarning(false);
+        const curTotal = getTimeoutSeconds();
+        setSessionSecondsRemaining(curTotal);
+        return;
+      }
+      // During active session, throttle activity updates so we maintain top performance
+      if (now - lastLoggedActivity > 500) {
+        lastLoggedActivity = now;
+        lastActivityRef.current = now;
+      }
     };
 
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
     events.forEach((ev) => window.addEventListener(ev, handleUserActivity, { passive: true }));
 
-    // Timeout durations based on sensitivity & role:
-    // 1. Patient: 15 minutes (900,000 ms)
-    // 2. Nurse / Staff: 20 minutes (1,200,000 ms)
-    // 3. Doctor: 25 minutes (1,500,000 ms)
-    // 4. Admin: 30 minutes (1,800,000 ms)
-    const getTimeoutMs = () => {
-      if (primaryRole === 'patient' || activeRole === 'patient') return 15 * 60 * 1000;
-      if (staffSubRole === 'nurse' || activeRole === 'nurse' || primaryRole === 'staff') return 20 * 60 * 1000;
-      if (activeRole === 'doctor' || primaryRole === 'doctor') return 25 * 60 * 1000;
-      if (activeRole === 'admin' || primaryRole === 'admin') return 30 * 60 * 1000;
-      return 20 * 60 * 1000;
-    };
-
     const interval = setInterval(() => {
       const now = Date.now();
-      const timeoutMs = getTimeoutMs();
-      const elapsed = now - lastActivityTime;
-      const remainingMs = timeoutMs - elapsed;
-      const remainingSecs = Math.max(0, Math.floor(remainingMs / 1000));
+      const timeoutSecs = getTimeoutSeconds();
+      const elapsedSecs = Math.max(0, Math.floor((now - lastActivityRef.current) / 1000));
+      const remainingSecs = Math.max(0, timeoutSecs - elapsedSecs);
 
       setSessionSecondsRemaining(remainingSecs);
 
       if (remainingSecs <= 0) {
-        logout();
         setShowSessionWarning(false);
-      } else if (remainingSecs <= 120) {
+        // Automatic logout and redirect to login page when time is up
+        setIsAuthenticated(false);
+        setPrimaryRole(null);
+        setStaffSubRole(null);
+        setLinkedPatientId(null);
+        setPendingAction(null);
+        setActiveRole('patient');
+        setAuthToken(null);
+        try {
+          localStorage.removeItem('smart_clinic_auth_session');
+          localStorage.removeItem('smart_clinic_token');
+        } catch {}
+        setActiveTabState('login');
+      } else if (remainingSecs <= 60) {
+        // Show warning when 60 seconds (1 minute) remain before timeout
         setShowSessionWarning(true);
       } else {
         setShowSessionWarning(false);
@@ -289,7 +361,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       events.forEach((ev) => window.removeEventListener(ev, handleUserActivity));
       clearInterval(interval);
     };
-  }, [isAuthenticated, primaryRole, activeRole, staffSubRole, lastActivityTime, resetSessionTimer]);
+  }, [isAuthenticated, getTimeoutSeconds]);
 
   const [patientAccounts, setPatientAccounts] = useState<PatientAccount[]>(() => {
     try {
@@ -880,7 +952,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  const logout = () => {
+  const logout = (redirectTab: string = 'home') => {
     setIsAuthenticated(false);
     setPrimaryRole(null);
     setStaffSubRole(null);
@@ -888,11 +960,12 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setPendingAction(null);
     setActiveRole('patient');
     setAuthToken(null);
+    setShowSessionWarning(false);
     try {
       localStorage.removeItem('smart_clinic_auth_session');
       localStorage.removeItem('smart_clinic_token');
     } catch { /* */ }
-    setActiveTab('home');
+    setActiveTab(redirectTab);
   };
 
   // ==============================================================================
@@ -1704,8 +1777,10 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         refreshSupabaseConfig,
         language,
         setLanguage,
+        t,
         showSessionWarning,
         sessionSecondsRemaining,
+        sessionTimeoutTotal,
         resetSessionTimer,
       }}
     >

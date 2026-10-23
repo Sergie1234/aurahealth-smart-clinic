@@ -23,8 +23,11 @@ export const AdminDashboardView: React.FC = () => {
     invoices,
     auditLogs,
     setActiveTab,
+    t,
+    language,
   } = useClinic();
 
+  const isFil = language === 'fil';
   const [showAddDoctorModal, setShowAddDoctorModal] = useState(false);
 
   const totalRevenue = invoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
@@ -39,18 +42,20 @@ export const AdminDashboardView: React.FC = () => {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 flex items-center gap-1.5">
                 <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Executive Clinic Director</span>
+                <span>{isFil ? 'Tagapamahala ng Klinika' : 'Executive Clinic Director'}</span>
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Secure Session • smartclinicrealacc@gmail.com</span>
+                <span>{isFil ? 'Ligtas na Sesyon' : 'Secure Session'} • smartclinicrealacc@gmail.com</span>
               </span>
             </div>
             <h1 className="text-xl sm:text-2xl font-black text-white mt-1">
-              Welcome, {currentUser.name}
+              {t.common.welcome}, {currentUser.name}
             </h1>
             <p className="text-slate-300 text-xs mt-0.5 max-w-xl">
-              Clinic Operations, Financial Oversight & Cryptographic Audit Trails. Adheres to Philippine National Privacy Commission (RA 10173).
+              {isFil
+                ? 'Operasyon ng Klinika, Pananalapi, at Audit Trail alinsunod sa Philippine Data Privacy Act (RA 10173).'
+                : 'Clinic Operations, Financial Oversight & Cryptographic Audit Trails. Adheres to Philippine National Privacy Commission (RA 10173).'}
             </p>
           </div>
         </div>
@@ -61,7 +66,7 @@ export const AdminDashboardView: React.FC = () => {
             className="px-4 py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl font-bold flex items-center gap-2 transition shadow-md shadow-indigo-500/20 cursor-pointer"
           >
             <ShieldAlert className="w-4 h-4" />
-            <span>Audit & Compliance Logs</span>
+            <span>{t.admin.complianceAudit}</span>
           </button>
         </div>
       </div>
@@ -69,38 +74,38 @@ export const AdminDashboardView: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
-            <span>Collected Revenue</span>
+            <span>{t.admin.revenueToday}</span>
             <Receipt className="w-4 h-4 text-emerald-600" />
           </div>
           <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{formatPeso(totalRevenue)}</p>
-          <span className="text-[10px] text-emerald-700 font-semibold">Active Fiscal Cycle (PHP)</span>
+          <span className="text-[10px] text-emerald-700 font-semibold">{isFil ? 'Nasingil na Halaga (PHP)' : 'Active Fiscal Cycle (PHP)'}</span>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
-            <span>Outstanding Balances</span>
+            <span>{isFil ? 'Natitirang Balanse' : 'Outstanding Balances'}</span>
             <TrendingUp className="w-4 h-4 text-amber-600" />
           </div>
           <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{formatPeso(outstandingRevenue)}</p>
-          <span className="text-[10px] text-amber-700 font-semibold">Pending Settlement</span>
+          <span className="text-[10px] text-amber-700 font-semibold">{isFil ? 'Nakahandang Bayarin' : 'Pending Settlement'}</span>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
-            <span>Registered Patients</span>
+            <span>{t.admin.totalPatients}</span>
             <Users className="w-4 h-4 text-teal-600" />
           </div>
           <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{patients.length}</p>
-          <span className="text-[10px] text-teal-700 font-semibold">Active Clinical Records</span>
+          <span className="text-[10px] text-teal-700 font-semibold">{isFil ? 'Aktibong Talaan ng Pasyente' : 'Active Clinical Records'}</span>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
-            <span>Security Audit Events</span>
+            <span>{t.admin.systemLogs}</span>
             <Lock className="w-4 h-4 text-indigo-600" />
           </div>
           <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{auditLogs.length}</p>
-          <span className="text-[10px] text-indigo-700 font-semibold">Tamper-evident Entries</span>
+          <span className="text-[10px] text-indigo-700 font-semibold">{isFil ? 'Mga Tala ng Seguridad' : 'Tamper-evident Entries'}</span>
         </div>
       </div>
 
@@ -132,19 +137,19 @@ export const AdminDashboardView: React.FC = () => {
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-teal-600" />
-              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Hospital Staff Access Matrix</h3>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{t.admin.manageStaff}</h3>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowAddDoctorModal(true)}
                 className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 transition shadow-sm shadow-teal-600/20 cursor-pointer"
-                title="Register and Credential New Doctor"
+                title={t.admin.addDoctorBtn}
               >
                 <Plus className="w-3.5 h-3.5" />
                 <Stethoscope className="w-3.5 h-3.5" />
-                <span>Add Doctor</span>
+                <span>{t.admin.addDoctorBtn}</span>
               </button>
-              <span className="text-xs text-slate-500">{users.length} Authorized</span>
+              <span className="text-xs text-slate-500">{users.length} {isFil ? 'Awtorisado' : 'Authorized'}</span>
             </div>
           </div>
 
@@ -172,13 +177,13 @@ export const AdminDashboardView: React.FC = () => {
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 text-indigo-600" />
-              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Tamper-Evident Security Log</h3>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{t.admin.complianceAudit}</h3>
             </div>
             <button
               onClick={() => setActiveTab('audit-logs')}
               className="text-xs text-indigo-600 hover:underline font-bold cursor-pointer"
             >
-              View Full Logs
+              {isFil ? 'Tingnan ang Lahat ng Tala' : 'View Full Logs'}
             </button>
           </div>
 

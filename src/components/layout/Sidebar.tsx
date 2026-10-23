@@ -30,7 +30,7 @@ interface NavItem {
 }
 
 export const Sidebar: React.FC = () => {
-  const { activeTab, setActiveTab, activeRole, appointments, labOrders, inventory } = useClinic();
+  const { activeTab, setActiveTab, activeRole, appointments, labOrders, inventory, t } = useClinic();
 
   const waitingCount = appointments.filter((a) => a.status === 'Checked In' || a.status === 'In Consultation').length;
   const pendingLabs = labOrders.filter((l) => l.status === 'Requested' || l.status === 'Processing').length;
@@ -46,50 +46,50 @@ export const Sidebar: React.FC = () => {
     // 1. PATIENT MODULES (Strictly for Patient role)
     {
       id: 'dashboard',
-      label: 'My Health Portal',
+      label: t.nav.patientPortal,
       icon: LayoutDashboard,
       roles: ['patient'],
     },
     {
       id: 'appointments',
-      label: 'My Appointments',
+      label: t.nav.appointments,
       icon: Calendar,
       roles: ['patient'],
     },
     {
       id: 'queue',
-      label: 'Live Queue & Waiting Room',
+      label: t.nav.queue,
       icon: Layers,
       badge: waitingCount > 0 ? waitingCount : undefined,
       roles: ['patient'],
     },
     {
       id: 'emr',
-      label: 'My Medical Records',
+      label: t.nav.emr,
       icon: FileText,
       roles: ['patient'],
     },
     {
       id: 'prescriptions',
-      label: 'My Prescriptions',
+      label: t.nav.prescriptions,
       icon: Pill,
       roles: ['patient'],
     },
     {
       id: 'laboratory',
-      label: 'My Diagnostic Lab',
+      label: t.nav.laboratory,
       icon: FlaskConical,
       roles: ['patient'],
     },
     {
       id: 'billing',
-      label: 'My Billing & Invoices',
+      label: t.nav.billing,
       icon: Receipt,
       roles: ['patient'],
     },
     {
       id: 'ai-assistant',
-      label: 'AI Triage Chatbot',
+      label: t.nav.aiAssistant,
       icon: Sparkles,
       roles: ['patient'],
     },
@@ -97,64 +97,64 @@ export const Sidebar: React.FC = () => {
     // 2. PROVIDER MODULES (Doctor, Nurse, Staff)
     {
       id: 'dashboard',
-      label: 'Provider Dashboard',
+      label: t.nav.dashboard,
       icon: LayoutDashboard,
       roles: ['doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician'],
     },
     {
       id: 'patients',
-      label: 'Patient List & Search',
+      label: t.nav.patients,
       icon: Users,
       roles: ['doctor', 'nurse', 'receptionist'],
     },
     {
       id: 'appointments',
-      label: 'Appointment Management',
+      label: t.nav.appointments,
       icon: Calendar,
       roles: ['doctor', 'nurse', 'receptionist'],
     },
     {
       id: 'queue',
-      label: 'Triage Review & Queue',
+      label: t.nav.queue,
       icon: Layers,
       badge: waitingCount > 0 ? waitingCount : undefined,
       roles: ['doctor', 'nurse', 'receptionist'],
     },
     {
       id: 'scan-qr',
-      label: 'Scan Health ID (QR)',
+      label: t.nav.scanHealthId,
       icon: QrCode,
       roles: ['nurse', 'receptionist'],
     },
     {
       id: 'consultations',
-      label: 'Clinical Notes & Charting',
+      label: t.nav.consultations,
       icon: Stethoscope,
       roles: ['doctor', 'nurse'],
     },
     {
       id: 'prescriptions',
-      label: 'Prescription Writing',
+      label: t.nav.prescriptions,
       icon: Pill,
       roles: ['doctor', 'pharmacist'],
     },
     {
       id: 'laboratory',
-      label: 'Lab Orders',
+      label: t.nav.laboratory,
       icon: FlaskConical,
       badge: pendingLabs > 0 ? pendingLabs : undefined,
       roles: ['doctor', 'lab_technician', 'nurse'],
     },
     {
       id: 'inventory',
-      label: 'Medication Formulary',
+      label: t.nav.inventory,
       icon: PackageCheck,
       badge: lowStockCount > 0 ? lowStockCount : undefined,
       roles: ['pharmacist', 'doctor'],
     },
     {
       id: 'ai-assistant',
-      label: 'Clinical AI Assistant',
+      label: t.nav.aiAssistant,
       icon: Sparkles,
       roles: ['doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician'],
     },
@@ -162,50 +162,50 @@ export const Sidebar: React.FC = () => {
     // 3. ADMIN MODULES (Strictly for Executive Admin - No QR scanner access)
     {
       id: 'dashboard',
-      label: 'Executive Overview',
+      label: t.admin.dashboardTitle,
       icon: LayoutDashboard,
       roles: ['admin'],
     },
     {
       id: 'patients',
-      label: 'User & Patient Management',
+      label: t.admin.totalPatients,
       icon: Users,
       roles: ['admin'],
     },
     {
       id: 'audit-logs',
-      label: 'Audit Logs & Compliance',
+      label: t.nav.auditLogs,
       icon: ShieldAlert,
       roles: ['admin'],
     },
     {
       id: 'reports',
-      label: 'Reports & Analytics',
+      label: t.nav.reports,
       icon: BarChart3,
       roles: ['admin'],
     },
     {
       id: 'predictive-analytics',
-      label: 'Clinic Predictive Analytics',
+      label: t.nav.predictiveAnalytics,
       icon: TrendingUp,
       roles: ['admin'],
     },
     {
       id: 'billing',
-      label: 'Clinic Billing & Revenue',
+      label: t.nav.billing,
       icon: Receipt,
       roles: ['admin'],
     },
     {
       id: 'inventory',
-      label: 'Supply & Stock Management',
+      label: t.nav.inventory,
       icon: PackageCheck,
       badge: lowStockCount > 0 ? lowStockCount : undefined,
       roles: ['admin'],
     },
     {
       id: 'ai-assistant',
-      label: 'Clinic Operations AI',
+      label: t.nav.aiAssistant,
       icon: Sparkles,
       roles: ['admin'],
     },

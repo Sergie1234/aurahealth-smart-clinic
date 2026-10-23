@@ -40,7 +40,7 @@ import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
 type AuthMode = 'login' | 'register';
 
 export const LoginPage: React.FC = () => {
-  const { login, setActiveTab, pendingAction } = useClinic();
+  const { login, setActiveTab, pendingAction, language, t } = useClinic();
   const { success: toastSuccess, error: toastError } = useToast();
 
   const [primaryRole, setPrimaryRole] = useState<PrimaryAuthRole>('patient');
@@ -368,6 +368,7 @@ export const LoginPage: React.FC = () => {
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-12 bg-gradient-to-b from-teal-50/40 via-slate-50 to-white dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 font-sans">
       <div className={`w-full ${isPatient && mode === 'register' ? 'max-w-2xl' : 'max-w-lg'} transition-all`}>
+
         {/* Header / Brand */}
         <div className="text-center mb-6">
           <button
@@ -386,7 +387,7 @@ export const LoginPage: React.FC = () => {
           <div className="flex items-center justify-center gap-2 mt-2">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/80 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              LIVE PRODUCTION SERVER (RA 10173)
+              {t.common.privacyCertified}
             </span>
           </div>
         </div>
@@ -396,7 +397,7 @@ export const LoginPage: React.FC = () => {
           <div className="mb-4 p-3.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-200 text-xs flex items-center gap-2.5 animate-in fade-in duration-200">
             <UserCheck className="w-4 h-4 text-teal-600 shrink-0" />
             <span>
-              <strong>Appointment Booking Gate:</strong> Please sign in or create an account to finalize your outpatient reservation. You will be redirected immediately.
+              <strong>{language === 'fil' ? 'Pansamantalang Pagpigil sa Pag-book:' : 'Appointment Booking Gate:'}</strong> {language === 'fil' ? 'Mangyaring mag-sign in o magrehistro muna upang makumpirma ang inyong appointment.' : 'Please sign in or create an account to finalize your outpatient reservation. You will be redirected immediately.'}
             </span>
           </div>
         )}
@@ -409,13 +410,13 @@ export const LoginPage: React.FC = () => {
             </div>
             <div className="space-y-1">
               <div className="font-bold text-teal-900 dark:text-white flex items-center gap-2">
-                <span>Authentication Required to View Live Queue</span>
+                <span>{language === 'fil' ? 'Kinakailangan Mag-login Para sa Live Queue' : 'Authentication Required to View Live Queue'}</span>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-teal-200/80 dark:bg-teal-800 text-teal-800 dark:text-teal-200">
                   RA 10173 Protected
                 </span>
               </div>
               <p className="text-teal-700 dark:text-teal-300 leading-relaxed">
-                To protect outpatient medical privacy and clinical triage confidentiality under Philippine Health Data Security Standards, viewing live waiting room details and room calls requires authentication. Please sign in with any role to proceed directly.
+                {language === 'fil' ? 'Para sa proteksyon ng medikal na datos alinsunod sa batas ng Pilipinas, kinakailangan munang mag-login upang makita ang kasalukuyang pila ng pasyente.' : 'To protect outpatient medical privacy and clinical triage confidentiality under Philippine Health Data Security Standards, viewing live waiting room details and room calls requires authentication.'}
               </p>
             </div>
           </div>
@@ -426,10 +427,10 @@ export const LoginPage: React.FC = () => {
           <div className="grid grid-cols-4 gap-2 mb-6">
             {(
               [
-                { id: 'patient' as const, label: 'Patient', icon: UserRound },
-                { id: 'doctor' as const, label: 'Doctor', icon: Stethoscope },
-                { id: 'staff' as const, label: 'Staff', icon: Activity },
-                { id: 'admin' as const, label: 'Admin', icon: ShieldCheck },
+                { id: 'patient' as const, label: t.roles.patient, icon: UserRound },
+                { id: 'doctor' as const, label: t.roles.doctor, icon: Stethoscope },
+                { id: 'staff' as const, label: t.roles.staff, icon: Activity },
+                { id: 'admin' as const, label: t.roles.admin, icon: ShieldCheck },
               ] as const
             ).map(({ id, label, icon: Icon }) => (
               <button
@@ -447,7 +448,7 @@ export const LoginPage: React.FC = () => {
                 }`}
               >
                 <Icon className="w-4 h-4" />
-                <span>{label}</span>
+                <span className="truncate max-w-full text-[11px]">{label}</span>
               </button>
             ))}
           </div>
@@ -465,7 +466,7 @@ export const LoginPage: React.FC = () => {
                     mode === 'login' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
-                  Sign In
+                  {t.auth.signInBtn}
                 </button>
                 <button
                   type="button"
@@ -475,7 +476,7 @@ export const LoginPage: React.FC = () => {
                   }`}
                 >
                   <UserPlus className="w-3.5 h-3.5" />
-                  Create Account
+                  {t.auth.registerTab}
                 </button>
               </div>
             </div>
@@ -1242,13 +1243,6 @@ export const LoginPage: React.FC = () => {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('home')}
-            className="mt-4 w-full text-center text-xs text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition cursor-pointer"
-          >
-            ← Back to Smart Clinic Homepage
-          </button>
         </div>
       </div>
 

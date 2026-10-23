@@ -103,7 +103,11 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
     selectPatient,
     setActiveTab,
     isAuthenticated,
+    t,
+    language,
   } = useClinic();
+
+  const isFil = language === 'fil';
 
   // Philippine Standard Time Clock (UTC+8)
   const [currentTime, setCurrentTime] = useState<string>('');
@@ -340,11 +344,13 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
                 <Radio className="w-4 h-4 animate-pulse" />
               </div>
               <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                Live Queue & Waiting Room Board
+                {t.nav.queue}
               </h1>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Real-time outpatient patient flow, triage vitals processing, room calling broadcast, and clinical consultation progression.
+              {isFil
+                ? 'Real-time na daloy ng outpatient, pagtatala ng vitals sa triage, broadcast sa silid ng doktor, at progreso ng konsultasyon.'
+                : 'Real-time outpatient patient flow, triage vitals processing, room calling broadcast, and clinical consultation progression.'}
             </p>
           </div>
 
@@ -362,7 +368,7 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
               title="Toggle Hospital Broadcast Chime Sound"
             >
               {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-600" /> : <VolumeX className="w-3.5 h-3.5" />}
-              <span>{soundEnabled ? 'Broadcast Audio On' : 'Muted'}</span>
+              <span>{soundEnabled ? (isFil ? 'Naka-on ang Audio' : 'Broadcast Audio On') : (isFil ? 'Naka-mute' : 'Muted')}</span>
             </button>
 
             {/* Test Chime Button */}
@@ -372,7 +378,7 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition cursor-pointer"
             >
               <BellRing className="w-3.5 h-3.5 text-teal-600" />
-              <span>Test Public Chime</span>
+              <span>{isFil ? 'Subukan ang Tunog' : 'Test Public Chime'}</span>
             </button>
 
             {/* View Privacy Policy Button */}
@@ -383,7 +389,7 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
               title="View Philippine Medical Privacy Policy (RA 10173)"
             >
               <ShieldCheck className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-              <span>Privacy Policy</span>
+              <span>{t.auth.privacyLink}</span>
             </button>
 
             {/* Scan Patient Health ID Check-in & Emergency Button (Receptionist & Nurse Only) */}
@@ -395,7 +401,7 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
                 title="Scan Patient Electronic Health ID QR Code (Receptionist & Nurse Only)"
               >
                 <QrCode className="w-3.5 h-3.5" />
-                <span>Scan Health ID</span>
+                <span>{t.nav.scanHealthId}</span>
               </button>
             )}
 
@@ -406,7 +412,7 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Get Queue Ticket / Check-In</span>
+              <span>{isFil ? 'Kumuha ng Ticket / Mag-check In' : 'Get Queue Ticket / Check-In'}</span>
             </button>
           </div>
         </div>

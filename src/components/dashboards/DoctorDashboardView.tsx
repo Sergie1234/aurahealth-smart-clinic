@@ -30,6 +30,7 @@ export const DoctorDashboardView: React.FC<Props> = ({
     consultations,
     prescriptions,
     setActiveTab,
+    t,
   } = useClinic();
 
   const [searchPatient, setSearchPatient] = useState('');
@@ -53,15 +54,15 @@ export const DoctorDashboardView: React.FC<Props> = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-teal-500/20 text-teal-300 border border-teal-500/40">
-                Attending Physician Workspace
+                {t.doctor.consultationWorkspace}
               </span>
               <span className="text-[10px] text-teal-300 font-mono">MD-892410</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-black text-white mt-1">
-              Welcome, {currentUser.name}
+              {t.common.welcome}, {currentUser.name}
             </h1>
             <p className="text-slate-300 text-xs mt-0.5">
-              Department of Outpatient Medicine & Endocrinology. {activeQueue.length} patients ready in consultation triage.
+              Department of Outpatient Medicine & Endocrinology. {activeQueue.length} {t.doctor.inQueueCount.toLowerCase()}.
             </p>
           </div>
         </div>
@@ -72,7 +73,7 @@ export const DoctorDashboardView: React.FC<Props> = ({
             className="px-4 py-2.5 bg-teal-400 hover:bg-teal-300 text-slate-950 rounded-xl font-bold flex items-center gap-2 transition shadow-md shadow-teal-500/20 cursor-pointer"
           >
             <Stethoscope className="w-4 h-4" />
-            <span>Open Consultation Room</span>
+            <span>{t.doctor.startConsultationBtn}</span>
           </button>
 
           <button
@@ -80,7 +81,7 @@ export const DoctorDashboardView: React.FC<Props> = ({
             className="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold flex items-center gap-2 border border-white/20 transition cursor-pointer"
           >
             <Sparkles className="w-4 h-4 text-teal-300" />
-            <span>AI Decision Support</span>
+            <span>{t.doctor.clinicalDecisionSupport}</span>
           </button>
         </div>
       </div>
@@ -89,38 +90,38 @@ export const DoctorDashboardView: React.FC<Props> = ({
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
-            <span>Patients Waiting in Triage</span>
+            <span>{t.doctor.inQueueCount}</span>
             <Layers className="w-4 h-4 text-teal-600" />
           </div>
           <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{activeQueue.length}</p>
-          <span className="text-[10px] text-teal-700 dark:text-teal-400 font-semibold">Immediate Care Ready</span>
+          <span className="text-[10px] text-teal-700 dark:text-teal-400 font-semibold">{t.home.waitingInQueue}</span>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
-            <span>Scheduled Today</span>
+            <span>{t.doctor.todaySchedule}</span>
             <Calendar className="w-4 h-4 text-cyan-600" />
           </div>
           <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{appointments.length}</p>
-          <span className="text-[10px] text-cyan-700 dark:text-cyan-400 font-semibold">Clinic Appointments</span>
+          <span className="text-[10px] text-cyan-700 dark:text-cyan-400 font-semibold">{t.nav.appointments}</span>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
-            <span>Consultations Completed</span>
+            <span>{t.doctor.completedToday}</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
           <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{consultations.length}</p>
-          <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">Care Encounters Documented</span>
+          <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">{t.common.status}</span>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
-            <span>Prescriptions Authored</span>
+            <span>{t.doctor.writePrescription}</span>
             <Pill className="w-4 h-4 text-indigo-600" />
           </div>
           <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{prescriptions.length}</p>
-          <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-semibold">e-Rx Formularies</span>
+          <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-semibold">{t.nav.prescriptions}</span>
         </div>
       </div>
 
@@ -130,14 +131,14 @@ export const DoctorDashboardView: React.FC<Props> = ({
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-teal-600" />
-              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Live Consultation Queue</h3>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{t.nav.queue}</h3>
             </div>
-            <span className="text-xs text-teal-700 dark:text-teal-400 font-semibold">{activeQueue.length} In Waiting</span>
+            <span className="text-xs text-teal-700 dark:text-teal-400 font-semibold">{activeQueue.length} {t.home.waitingInQueue}</span>
           </div>
 
           <div className="space-y-3">
             {activeQueue.length === 0 ? (
-              <p className="text-slate-400 py-6 text-center">No patients currently in triage queue.</p>
+              <p className="text-slate-400 py-6 text-center">{t.common.noData}</p>
             ) : (
               activeQueue.map((apt) => (
                 <div
@@ -167,7 +168,7 @@ export const DoctorDashboardView: React.FC<Props> = ({
                     className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold flex items-center gap-1.5 transition shadow-sm cursor-pointer shrink-0"
                   >
                     <Stethoscope className="w-3.5 h-3.5" />
-                    <span>Begin Visit</span>
+                    <span>{t.doctor.startConsultationBtn}</span>
                   </button>
                 </div>
               ))
@@ -179,7 +180,7 @@ export const DoctorDashboardView: React.FC<Props> = ({
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-teal-600" />
-              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Patient Longitudinal EMR Chart</h3>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{t.nav.emr}</h3>
             </div>
           </div>
 
@@ -187,7 +188,7 @@ export const DoctorDashboardView: React.FC<Props> = ({
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search by patient name or MRN..."
+              placeholder={t.common.searchPlaceholder}
               value={searchPatient}
               onChange={(e) => setSearchPatient(e.target.value)}
               className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-teal-500"
@@ -206,14 +207,14 @@ export const DoctorDashboardView: React.FC<Props> = ({
                     {pat.mrn} • Blood {pat.bloodType} • {pat.gender}
                   </p>
                   <p className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold mt-0.5">
-                    Allergies: {Array.isArray(pat.allergies) ? (pat.allergies.length ? pat.allergies.map((a: any) => typeof a === 'string' ? a : a.allergen).join(', ') : 'NKDA') : 'NKDA'}
+                    {t.patient.allergies}: {Array.isArray(pat.allergies) ? (pat.allergies.length ? pat.allergies.map((a: any) => typeof a === 'string' ? a : a.allergen).join(', ') : t.patient.noKnownAllergies) : t.patient.noKnownAllergies}
                   </p>
                 </div>
 
                 <button
                   onClick={() => onStartConsultation(pat.id)}
                   className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-teal-700 dark:text-teal-400 hover:border-teal-500 cursor-pointer transition"
-                  title="Open Clinical Chart"
+                  title={t.doctor.viewChartBtn}
                 >
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
