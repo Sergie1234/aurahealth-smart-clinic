@@ -82,6 +82,7 @@ const ClinicAppContent: React.FC = () => {
   const [labOrderForReport, setLabOrderForReport] = useState<LabTestOrder | null>(null);
   const [consultPatientId, setConsultPatientId] = useState<string | undefined>(undefined);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   const openBookAppointment = () => {
     if (!isAuthenticated) {
@@ -234,9 +235,13 @@ const ClinicAppContent: React.FC = () => {
               setShowScanQRModal(true);
             }}
             onOpenProfileSettings={() => setShowProfileSettings(true)}
+            onToggleMobileMenu={() => setIsMobileNavOpen((prev) => !prev)}
           />
           <div className="flex flex-1 overflow-hidden">
-            <Sidebar />
+            <Sidebar
+              isOpen={isMobileNavOpen}
+              onClose={() => setIsMobileNavOpen(false)}
+            />
             <main className="flex-1 overflow-y-auto p-4 md:p-6">
               {activeTab === 'dashboard' && primaryRole === 'patient' && (
                 <PatientDashboardView
@@ -254,6 +259,7 @@ const ClinicAppContent: React.FC = () => {
                 <StaffDashboardView
                   subRole={staffSubRole || 'nurse'}
                   onOpenBookAppointment={openBookAppointment}
+                  onOpenNewPatient={() => setShowNewPatient(true)}
                 />
               )}
               {activeTab === 'dashboard' && (primaryRole === 'doctor' || activeRole === 'doctor') && (

@@ -5,7 +5,7 @@ import { NotificationDetailModal } from '../notifications/NotificationDetailModa
 import { canUserScanQR } from '../../utils/qrPermissions';
 import type { Notification } from '../../types/clinic';
 import {
-  Search, Bell, Clock, CheckCircle2, AlertTriangle, User, X, Plus, Database, LogOut, Lock, ShieldCheck, QrCode
+  Search, Bell, Clock, CheckCircle2, AlertTriangle, User, X, Plus, Database, LogOut, Lock, ShieldCheck, QrCode, Menu
 } from 'lucide-react';
 
 interface Props {
@@ -14,6 +14,7 @@ interface Props {
   onOpenSupabaseModal?: () => void;
   onOpenScanQR?: (mode?: 'checkin' | 'emergency') => void;
   onOpenProfileSettings?: () => void;
+  onToggleMobileMenu?: () => void;
 }
 
 export const Header: React.FC<Props> = ({
@@ -22,6 +23,7 @@ export const Header: React.FC<Props> = ({
   onOpenSupabaseModal,
   onOpenScanQR,
   onOpenProfileSettings,
+  onToggleMobileMenu,
 }) => {
   const {
     currentUser, activeRole, primaryRole, staffSubRole, notifications, unreadNotificationCount, markNotificationAsRead, markAllNotificationsAsRead,
@@ -69,10 +71,21 @@ export const Header: React.FC<Props> = ({
 
   return (
     <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30 select-none">
-      <div className="px-4 sm:px-6 py-2.5 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="px-3 sm:px-6 py-2.5 flex items-center justify-between gap-3 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {onToggleMobileMenu && (
+            <button
+              onClick={onToggleMobileMenu}
+              type="button"
+              className="lg:hidden p-1.5 -ml-1 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer active:scale-95"
+              aria-label="Toggle navigation menu"
+              title="Open Navigation"
+            >
+              <Menu className="w-5 h-5 text-slate-700 dark:text-slate-200" />
+            </button>
+          )}
           <div onClick={() => setActiveTab('dashboard')} className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 transition select-none" title="Go to Dashboard">
-            <SmartClinicLogo className="w-9 h-9" glow={true} />
+            <SmartClinicLogo className="w-8 h-8 sm:w-9 sm:h-9" glow={true} />
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-slate-900 dark:text-slate-100 text-base tracking-tight leading-none">Smart Clinic</span>

@@ -4,6 +4,8 @@
  * Complete patient data isolation, RBAC token authentication, and real SMTP / Twilio integrations.
  */
 import express, { Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
@@ -62,26 +64,63 @@ dotenv.config();
 export const app = express();
 app.use(express.json({ limit: '10mb' }));
 
-// Route alias normalization
-app.use((req, _res, next) => {
-  if (
-    !req.url.startsWith('/api') &&
-    (req.url.startsWith('/health') ||
-      req.url.startsWith('/ai') ||
-      req.url.startsWith('/supabase') ||
-      req.url.startsWith('/patients') ||
-      req.url.startsWith('/appointments') ||
-      req.url.startsWith('/consultations') ||
-      req.url.startsWith('/prescriptions') ||
-      req.url.startsWith('/lab-orders') ||
-      req.url.startsWith('/inventory') ||
-      req.url.startsWith('/invoices') ||
-      req.url.startsWith('/audit-logs') ||
-      req.url.startsWith('/auth'))
-  ) {
-    req.url = `/api${req.url}`;
+// 1. Universal CORS middleware for Vercel, serverless lambdas, and client preview environments
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Requested-With, X-Auth-Token, Accept, Origin'
+  );
+  res.setHeader('Access-Control-Max-Age', '86400');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
   }
   next();
+});
+
+// 2. Route alias normalization - only for API routes where /api prefix was stripped by a proxy or serverless rewrite
+const API_PREFIXES = [
+  '/auth',
+  '/patients',
+  '/appointments',
+  '/doctors',
+  '/consultations',
+  '/prescriptions',
+  '/lab-orders',
+  '/inventory',
+  '/invoices',
+  '/notifications',
+  '/communication',
+  '/audit',
+  '/ai',
+  '/health',
+  '/status',
+  '/gateway',
+];
+
+app.use((req, _res, next) => {
+  if (!req.url.startsWith('/api')) {
+    for (const prefix of API_PREFIXES) {
+      if (req.url === prefix || req.url.startsWith(`${prefix}/`) || req.url.startsWith(`${prefix}?`)) {
+        req.url = `/api${req.url}`;
+        break;
+      }
+    }
+  }
+  next();
+});
+
+// Base API index route for Vercel sanity checks
+app.get(['/api', '/api/'], (_req: Request, res: Response) => {
+  res.json({
+    name: 'Smart Clinic API',
+    status: 'online',
+    version: '3.4.0',
+    health: '/api/health',
+    standards: 'RA 10173 Compliant',
+  });
 });
 
 // Apply authentication middleware to all API routes
@@ -101,6 +140,54 @@ let memInvoices = [...INITIAL_INVOICES];
 let memAuditLogs = [...INITIAL_AUDIT_LOGS];
 let memNotifications = [...INITIAL_NOTIFICATIONS];
 let memUsers: User[] = [...INITIAL_USERS];
+
+// Vercel Serverless State Persistence (/tmp/smart_clinic_data.json)
+const CLINIC_STATE_FILE = path.join('/tmp', 'smart_clinic_data.json');
+
+function hydrateClinicStateFromDisk(): void {
+  try {
+    if (fs.existsSync(CLINIC_STATE_FILE)) {
+      const raw = fs.readFileSync(CLINIC_STATE_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      if (Array.isArray(data.patients) && data.patients.length > 0) memPatients = data.patients;
+      if (Array.isArray(data.appointments)) memAppointments = data.appointments;
+      if (Array.isArray(data.consultations)) memConsultations = data.consultations;
+      if (Array.isArray(data.prescriptions)) memPrescriptions = data.prescriptions;
+      if (Array.isArray(data.labOrders)) memLabOrders = data.labOrders;
+      if (Array.isArray(data.inventory) && data.inventory.length > 0) memInventory = data.inventory;
+      if (Array.isArray(data.invoices)) memInvoices = data.invoices;
+      if (Array.isArray(data.auditLogs)) memAuditLogs = data.auditLogs;
+      if (Array.isArray(data.notifications)) memNotifications = data.notifications;
+      if (Array.isArray(data.users) && data.users.length > 0) memUsers = data.users;
+    }
+  } catch (e) {
+    // Non-fatal fallback
+  }
+}
+
+export function flushClinicStateToDisk(): void {
+  try {
+    const payload = {
+      patients: memPatients,
+      appointments: memAppointments,
+      consultations: memConsultations,
+      prescriptions: memPrescriptions,
+      labOrders: memLabOrders,
+      inventory: memInventory,
+      invoices: memInvoices,
+      auditLogs: memAuditLogs,
+      notifications: memNotifications,
+      users: memUsers,
+      updatedAt: new Date().toISOString(),
+    };
+    fs.writeFileSync(CLINIC_STATE_FILE, JSON.stringify(payload), 'utf-8');
+  } catch {
+    // Non-fatal in read-only runtimes
+  }
+}
+
+// Hydrate existing state on warm start
+hydrateClinicStateFromDisk();
 
 // Two-Factor Authentication (Authenticator App TOTP) Store
 // Tracks accounts with active Authenticator 2FA (Strictly Admin / Staff accounts — NEVER patients)
@@ -528,6 +615,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     };
 
     memPatients.unshift(newPatient);
+    flushClinicStateToDisk();
 
     // Cryptographic PBKDF2 Password Hashing with Salt
     if (cleanEmail && password) {
@@ -1255,6 +1343,7 @@ app.post('/api/doctors', (req: Request, res: Response) => {
       ipAddress: String(req.ip || '127.0.0.1'),
     };
     memAuditLogs.unshift(auditEntry);
+    flushClinicStateToDisk();
 
     return res.status(201).json({
       success: true,
@@ -1293,6 +1382,7 @@ app.post('/api/patients', (req: AuthenticatedRequest, res: Response) => {
   if (!newPat.mrn) newPat.mrn = `MRN-2026-${String(memPatients.length + 101).padStart(3, '0')}`;
   newPat.createdAt = newPat.createdAt || new Date().toISOString();
   memPatients.unshift(newPat);
+  flushClinicStateToDisk();
   return res.status(201).json(newPat);
 });
 
@@ -1324,6 +1414,8 @@ app.patch('/api/patients/:id', enforcePatientIsolation, (req: AuthenticatedReque
     memPatients[patientIdx] = { ...memPatients[patientIdx], ...updates };
   }
 
+  flushClinicStateToDisk();
+
   if (supabaseServer) {
     (async () => {
       try {
@@ -1343,6 +1435,28 @@ app.put('/api/patients/:id', enforcePatientIsolation, (req: AuthenticatedRequest
 
   const updates = req.body || {};
   const isPatient = (req.userRole || req.user?.role) === 'patient';
+
+  if (isPatient) {
+    const allowed = ['fullName', 'email', 'phone', 'address', 'emergencyContact', 'bloodType', 'allergies', 'chronicConditions', 'avatar', 'dob', 'gender'];
+    const safeUpdates: any = {};
+    for (const key of allowed) {
+      if (updates[key] !== undefined) {
+        safeUpdates[key] = updates[key];
+      }
+    }
+    memPatients[patientIdx] = { ...memPatients[patientIdx], ...safeUpdates };
+
+    const userIdx = memUsers.findIndex((u) => u.id === req.params.id || u.email.toLowerCase() === memPatients[patientIdx].email.toLowerCase());
+    if (userIdx !== -1) {
+      if (safeUpdates.fullName) memUsers[userIdx].name = safeUpdates.fullName;
+      if (safeUpdates.email) memUsers[userIdx].email = safeUpdates.email;
+      if (safeUpdates.avatar) memUsers[userIdx].avatar = safeUpdates.avatar;
+    }
+  } else {
+    memPatients[patientIdx] = { ...memPatients[patientIdx], ...updates };
+  }
+
+  flushClinicStateToDisk();
 
   if (isPatient) {
     const allowed = ['fullName', 'email', 'phone', 'address', 'emergencyContact', 'bloodType', 'allergies', 'chronicConditions', 'avatar', 'dob', 'gender'];
@@ -1410,6 +1524,7 @@ app.post('/api/appointments', (req: AuthenticatedRequest, res: Response) => {
   if (!newApt.id) newApt.id = `apt-${Date.now()}`;
   newApt.createdAt = newApt.createdAt || new Date().toISOString();
   memAppointments.unshift(newApt);
+  flushClinicStateToDisk();
   return res.status(201).json(newApt);
 });
 
@@ -1436,6 +1551,7 @@ app.patch('/api/appointments/:id/status', (req: AuthenticatedRequest, res: Respo
     memNotifications.unshift(notif);
   }
 
+  flushClinicStateToDisk();
   return res.json({ success: true, appointment: apt });
 });
 
@@ -1461,6 +1577,7 @@ app.post('/api/consultations', (req: Request, res: Response) => {
   const newConsult = req.body;
   if (!newConsult.id) newConsult.id = `con-${Date.now()}`;
   memConsultations.unshift(newConsult);
+  flushClinicStateToDisk();
   return res.status(201).json(newConsult);
 });
 
@@ -1487,6 +1604,7 @@ app.post('/api/prescriptions', (req: Request, res: Response) => {
   if (!newRx.id) newRx.id = `rx-${Date.now()}`;
   if (!newRx.prescriptionNumber) newRx.prescriptionNumber = `RX-2026-${String(memPrescriptions.length + 101).padStart(3, '0')}`;
   memPrescriptions.unshift(newRx);
+  flushClinicStateToDisk();
   return res.status(201).json(newRx);
 });
 
@@ -1513,6 +1631,7 @@ app.post('/api/lab-orders', (req: Request, res: Response) => {
   if (!newOrder.id) newOrder.id = `lab-${Date.now()}`;
   if (!newOrder.orderNumber) newOrder.orderNumber = `LAB-2026-${String(memLabOrders.length + 1001)}`;
   memLabOrders.unshift(newOrder);
+  flushClinicStateToDisk();
   return res.status(201).json(newOrder);
 });
 
@@ -1550,6 +1669,7 @@ app.post('/api/inventory/adjust', (req: AuthenticatedRequest, res: Response) => 
     ipAddress: '127.0.0.1',
   };
   memAuditLogs.unshift(auditLog);
+  flushClinicStateToDisk();
 
   return res.json({ success: true, item, auditLog });
 });
@@ -1577,6 +1697,7 @@ app.post('/api/invoices', (req: Request, res: Response) => {
   if (!newInv.id) newInv.id = `inv-${Date.now()}`;
   if (!newInv.invoiceNumber) newInv.invoiceNumber = `INV-2026-${String(memInvoices.length + 5001)}`;
   memInvoices.unshift(newInv);
+  flushClinicStateToDisk();
   return res.status(201).json(newInv);
 });
 
