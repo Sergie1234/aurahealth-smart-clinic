@@ -1,4 +1,5 @@
 // Service wrapper for server-side AI endpoints
+import { API_BASE_URL } from '../lib/config';
 
 export interface SOAPResponse {
   chiefComplaint: string;
@@ -95,7 +96,7 @@ export const aiService = {
     vitals?: any;
     chiefComplaint?: string;
   }): Promise<{ data: SOAPResponse; disclaimer: string }> {
-    const res = await fetch('/api/ai/clinical-notes', {
+    const res = await fetch(`${API_BASE_URL}/api/ai/clinical-notes`, {
       method: 'POST',
       headers: getAiAuthHeaders(),
       body: JSON.stringify(payload),
@@ -111,7 +112,7 @@ export const aiService = {
     labOrders?: any[];
     prescriptions?: any[];
   }): Promise<{ data: PatientSummaryResponse; disclaimer: string }> {
-    const res = await fetch('/api/ai/patient-summary', {
+    const res = await fetch(`${API_BASE_URL}/api/ai/patient-summary`, {
       method: 'POST',
       headers: getAiAuthHeaders(),
       body: JSON.stringify(payload),
@@ -127,7 +128,7 @@ export const aiService = {
     results: any[];
     patientContext?: any;
   }): Promise<{ data: LabInterpretationResponse; disclaimer: string }> {
-    const res = await fetch('/api/ai/lab-interpretation', {
+    const res = await fetch(`${API_BASE_URL}/api/ai/lab-interpretation`, {
       method: 'POST',
       headers: getAiAuthHeaders(),
       body: JSON.stringify(payload),
@@ -143,7 +144,7 @@ export const aiService = {
     allergies?: any[];
     conditions?: string[];
   }): Promise<{ data: MedicationSafetyResponse; disclaimer: string }> {
-    const res = await fetch('/api/ai/medication-safety', {
+    const res = await fetch(`${API_BASE_URL}/api/medication-safety`, {
       method: 'POST',
       headers: getAiAuthHeaders(),
       body: JSON.stringify(payload),
@@ -180,7 +181,7 @@ export const aiService = {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
 
-      const res = await fetch('/api/ai/chat', {
+      const res = await fetch(`${API_BASE_URL}/api/ai/chat`, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
@@ -208,7 +209,7 @@ export const aiService = {
     vitals?: any;
     riskProfile?: any;
   }): Promise<{ data: PredictiveRiskResponse; disclaimer: string }> {
-    const res = await fetch('/api/ai/predictive-risk', {
+    const res = await fetch(`${API_BASE_URL}/api/ai/predictive-risk`, {
       method: 'POST',
       headers: getAiAuthHeaders(),
       body: JSON.stringify(payload),

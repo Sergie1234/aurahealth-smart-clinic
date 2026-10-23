@@ -64,13 +64,19 @@ dotenv.config();
 export const app = express();
 app.use(express.json({ limit: '10mb' }));
 
-// 1. Universal CORS middleware for Vercel, serverless lambdas, and client preview environments
+// 1. Universal CORS middleware for Vercel, serverless lambdas, and client environments
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'Content-Type, Authorization, X-Requested-With, X-Auth-Token, Accept, Origin'
+    'Content-Type, Authorization, X-Requested-With, X-Auth-Token, Accept, Origin, x-user-role, x-linked-patient-id, Cache-Control, Pragma'
   );
   res.setHeader('Access-Control-Max-Age', '86400');
 
@@ -80,7 +86,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// 2. Route alias normalization - only for API routes where /api prefix was stripped by a proxy or serverless rewrite
+// 2. Route alias normalization & Vercel serverless rewrite path recovery
 const API_PREFIXES = [
   '/auth',
   '/patients',
@@ -105,6 +111,26 @@ const API_PREFIXES = [
 ];
 
 app.use((req, _res, next) => {
+  // If Vercel or proxy rewrote the incoming route to /api or /api/index, recover the original path
+  const original = (
+    req.originalUrl ||
+    req.headers['x-matched-path'] ||
+    req.headers['x-forwarded-uri'] ||
+    req.headers['x-vercel-matched-path']
+  ) as string | undefined;
+
+  if (typeof original === 'string') {
+    const cleanOriginal = original.split('?')[0];
+    const query = original.includes('?') ? original.slice(original.indexOf('?')) : '';
+    if (
+      cleanOriginal.startsWith('/api/') &&
+      (!req.url || req.url === '/api' || req.url === '/api/' || req.url === '/api/index')
+    ) {
+      req.url = `${cleanOriginal}${query}`;
+    }
+  }
+
+  // If the path arrived without /api prefix, prepend it
   if (!req.url.startsWith('/api')) {
     for (const prefix of API_PREFIXES) {
       if (req.url === prefix || req.url.startsWith(`${prefix}/`) || req.url.startsWith(`${prefix}?`)) {

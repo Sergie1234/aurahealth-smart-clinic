@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { ShieldCheck, Search, Filter, Clock, User, ShieldAlert, FileText, Mail, Smartphone, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { API_BASE_URL } from '../../lib/config';
 
 export const AuditLogsView: React.FC = () => {
   const { auditLogs } = useClinic();
@@ -14,7 +15,7 @@ export const AuditLogsView: React.FC = () => {
   const fetchCommLogs = async () => {
     setLoadingComm(true);
     try {
-      const res = await fetch('/api/communication/logs');
+      const res = await fetch(`${API_BASE_URL}/api/communication/logs`);
       const data = await res.json();
       if (data.success && Array.isArray(data.logs)) {
         setCommLogs(data.logs);

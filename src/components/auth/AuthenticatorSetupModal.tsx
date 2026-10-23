@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useClinic } from '../../context/ClinicContext';
+import { API_BASE_URL } from '../../lib/config';
 
 interface Props {
   isOpen: boolean;
@@ -70,7 +71,7 @@ export const AuthenticatorSetupModal: React.FC<Props> = ({
 
     try {
       setLoading(true);
-      const res = await fetch(`/api/auth/2fa/setup?email=${encodeURIComponent(targetEmail)}`);
+      const res = await fetch(`${API_BASE_URL}/api/auth/2fa/setup?email=${encodeURIComponent(targetEmail)}`);
       if (res.ok) {
         const data = await res.json();
         const qrUrl = data.otpAuthUrl

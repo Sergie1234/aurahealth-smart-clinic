@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '../lib/config';
+
 /**
  * Client-side TOTP & Authenticator app helpers
  */
@@ -14,7 +16,7 @@ export function getTotpRemainingSeconds(): number {
  */
 export async function fetchTotpSetup(accountName: string) {
   try {
-    const res = await fetch(`/api/auth/2fa/setup?email=${encodeURIComponent(accountName)}`);
+    const res = await fetch(`${API_BASE_URL}/api/auth/2fa/setup?email=${encodeURIComponent(accountName)}`);
     if (res.ok) {
       return await res.json();
     }

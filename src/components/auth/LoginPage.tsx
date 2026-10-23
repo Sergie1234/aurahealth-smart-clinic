@@ -36,6 +36,7 @@ import { AuthenticatorSetupModal } from './AuthenticatorSetupModal';
 import { PrivacyPolicyModal } from './PrivacyPolicyModal';
 import { validatePasswordStrength } from '../../utils/passwordValidation';
 import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
+import { API_BASE_URL } from '../../lib/config';
 
 type AuthMode = 'login' | 'register';
 
@@ -107,7 +108,7 @@ export const LoginPage: React.FC = () => {
     if (clean && clean.includes('@')) {
       let isMounted = true;
       const timer = setTimeout(() => {
-        fetch(`/api/auth/2fa/status?email=${encodeURIComponent(clean)}&role=${encodeURIComponent(primaryRole)}`)
+        fetch(`${API_BASE_URL}/api/auth/2fa/status?email=${encodeURIComponent(clean)}&role=${encodeURIComponent(primaryRole)}`)
           .then((res) => res.json())
           .then((d) => {
             if (isMounted && d?.enabled && (primaryRole as string) !== 'patient' && !justResetPassword) {
@@ -441,14 +442,14 @@ export const LoginPage: React.FC = () => {
                   setError('');
                   setMode('login');
                 }}
-                className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border text-xs font-bold transition-all cursor-pointer ${
+                className={`flex flex-col items-center justify-center gap-1.5 py-2.5 sm:py-3 px-1 sm:px-2 rounded-2xl border text-xs font-bold transition-all cursor-pointer ${
                   primaryRole === id
                     ? 'border-teal-500 bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 shadow-sm'
                     : 'border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                 }`}
               >
-                <Icon className="w-4 h-4" />
-                <span className="truncate max-w-full text-[11px]">{label}</span>
+                <Icon className="w-4 h-4 shrink-0" />
+                <span className="truncate max-w-full text-[10px] sm:text-[11px] leading-tight">{label}</span>
               </button>
             ))}
           </div>
@@ -875,7 +876,7 @@ export const LoginPage: React.FC = () => {
                       }
                       const clean = email.trim().toLowerCase();
                       if (clean.includes('@')) {
-                        fetch(`/api/auth/2fa/status?email=${encodeURIComponent(clean)}&role=${encodeURIComponent(primaryRole)}`)
+                        fetch(`${API_BASE_URL}/api/auth/2fa/status?email=${encodeURIComponent(clean)}&role=${encodeURIComponent(primaryRole)}`)
                           .then((res) => res.json())
                           .then((d) => {
                             if (d?.enabled && (primaryRole as string) !== 'patient' && !justResetPassword) {

@@ -834,7 +834,14 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             chronicConditions: credentials.chronicConditions,
           }),
         });
-        const regData = await regRes.json();
+
+        let regData: any = {};
+        try {
+          regData = await regRes.json();
+        } catch {
+          regData = { error: `Server response error (${regRes.status}: ${regRes.statusText || 'Registration failed'})` };
+        }
+
         if (!regRes.ok || !regData.success) {
           return { success: false, error: regData.error || 'Registration failed.' };
         }
@@ -866,7 +873,13 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         body: JSON.stringify(credentials),
       });
 
-      const serverRes = await res.json();
+      let serverRes: any = {};
+      try {
+        serverRes = await res.json();
+      } catch {
+        serverRes = { error: `Server response error (${res.status}: ${res.statusText || 'Authentication failed'})` };
+      }
+
       if (!res.ok || !serverRes.success) {
         if (serverRes?.requires2FA) {
           return {
@@ -951,26 +964,30 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       return { success: false, error: 'Unknown role.' };
     } catch (netErr) {
-      console.warn('[Smart Clinic Auth] Server unreachable:', netErr);
+      console.warn('[Smart Clinic Auth] Network error connecting to auth server:', netErr);
       
-      // Strict verification in offline mode: 
-      // Only allow login if credentials match locally stored hashes (for patients) 
-      // or if it's a specific dev environment scenario.
-      const isDev = import.meta.env.DEV;
-
+      // If network fails (e.g. offline device / airplane mode), allow cached or valid demo fallback
       if (role === 'patient') {
         const cleanEmail = (credentials.email || '').trim().toLowerCase();
         const cleanPhone = (credentials.phone || '').replace(/\D/g, '');
 
         if (credentials.isRegister) {
-            // Keep registration as is for now if it's not a security issue, 
-            // but registration usually requires server-side validation anyway.
-            return registerPatient({
-                fullName: credentials.fullName || cleanEmail.split('@')[0] || 'New Patient',
-                email: cleanEmail,
-                phone: cleanPhone,
-                password: credentials.password,
-            });
+          return registerPatient({
+            fullName: credentials.fullName || cleanEmail.split('@')[0] || 'New Patient',
+            email: cleanEmail,
+            phone: cleanPhone,
+            password: credentials.password,
+            dob: credentials.dob,
+            age: credentials.age,
+            gender: credentials.gender,
+            bloodType: credentials.bloodType,
+            address: credentials.address,
+            emergencyContactName: credentials.emergencyContactName,
+            emergencyContactRelation: credentials.emergencyContactRelation,
+            emergencyContactPhone: credentials.emergencyContactPhone,
+            allergies: credentials.allergies,
+            chronicConditions: credentials.chronicConditions,
+          });
         }
 
         const matched = patientAccounts.find(
@@ -980,46 +997,46 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         );
 
         if (matched && matched.passwordHash === simpleHash(credentials.password || '')) {
-            finishPatientSession(matched.id, matched.fullName, matched.email || '', matched.patientId);
-            return { success: true };
+          finishPatientSession(matched.id, matched.fullName, matched.email || '', matched.patientId);
+          return { success: true };
         }
       }
 
-      // Fallback for static Vercel deployment when backend is not running
+      // Fallback for demo credentials in offline/sandbox mode
       if (role === 'doctor' && (credentials.password === 'doctor123' || !credentials.password)) {
-         const doc = users.find((u) => u.role === 'doctor') || users[0];
-         setCurrentUser(doc);
-         setActiveRole('doctor');
-         setPrimaryRole('doctor');
-         setStaffSubRole(null);
-         setIsAuthenticated(true);
-         setActiveTab(pendingAction === 'queue' ? 'queue' : 'consultations');
-         return { success: true };
+        const doc = users.find((u) => u.role === 'doctor') || users[0];
+        setCurrentUser(doc);
+        setActiveRole('doctor');
+        setPrimaryRole('doctor');
+        setStaffSubRole(null);
+        setIsAuthenticated(true);
+        setActiveTab(pendingAction === 'queue' ? 'queue' : 'consultations');
+        return { success: true };
       }
 
       if (role === 'staff') {
-         const staffSub = subRole || 'nurse';
-         const st = users.find((u) => u.role === staffSub) || {
-           id: `usr-${staffSub}`,
-           name: `${staffSub.toUpperCase()} Practitioner`,
-           email: `${staffSub}@smartclinic.ph`,
-           role: staffSub as UserRole,
-         };
-         setCurrentUser(st);
-         setActiveRole(staffSub as UserRole);
-         setPrimaryRole('staff');
-         setStaffSubRole(staffSub);
-         setIsAuthenticated(true);
-         if (pendingAction === 'queue') setActiveTab('queue');
-         else if (staffSub === 'nurse') setActiveTab('queue');
-         else if (staffSub === 'pharmacist') setActiveTab('inventory');
-         else if (staffSub === 'receptionist') setActiveTab('appointments');
-         else if (staffSub === 'lab_technician') setActiveTab('laboratory');
-         else setActiveTab('dashboard');
-         return { success: true };
+        const staffSub = subRole || 'nurse';
+        const st = users.find((u) => u.role === staffSub) || {
+          id: `usr-${staffSub}`,
+          name: `${staffSub.toUpperCase()} Practitioner`,
+          email: `${staffSub}@smartclinic.ph`,
+          role: staffSub as UserRole,
+        };
+        setCurrentUser(st);
+        setActiveRole(staffSub as UserRole);
+        setPrimaryRole('staff');
+        setStaffSubRole(staffSub);
+        setIsAuthenticated(true);
+        if (pendingAction === 'queue') setActiveTab('queue');
+        else if (staffSub === 'nurse') setActiveTab('queue');
+        else if (staffSub === 'pharmacist') setActiveTab('inventory');
+        else if (staffSub === 'receptionist') setActiveTab('appointments');
+        else if (staffSub === 'lab_technician') setActiveTab('laboratory');
+        else setActiveTab('dashboard');
+        return { success: true };
       }
 
-      if (role === 'admin') {
+      if (role === 'admin' && (credentials.password === 'SmartClinic@Admin2026' || !credentials.password)) {
         const adm = users.find((u) => u.role === 'admin') || {
           id: 'usr-admin',
           name: 'Administrator',
@@ -1035,7 +1052,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return { success: true };
       }
 
-      return { success: false, error: 'Server unavailable and credentials invalid for offline mode. Please ensure the backend is running.' };
+      return {
+        success: false,
+        error:
+          'Unable to reach the Smart Clinic authentication server. Please check your internet connection or verify your deployment configuration.',
+      };
     }
   };
 
@@ -1647,7 +1668,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const res = await fetch('/api/notifications', { headers });
+        const res = await fetch(`${API_BASE_URL}/api/notifications`, { headers });
         if (res.ok) {
           const liveData: Notification[] = await res.json();
           if (isMounted && Array.isArray(liveData)) {
@@ -1700,7 +1721,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // Dispatch to server asynchronously for live broadcast
     try {
       const token = authToken || localStorage.getItem('smart_clinic_token');
-      fetch('/api/notifications', {
+      fetch(`${API_BASE_URL}/api/notifications`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1718,7 +1739,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
     try {
       const token = authToken || localStorage.getItem('smart_clinic_token');
-      fetch(`/api/notifications/${id}/read`, {
+      fetch(`${API_BASE_URL}/api/notifications/${id}/read`, {
         method: 'PATCH',
         headers: {
           'x-user-role': activeRole,
@@ -1740,7 +1761,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     );
     try {
       const token = authToken || localStorage.getItem('smart_clinic_token');
-      fetch('/api/notifications/read-all', {
+      fetch(`${API_BASE_URL}/api/notifications/read-all`, {
         method: 'POST',
         headers: {
           'x-user-role': activeRole,
@@ -1822,7 +1843,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // Persist to server database
     try {
-      await fetch('/api/doctors', {
+      await fetch(`${API_BASE_URL}/api/doctors`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(doctorData),
@@ -1843,7 +1864,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const checkTwoFactorStatus = async (email: string) => {
     try {
-      const res = await fetch(`/api/auth/2fa/status?email=${encodeURIComponent(email)}`);
+      const res = await fetch(`${API_BASE_URL}/api/auth/2fa/status?email=${encodeURIComponent(email)}`);
       const data = await res.json();
       return { enabled: Boolean(data?.enabled) };
     } catch {
@@ -1853,7 +1874,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const enableTwoFactor = async (email: string, code: string) => {
     try {
-      const res = await fetch('/api/auth/2fa/enable', {
+      const res = await fetch(`${API_BASE_URL}/api/auth/2fa/enable`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, code }),
@@ -1870,7 +1891,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const disableTwoFactor = async (email: string, code: string) => {
     try {
-      const res = await fetch('/api/auth/2fa/disable', {
+      const res = await fetch(`${API_BASE_URL}/api/auth/2fa/disable`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, code }),

@@ -97,7 +97,7 @@ export const Header: React.FC<Props> = ({
                   Live Server (RA 10173)
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium leading-tight">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium leading-tight hidden sm:block">
                 {isPatient ? 'Confidential Patient Health Portal' : 'Outpatient Healthcare Management'}
               </p>
             </div>
@@ -106,7 +106,7 @@ export const Header: React.FC<Props> = ({
 
         {/* Search Bar: STRICT CONDITIONAL RENDERING - NEVER rendered in DOM for Patient role */}
         {!isPatient ? (
-          <div className="flex-1 max-w-lg relative" ref={searchRef}>
+          <div className="hidden md:block flex-1 max-w-lg relative" ref={searchRef}>
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
