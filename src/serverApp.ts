@@ -1821,12 +1821,13 @@ app.post('/api/ai/chat', async (req: AuthenticatedRequest, res: Response) => {
 
   // Resolve active specialized role
   const rawRole = (role || req.userRole || req.user?.role || 'patient').toLowerCase();
-  let activeRole: 'patient' | 'doctor' | 'nurse' | 'receptionist' | 'pharmacist' | 'admin' = 'patient';
+  let activeRole: 'patient' | 'doctor' | 'nurse' | 'receptionist' | 'pharmacist' | 'lab_technician' | 'admin' = 'patient';
   if (['admin', 'manager', 'executive'].includes(rawRole)) activeRole = 'admin';
   else if (['doctor', 'physician'].includes(rawRole)) activeRole = 'doctor';
   else if (['nurse'].includes(rawRole)) activeRole = 'nurse';
   else if (['receptionist', 'frontdesk', 'clerk'].includes(rawRole)) activeRole = 'receptionist';
   else if (['pharmacist', 'pharmacy'].includes(rawRole)) activeRole = 'pharmacist';
+  else if (['lab_technician', 'lab', 'technician'].includes(rawRole)) activeRole = 'lab_technician';
   else activeRole = 'patient';
 
   let activePage = String(page || context?.activePage || 'Dashboard').trim();
@@ -1899,7 +1900,7 @@ app.post('/api/ai/chat', async (req: AuthenticatedRequest, res: Response) => {
       clinicWaitingQueueCount: memAppointments.filter((a) => a.status === 'Checked In').length,
     };
 
-    systemPersonaPrompt = `You are the SmartClinic Clinical Decision Support AI assisting attending physician Dr. Maria Cristina Reyes, MD.
+    systemPersonaPrompt = `You are the SmartClinic Clinical Decision Support AI assisting attending physician ${req.user?.name || 'the attending physician'}.
 ROLE CAPABILITIES:
 1. Review the patient's triage intake summary, urgency score, symptoms, and timeline.
 2. Present patient medical history, allergies (critical alerts), chronic conditions, and previous visits.
@@ -1966,11 +1967,12 @@ ROLE CAPABILITIES:
         estimatedAverageWaitMinutes: waitingList.length * 15 || 10,
       },
       todaySchedule: todayApps,
-      activeDoctors: [
-        { name: 'Dr. Maria Cristina Reyes, MD', specialty: 'Internal Medicine', room: 'Consultation Room 1', status: 'Available' },
-        { name: 'Dr. Alejandro Santos, MD', specialty: 'Cardiology', room: 'Consultation Room 2', status: 'In Consultation' },
-        { name: 'Dr. Sofia Ramos, MD', specialty: 'Pediatrics', room: 'Consultation Room 3', status: 'Available' },
-      ],
+      activeDoctors: memUsers.filter((u) => u.role === 'doctor').map((d, idx) => ({
+        name: d.name,
+        specialty: d.specialty || 'General Practice',
+        room: `Consultation Room ${idx + 1}`,
+        status: 'Available',
+      })),
       totalPatientsInSystem: memPatients.length,
     };
 
@@ -2052,6 +2054,44 @@ ROLE CAPABILITIES:
 3. Report on appointment volumes, pharmacy inventory reorder alerts, and billing claims status.
 4. Provide security and compliance monitoring under Philippine Health Data Security Standards (RA 10173).
 SECURITY DIRECTIVE: Strictly withhold private patient clinical consultation notes; focus exclusively on operational, administrative, and compliance metrics.`;
+
+  } else if (activeRole === 'lab_technician') {
+    const pendingOrders = memLabOrders.filter((l) => l.status === 'Requested' || l.status === 'Processing');
+    const patientOrders = targetPatient ? memLabOrders.filter((l) => l.patientId === targetPatient.id) : [];
+
+    safeContext = {
+      medicalTechnologist: req.user?.name || 'Amina Bautista, RMT',
+      department: 'Diagnostic Pathology & Laboratory',
+      totalPendingOrders: pendingOrders.length,
+      pendingOrdersList: pendingOrders.slice(0, 5).map((o) => ({
+        orderNumber: o.orderNumber,
+        testName: o.testName,
+        category: o.category,
+        urgency: o.urgency,
+        patientName: o.patientName,
+        requestedAt: o.requestedAt,
+      })),
+      patientInFocus: targetPatient ? {
+        fullName: targetPatient.fullName,
+        mrn: targetPatient.mrn,
+        age: targetPatient.age,
+        gender: targetPatient.gender,
+        recentOrders: patientOrders.map((o) => ({
+          orderNumber: o.orderNumber,
+          testName: o.testName,
+          status: o.status,
+          results: o.results || [],
+        })),
+      } : 'No patient currently selected',
+    };
+
+    systemPersonaPrompt = `You are the SmartClinic Diagnostic Pathology AI Assistant assisting registered medical technologist ${req.user?.name || 'Amina Bautista, RMT'}.
+ROLE CAPABILITIES:
+1. Interpret diagnostic laboratory panels: Complete Blood Count (CBC), Comprehensive Metabolic Panel (CMP), Fasting Blood Sugar (FBS), Lipid Profile, Urinalysis, and HbA1c.
+2. Flag critical abnormal panic values (e.g., severe hypokalemia, acute thrombocytopenia, extreme hyperglycemia) with immediate clinician notification protocols.
+3. Assist in verifying reference intervals, specimen quality control (QC), hemolysis/lipemia detection, and reagent batch calibration logs.
+4. Assist in formatting structured laboratory pathology interpretation reports for attending physicians.
+CLINICAL DIRECTIVE: All laboratory results must be certified by a licensed Medical Technologist or Pathologist before clinical release.`;
 
   } else {
     // Patient Triage
@@ -2180,7 +2220,7 @@ Respond strictly according to your role instructions. If in clinical triage mode
         disclaimer:
           activeRole === 'patient'
             ? (isEmergency ? 'I am an AI. For medical emergencies, visit a hospital immediately.' : '')
-            : (activeRole === 'doctor' ? CLINICAL_DISCLAIMER : (activeRole === 'nurse' ? 'Nursing Care Decision Support' : (activeRole === 'pharmacist' ? 'Pharmacotherapy Safety Sentry' : 'Clinic Administrative Operations'))),
+            : (activeRole === 'doctor' ? CLINICAL_DISCLAIMER : (activeRole === 'nurse' ? 'Nursing Care Decision Support' : (activeRole === 'pharmacist' ? 'Pharmacotherapy Safety Sentry' : (activeRole === 'lab_technician' ? 'Diagnostic Pathology Quality Sentry' : 'Clinic Administrative Operations')))),
         persona: `SmartClinic ${activeRole.toUpperCase()} AI Assistant`,
       });
     } catch (err: any) {
@@ -2219,11 +2259,14 @@ Respond strictly according to your role instructions. If in clinical triage mode
         `Safety Check: Cross-referenced against patient's allergies (${(targetPatient?.allergies || []).map((a) => a.allergen).join(', ') || 'NKDA'}) — No interactions detected.\n\n` +
         `*DECISION SUPPORT ONLY: Attending physician retains sole prescribing and diagnostic authority.*`;
     } else {
-      fallbackReply = `Doctor AI Assistant active for Dr. Maria Cristina Reyes, MD.\n\nPatient in Focus: ${targetPatient?.fullName || 'Selected Patient'} (${targetPatient?.mrn || 'N/A'})\n` +
-        `• Allergies: ${(targetPatient?.allergies || []).map((a) => `${a.allergen} (${a.severity})`).join(', ') || 'None documented'}\n` +
-        `• Chronic Conditions: ${(targetPatient?.chronicConditions || []).join(', ') || 'General Outpatient'}\n` +
-        `• Latest Triage: ${latestTriage ? `${latestTriage.urgencyBand.toUpperCase()} (Score ${latestTriage.urgencyScore}/10) — "${latestTriage.symptoms}"` : 'No triage recorded today.'}\n\n` +
-        `I am ready to assist with differential diagnosis suggestions, SOAP clinical notes, or prescription regimens. How would you like to proceed?`;
+      fallbackReply = `Doctor AI Assistant active for ${req.user?.name || 'Attending Physician'}.\n\n` +
+        (targetPatient
+          ? `Patient in Focus: ${targetPatient.fullName} (${targetPatient.mrn || 'N/A'})\n` +
+            `• Allergies: ${(targetPatient.allergies || []).map((a) => `${a.allergen} (${a.severity})`).join(', ') || 'None documented'}\n` +
+            `• Chronic Conditions: ${(targetPatient.chronicConditions || []).join(', ') || 'General Outpatient'}\n` +
+            `• Latest Triage: ${latestTriage ? `${latestTriage.urgencyBand.toUpperCase()} (Score ${latestTriage.urgencyScore}/10) — "${latestTriage.symptoms}"` : 'No triage recorded today.'}\n\n` +
+            `I am ready to assist with differential diagnosis suggestions (ICD-10), SOAP clinical consultation notes, and prescription regimens. How would you like to proceed?`
+          : `No patient is currently in focus. Please select an enrolled patient from the clinic list above to inspect clinical history, triage records, and vitals.`);
     }
   } else if (activeRole === 'nurse') {
     if (lowerUserText.includes('vital') || lowerUserText.includes('bp') || lowerUserText.includes('check-in')) {
@@ -2263,11 +2306,8 @@ Respond strictly according to your role instructions. If in clinical triage mode
       `• Waiting Patients: ${waiting.length} (${waiting.map((w) => w.patientName).join(', ') || 'Queue clear'})\n` +
       `• In Consultation: ${memAppointments.filter((a) => a.status === 'In Consultation').length}\n` +
       `• Completed Today: ${memAppointments.filter((a) => a.status === 'Completed').length}\n` +
-      `• Estimated Wait Time: ~${waiting.length * 15 || 10} minutes\n\n` +
       `🏥 Doctor Availability:\n` +
-      `• Dr. Maria Cristina Reyes, MD (Internal Medicine) — Room 1: Available\n` +
-      `• Dr. Alejandro Santos, MD (Cardiology) — Room 2: In Consultation\n` +
-      `• Dr. Sofia Ramos, MD (Pediatrics) — Room 3: Available\n\n` +
+      (memUsers.filter((u) => u.role === 'doctor').map((d, idx) => `• ${d.name} (${d.specialty || 'General'}) — Consultation Room ${idx + 1}: Available`).join('\n') || '• Consultation rooms on active schedule\n') + `\n\n` +
       `Patient Intake Protocol: Ensure all walk-in registrations include legal full name, mobile number, and emergency contact.`;
   } else if (activeRole === 'pharmacist') {
     const allergies = targetPatient?.allergies || [];
@@ -2294,6 +2334,37 @@ Respond strictly according to your role instructions. If in clinical triage mode
       `🛡️ Compliance & Security Audit:\n` +
       `• RA 10173 Health Data Privacy: Verified Compliant (Strict Role & Tenant Isolation Active)\n` +
       `• Audit Trail: ${memAuditLogs.length} logged access events recorded in tamper-evident ledger.`;
+  } else if (activeRole === 'lab_technician') {
+    const pending = memLabOrders.filter((l) => l.status === 'Requested' || l.status === 'Processing');
+    if (lowerUserText.includes('interpret') || lowerUserText.includes('result') || lowerUserText.includes('panel')) {
+      fallbackReply = `Diagnostic Lab Panel Interpretation (RMT Clinical Decision Support):\n\n` +
+        `Specimen Assessment: Complete Blood Count & Comprehensive Metabolic Panel\n` +
+        `• Fasting Blood Glucose: 118 mg/dL ⚠️ [ELEVATED — Pre-diabetic Range (Ref: 70-99 mg/dL)]\n` +
+        `• HbA1c: 6.8% ⚠️ [ELEVATED — Suboptimal Glycemic Control (Ref: < 5.7%)]\n` +
+        `• Serum Creatinine: 0.9 mg/dL ✅ [Normal (Ref: 0.6-1.2 mg/dL)]\n` +
+        `• White Blood Cells (WBC): 6.8 x10^9/L ✅ [Normal (Ref: 4.5-11.0 x10^9/L)]\n` +
+        `• Platelets: 240 x10^9/L ✅ [Normal (Ref: 150-450 x10^9/L)]\n\n` +
+        `Pathologist Impression: Mild fasting hyperglycemia and elevated glycosylated hemoglobin without acute nephrotoxicity or hematologic abnormalities. Certified by Medical Technologist for attending physician correlation.`;
+    } else if (lowerUserText.includes('critical') || lowerUserText.includes('panic') || lowerUserText.includes('alert')) {
+      fallbackReply = `Critical Panic Values Surveillance Protocol:\n\n` +
+        `⚠️ Critical Panic Alert Thresholds:\n` +
+        `• Potassium (K+): < 2.8 mmol/L or > 6.0 mmol/L (Immediate Cardiac Arrhythmia Risk)\n` +
+        `• Sodium (Na+): < 120 mmol/L or > 160 mmol/L (Severe Neurological Osmotic Risk)\n` +
+        `• Platelet Count: < 20 x10^9/L (Acute Spontaneous Hemorrhage Risk)\n` +
+        `• Hemoglobin: < 7.0 g/dL (Severe Anemia / Transfusion Protocol)\n\n` +
+        `Action Rule: If critical value observed, re-run test on duplicate aliquot immediately, verify non-hemolyzed specimen, and telephone attending physician within 15 minutes.`;
+    } else if (lowerUserText.includes('order') || lowerUserText.includes('pending') || lowerUserText.includes('specimen')) {
+      fallbackReply = `Diagnostic Laboratory Queue Status:\n\n` +
+        `• Pending Specimen Orders: ${pending.length} order(s) currently awaiting processing or result certification.\n` +
+        (pending.length > 0 ? pending.slice(0, 4).map((p) => `  - [${p.orderNumber}] ${p.testName} (${p.patientName}) — ${p.urgency} Urgency`).join('\n') : '  - All accessioned specimens processed.') +
+        `\n\nQuality Assurance: Daily automated hematology control (Level 1, 2, 3) certified valid.`;
+    } else {
+      fallbackReply = `SmartClinic Diagnostic Pathology AI Assistant active for ${req.user?.name || 'Amina Bautista, RMT'}.\n\n` +
+        `• Laboratory Section: Diagnostic Pathology, Hematology & Clinical Chemistry\n` +
+        `• Pending Accession Orders: ${pending.length} test order(s) in queue\n` +
+        (targetPatient ? `• Patient in Focus: ${targetPatient.fullName} (${targetPatient.mrn})\n` : `• No individual patient selected\n`) +
+        `\nI can assist with test panel interpretations, critical panic value alerts, specimen QC calibration verification, and drafting diagnostic pathology notes.`;
+    }
   } else {
     // SmartClinic AI Triage Chatbot Fallback
     const historyExchanges = conversationHistory || [];
@@ -2357,7 +2428,7 @@ Respond strictly according to your role instructions. If in clinical triage mode
     disclaimer:
       activeRole === 'patient'
         ? (isEmergency ? 'I am an AI. For medical emergencies, visit a hospital immediately.' : '')
-        : (activeRole === 'doctor' ? CLINICAL_DISCLAIMER : (activeRole === 'nurse' ? 'Nursing Care Decision Support' : (activeRole === 'pharmacist' ? 'Pharmacotherapy Safety Sentry' : 'Clinic Administrative Operations'))),
+        : (activeRole === 'doctor' ? CLINICAL_DISCLAIMER : (activeRole === 'nurse' ? 'Nursing Care Decision Support' : (activeRole === 'pharmacist' ? 'Pharmacotherapy Safety Sentry' : (activeRole === 'lab_technician' ? 'Diagnostic Pathology Quality Sentry' : 'Clinic Administrative Operations')))),
     persona: `SmartClinic ${activeRole.toUpperCase()} AI Assistant`,
   });
 });

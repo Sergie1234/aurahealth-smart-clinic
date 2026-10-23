@@ -1226,6 +1226,22 @@ export const LoginPage: React.FC = () => {
                 type="button"
                 onClick={() => {
                   setError('');
+                  setPrimaryRole('staff');
+                  setStaffSubRole('lab_technician');
+                  setEmail('lab@smartclinic.ph');
+                  setPassword('lab123');
+                }}
+                className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
+              >
+                <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Lab Technician</div>
+                <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">lab@smartclinic.ph</div>
+                <div className="text-[9px] text-slate-400">Pathology & Diagnostic Lab</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setError('');
                   setPrimaryRole('admin');
                   setEmail('smartclinicrealacc@gmail.com');
                   setPassword('SmartClinic@Admin2026');
