@@ -1,20 +1,31 @@
-import express, { Request, Response } from 'express';
+import express from 'express';
+import type { Request, Response } from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import { app } from './src/serverApp';
 
 dotenv.config();
+
+// Register tsx loader dynamically so Node can resolve TypeScript imports without flags
+try {
+  const { register } = await import('tsx/esm/api');
+  register();
+} catch {}
+
+const { app } = await import('./src/serverApp');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Always listen on port 3000 for AI Studio environment
-const PORT = 3000;
+// Respect Cloud Run's PORT env variable (e.g. 8080) with fallback to 3000 for local AI Studio preview
+const PORT = Number(process.env.PORT) || 3000;
 
 // Setup Vite Dev Server or Production Static Serving
 async function startServer() {
-  const isProd = process.env.NODE_ENV === 'production';
+  const distPath = path.resolve(__dirname, 'dist');
+  const hasDist = fs.existsSync(distPath);
+  const isProd = process.env.NODE_ENV === 'production' || hasDist;
 
   if (!isProd) {
     const { createServer: createViteServer } = await import('vite');
@@ -27,7 +38,6 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.resolve(__dirname, 'dist');
     app.use(express.static(distPath));
     app.get('*', (req: Request, res: Response) => {
       res.sendFile(path.resolve(distPath, 'index.html'));
@@ -35,7 +45,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Smart Clinic Server running on port ${PORT}`);
+    console.log(`Smart Clinic Server running on port ${PORT} (0.0.0.0) [${isProd ? 'production' : 'development'}]`);
   });
 }
 
