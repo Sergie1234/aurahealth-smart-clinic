@@ -9,7 +9,8 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = Number(process.env.PORT) || 3000;
+// Always listen on port 3000 for AI Studio environment
+const PORT = 3000;
 
 // Setup Vite Dev Server or Production Static Serving
 async function startServer() {

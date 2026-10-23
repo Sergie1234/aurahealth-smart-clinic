@@ -13,6 +13,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
+import { RoleHeroBanner } from '../common/RoleHeroBanner';
 
 interface Props {
   onStartConsultation: (patientId: string) => void;
@@ -31,8 +32,10 @@ export const DoctorDashboardView: React.FC<Props> = ({
     prescriptions,
     setActiveTab,
     t,
+    language,
   } = useClinic();
 
+  const isFil = language === 'fil';
   const [searchPatient, setSearchPatient] = useState('');
 
   const activeQueue = appointments.filter(
@@ -45,46 +48,55 @@ export const DoctorDashboardView: React.FC<Props> = ({
       p.mrn.toLowerCase().includes(searchPatient.toLowerCase())
   );
 
+  const deptLabel =
+    currentUser.department ||
+    (isFil
+      ? 'Kagawaran ng Pangkalahatang Medisina at Endokrinolohiya'
+      : 'Department of Outpatient Medicine & Endocrinology');
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto text-xs font-sans pb-12">
-      {/* Doctor Header Hero */}
-      <div className="bg-gradient-to-r from-teal-950 via-teal-900 to-slate-900 rounded-3xl p-6 sm:p-7 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-5 border border-teal-800/40">
-        <div className="flex items-center gap-4">
-          <SmartClinicLogo className="w-14 h-14" glow={true} />
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-teal-500/20 text-teal-300 border border-teal-500/40">
-                {t.doctor.consultationWorkspace}
-              </span>
-              <span className="text-[10px] text-teal-300 font-mono">MD-892410</span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-black text-white mt-1">
-              {t.common.welcome}, {currentUser.name}
-            </h1>
-            <p className="text-slate-300 text-xs mt-0.5">
-              Department of Outpatient Medicine & Endocrinology. {activeQueue.length} {t.doctor.inQueueCount.toLowerCase()}.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5 self-start md:self-auto">
-          <button
-            onClick={() => setActiveTab('consultations')}
-            className="px-4 py-2.5 bg-teal-400 hover:bg-teal-300 text-slate-950 rounded-xl font-bold flex items-center gap-2 transition shadow-md shadow-teal-500/20 cursor-pointer"
-          >
-            <Stethoscope className="w-4 h-4" />
-            <span>{t.doctor.startConsultationBtn}</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('ai-assistant')}
-            className="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold flex items-center gap-2 border border-white/20 transition cursor-pointer"
-          >
-            <Sparkles className="w-4 h-4 text-teal-300" />
-            <span>{t.doctor.clinicalDecisionSupport}</span>
-          </button>
-        </div>
-      </div>
+      {/* Unified Doctor Hero Banner */}
+      <RoleHeroBanner
+        badges={[
+          {
+            text: t.doctor.consultationWorkspace,
+            pulseDot: true,
+            pulseColor: 'bg-teal-400',
+            className: 'bg-teal-500/20 text-teal-300 border-teal-500/40',
+          },
+          {
+            text: currentUser.licenseNumber || 'MD-892410',
+            className: 'bg-white/10 text-slate-300 border-white/20 font-mono',
+          },
+        ]}
+        title={`${t.common.welcome}, ${currentUser.name}`}
+        meta={
+          <span>
+            {deptLabel}. <span className="font-bold text-white">{activeQueue.length}</span> {t.doctor.inQueueCount.toLowerCase()}.
+          </span>
+        }
+        gradientClass="bg-gradient-to-r from-teal-950 via-teal-900 to-slate-900 border-teal-800/40"
+        actions={[
+          {
+            label: t.doctor.startConsultationBtn,
+            onClick: () => setActiveTab('consultations'),
+            icon: <Stethoscope className="w-4 h-4 text-slate-950" />,
+            variant: 'primary',
+            primaryColor: 'bg-teal-400 hover:bg-teal-300 text-slate-950 shadow-md shadow-teal-500/20 focus-visible:ring-teal-300',
+            ariaLabel: t.doctor.startConsultationBtn,
+            title: isFil ? 'Simulan ang bagong konsultasyong medikal' : 'Start clinical consultation with waiting patient',
+          },
+          {
+            label: t.doctor.clinicalDecisionSupport,
+            onClick: () => setActiveTab('ai-assistant'),
+            icon: <Sparkles className="w-4 h-4 text-teal-300" />,
+            variant: 'secondary',
+            ariaLabel: t.doctor.clinicalDecisionSupport,
+            title: isFil ? 'Buksan ang AI Assistant para sa suporta sa klinikal na desisyon' : 'Open AI Clinical Decision Support suite',
+          },
+        ]}
+      />
 
       {/* Operational Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">

@@ -15,6 +15,7 @@ import {
   User,
 } from 'lucide-react';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
+import { RoleHeroBanner } from '../common/RoleHeroBanner';
 import { EmergencyDisclaimerBanner } from '../common/EmergencyDisclaimerBanner';
 import { formatPeso } from '../../utils/currency';
 
@@ -33,7 +34,19 @@ export const PatientDashboardView: React.FC<Props> = ({
   onOpenPrescription,
   onOpenProfileSettings,
 }) => {
-  const { patients, appointments, prescriptions, labOrders, invoices, linkedPatientId, currentUser, setActiveTab, t, language } = useClinic();
+  const {
+    patients,
+    appointments,
+    prescriptions,
+    labOrders,
+    invoices,
+    linkedPatientId,
+    currentUser,
+    users,
+    setActiveTab,
+    t,
+    language,
+  } = useClinic();
 
   // Active patient (logged-in portal patient)
   const patient =
@@ -51,7 +64,14 @@ export const PatientDashboardView: React.FC<Props> = ({
       email: 'elena.vargas@example.com',
       allergies: [{ allergen: 'Penicillin', severity: 'severe' as const, reaction: 'Anaphylaxis' }],
       chronicConditions: ['Type 2 Diabetes Mellitus', 'Essential Hypertension'],
+      primaryDoctorId: 'usr-1',
     };
+
+  // Dynamic primary physician resolution
+  const primaryDoctor =
+    users.find((u) => u.id === patient.primaryDoctorId) ||
+    users.find((u) => u.role === 'doctor');
+  const primaryDoctorName = primaryDoctor?.name || 'Dr. Maria Cristina Reyes, MD';
 
   const patientAppointments = appointments.filter((a) => a.patientId === patient.id || a.patientName === patient.fullName);
   const patientPrescriptions = prescriptions.filter((p) => p.patientId === patient.id || p.patientName === patient.fullName);
@@ -59,65 +79,72 @@ export const PatientDashboardView: React.FC<Props> = ({
   const patientInvoices = invoices.filter((i) => i.patientId === patient.id || i.patientName === patient.fullName);
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto text-xs font-sans pb-12">
-      <div className="bg-gradient-to-r from-teal-900 via-teal-800 to-slate-900 rounded-3xl p-6 sm:p-7 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-5 border border-teal-700/40">
-        <div className="flex items-center gap-4">
-          <SmartClinicLogo className="w-14 h-14" glow={true} />
-          <div>
-            <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white/10 text-teal-200 border border-white/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              {t.patient.healthPortalTitle}
-            </div>
-            <h1
-              onClick={onOpenProfileSettings}
-              className={`text-xl sm:text-2xl font-black text-white mt-1 ${
-                onOpenProfileSettings ? 'cursor-pointer hover:text-teal-200 transition' : ''
-              }`}
-              title={onOpenProfileSettings ? 'Click to open Profile Settings' : undefined}
-            >
-              {language === 'fil' ? 'Maligayang pagbabalik' : 'Welcome'}, {patient.fullName}
-            </h1>
-            <p className="text-teal-100 text-xs mt-0.5">
-              {t.patient.mrnLabel}: <span className="font-mono font-bold text-white">{patient.mrn}</span> • {t.patient.bloodTypeLabel}: <span className="font-bold text-white">{patient.bloodType}</span> • {t.patient.primaryDoctorLabel}: Dr. Maria Cristina Reyes, MD
-            </p>
-          </div>
-        </div>
+    <div className="space-y-5 max-w-6xl mx-auto text-xs font-sans pb-12">
+      {/* Unified Role Hero Banner */}
+      <div className="space-y-3">
+        <RoleHeroBanner
+          badges={[
+            {
+              text: t.patient.healthPortalTitle,
+              pulseDot: true,
+              pulseColor: 'bg-emerald-400',
+              className: 'bg-white/10 text-teal-200 border-white/20',
+            },
+          ]}
+          title={`${language === 'fil' ? 'Maligayang pagbabalik' : 'Welcome'}, ${patient.fullName}`}
+          onTitleClick={onOpenProfileSettings}
+          titleTooltip={onOpenProfileSettings ? (language === 'fil' ? 'Buksan ang mga setting ng profile' : 'Click to open Profile Settings') : undefined}
+          meta={
+            <span>
+              {t.patient.mrnLabel}: <span className="font-mono font-bold text-white">{patient.mrn}</span> •{' '}
+              {t.patient.bloodTypeLabel}: <span className="font-bold text-white">{patient.bloodType}</span> •{' '}
+              {t.patient.primaryDoctorLabel}: <span className="font-semibold text-white">{primaryDoctorName}</span>
+            </span>
+          }
+          gradientClass="bg-gradient-to-r from-teal-900 via-teal-800 to-slate-900 border-teal-700/40"
+          actions={[
+            ...(onOpenProfileSettings
+              ? [
+                  {
+                    label: t.nav.profileSettings,
+                    onClick: onOpenProfileSettings,
+                    icon: <User className="w-4 h-4 text-teal-300" />,
+                    variant: 'secondary' as const,
+                    ariaLabel: t.nav.profileSettings,
+                    title: language === 'fil' ? 'Tingnan at i-edit ang iyong impormasyon sa profile' : 'View and edit your personal profile and EMR details',
+                  },
+                ]
+              : []),
+            ...(onOpenQR
+              ? [
+                  {
+                    label: t.patient.healthIdBtn,
+                    onClick: onOpenQR,
+                    icon: <QrCode className="w-4 h-4 text-teal-300" />,
+                    variant: 'secondary' as const,
+                    ariaLabel: t.patient.healthIdBtn,
+                    title: language === 'fil' ? 'Ipakita ang iyong Health ID QR Code' : 'Display your personal Health ID QR Code',
+                  },
+                ]
+              : []),
+            ...(onOpenBookAppointment
+              ? [
+                  {
+                    label: t.common.bookAppointment,
+                    onClick: onOpenBookAppointment,
+                    icon: <Calendar className="w-4 h-4 text-slate-950" />,
+                    variant: 'primary' as const,
+                    primaryColor: 'bg-teal-400 hover:bg-teal-300 text-slate-950 shadow-md shadow-teal-500/20 focus-visible:ring-teal-300',
+                    ariaLabel: t.common.bookAppointment,
+                    title: language === 'fil' ? 'Magtakda ng bagong appointment' : 'Schedule a new clinical consultation',
+                  },
+                ]
+              : []),
+          ]}
+        />
 
-        <div className="flex items-center gap-2.5 self-start md:self-auto flex-wrap">
-          {onOpenProfileSettings && (
-            <button
-              onClick={onOpenProfileSettings}
-              className="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold flex items-center gap-2 border border-white/20 transition cursor-pointer"
-              title="View and edit your personal information and EMR details"
-            >
-              <User className="w-4 h-4 text-teal-300" />
-              <span>{t.nav.profileSettings}</span>
-            </button>
-          )}
-
-          {onOpenQR && (
-            <button
-              onClick={onOpenQR}
-              className="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold flex items-center gap-2 border border-white/20 transition cursor-pointer"
-            >
-              <QrCode className="w-4 h-4 text-teal-300" />
-              <span>{t.patient.healthIdBtn}</span>
-            </button>
-          )}
-
-          {onOpenBookAppointment && (
-            <button
-              onClick={onOpenBookAppointment}
-              className="px-4 py-2.5 bg-teal-400 hover:bg-teal-300 text-slate-950 rounded-xl font-bold flex items-center gap-2 transition shadow-md shadow-teal-500/20 cursor-pointer"
-            >
-              <Calendar className="w-4 h-4" />
-              <span>{t.common.bookAppointment}</span>
-            </button>
-          )}
-        </div>
+        <EmergencyDisclaimerBanner />
       </div>
-
-      <EmergencyDisclaimerBanner />
 
       {/* Specific Task & Privacy Directive Banner */}
       <div className="p-3 bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 rounded-xl flex items-center justify-between gap-3 text-xs">

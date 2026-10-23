@@ -12,6 +12,7 @@ import {
   Stethoscope,
 } from 'lucide-react';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
+import { RoleHeroBanner } from '../common/RoleHeroBanner';
 import { formatPeso } from '../../utils/currency';
 import { AddDoctorModal } from './AddDoctorModal';
 
@@ -33,43 +34,47 @@ export const AdminDashboardView: React.FC = () => {
   const totalRevenue = invoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
   const outstandingRevenue = invoices.reduce((sum, inv) => sum + (inv.totalAmount - inv.paidAmount), 0);
 
+  const adminEmail = currentUser.email || 'smartclinicrealacc@gmail.com';
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto text-xs font-sans pb-12">
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-7 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-5 border border-indigo-800/40">
-        <div className="flex items-center gap-4">
-          <SmartClinicLogo className="w-14 h-14" glow={true} />
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 flex items-center gap-1.5">
-                <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
-                <span>{isFil ? 'Tagapamahala ng Klinika' : 'Executive Clinic Director'}</span>
-              </span>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{isFil ? 'Ligtas na Sesyon' : 'Secure Session'} • smartclinicrealacc@gmail.com</span>
-              </span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-black text-white mt-1">
-              {t.common.welcome}, {currentUser.name}
-            </h1>
-            <p className="text-slate-300 text-xs mt-0.5 max-w-xl">
-              {isFil
-                ? 'Operasyon ng Klinika, Pananalapi, at Audit Trail alinsunod sa Philippine Data Privacy Act (RA 10173).'
-                : 'Clinic Operations, Financial Oversight & Cryptographic Audit Trails. Adheres to Philippine National Privacy Commission (RA 10173).'}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5 self-start md:self-auto">
-          <button
-            onClick={() => setActiveTab('audit-logs')}
-            className="px-4 py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl font-bold flex items-center gap-2 transition shadow-md shadow-indigo-500/20 cursor-pointer"
-          >
-            <ShieldAlert className="w-4 h-4" />
-            <span>{t.admin.complianceAudit}</span>
-          </button>
-        </div>
-      </div>
+      {/* Unified Admin Hero Banner */}
+      <RoleHeroBanner
+        badges={[
+          {
+            text: isFil ? 'Tagapamahala ng Klinika' : 'Executive Clinic Director',
+            icon: <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />,
+            className: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
+          },
+          {
+            text: `${isFil ? 'Ligtas na Sesyon' : 'Secure Session'} • ${adminEmail}`,
+            icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />,
+            pulseDot: true,
+            pulseColor: 'bg-emerald-400',
+            className: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-mono',
+          },
+        ]}
+        title={`${t.common.welcome}, ${currentUser.name}`}
+        meta={
+          <span className="max-w-2xl block">
+            {isFil
+              ? 'Operasyon ng Klinika, Pananalapi, at Audit Trail alinsunod sa Philippine Data Privacy Act (RA 10173).'
+              : 'Clinic Operations, Financial Oversight & Cryptographic Audit Trails. Adheres to Philippine National Privacy Commission (RA 10173).'}
+          </span>
+        }
+        gradientClass="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-indigo-800/40"
+        actions={[
+          {
+            label: t.admin.complianceAudit,
+            onClick: () => setActiveTab('audit-logs'),
+            icon: <ShieldAlert className="w-4 h-4 text-white" />,
+            variant: 'primary',
+            primaryColor: 'bg-indigo-500 hover:bg-indigo-400 text-white shadow-md shadow-indigo-500/25 focus-visible:ring-indigo-300',
+            ariaLabel: t.admin.complianceAudit,
+            title: isFil ? 'Buksan ang Talaan ng Pagsunod at Seguridad' : 'Open Tamper-Evident Regulatory Compliance Audit Logs',
+          },
+        ]}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">

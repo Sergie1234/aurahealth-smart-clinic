@@ -11,8 +11,10 @@ import {
   PackageCheck,
   CheckCircle2,
   Layers,
+  UserPlus,
 } from 'lucide-react';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
+import { RoleHeroBanner } from '../common/RoleHeroBanner';
 
 interface Props {
   subRole: StaffSubRole;
@@ -42,11 +44,10 @@ export const StaffDashboardView: React.FC<Props> = ({
 
   const isFil = language === 'fil';
 
-  const roleLabels: Record<StaffSubRole, { title: string; badge: string; color: string; desc: string }> = {
+  const roleLabels: Record<StaffSubRole, { title: string; badge: string; desc: string }> = {
     nurse: {
       title: isFil ? 'Pangangalagang Pang-nars at Triage' : 'Clinical Nursing & Outpatient Triage',
       badge: t.roles.nurse,
-      color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
       desc: isFil
         ? 'Pagtatala ng vital signs, pagsubaybay sa outpatient, at paghahanda sa pasyente bago ang konsultasyon.'
         : 'Triage vital sign evaluations, outpatient monitoring, and pre-consultation patient readiness.',
@@ -54,7 +55,6 @@ export const StaffDashboardView: React.FC<Props> = ({
     pharmacist: {
       title: isFil ? 'Parmasya at Pamamahagi ng Gamot' : 'Pharmacy Formulary & Dispensary Operations',
       badge: t.roles.pharmacist,
-      color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30',
       desc: isFil
         ? 'Pagsubaybay sa imbentaryo ng gamot, pagsusuri ng reseta, at pag-dispense ng gamot.'
         : 'Drug inventory monitoring, prescription review, compounding validation, and dispensing dispatch.',
@@ -62,7 +62,6 @@ export const StaffDashboardView: React.FC<Props> = ({
     receptionist: {
       title: isFil ? 'Pagtanggap ng Pasyente at Pamamahala ng Pila' : 'Patient Intake & Queue Management Desk',
       badge: t.roles.receptionist,
-      color: 'bg-sky-500/10 text-sky-400 border-sky-500/30',
       desc: isFil
         ? 'Pagtanggap sa front desk, pag-iskedyul ng appointment, check-in ng pasyente, at triage sa pila.'
         : 'Front desk intake, appointment calendar scheduling, patient check-ins, and queue triage.',
@@ -70,11 +69,31 @@ export const StaffDashboardView: React.FC<Props> = ({
     lab_technician: {
       title: isFil ? 'Laboratoryo ng Diagnostics at Pagsusuri' : 'Diagnostic Laboratory & Specimen Processing',
       badge: t.roles.labTechnician,
-      color: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
       desc: isFil
         ? 'Pagsusuri ng biyolohikal na ispesimen, sertipikasyon ng lab assay, at paglalabas ng resulta.'
         : 'Biological specimen processing, laboratory assay certification, and diagnostics turnaround.',
     },
+  };
+
+  const subRoleGradients: Record<StaffSubRole, string> = {
+    nurse: 'bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 border-emerald-800/40',
+    pharmacist: 'bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-indigo-800/40',
+    receptionist: 'bg-gradient-to-r from-slate-900 via-sky-950 to-slate-900 border-sky-800/40',
+    lab_technician: 'bg-gradient-to-r from-slate-900 via-amber-950 to-slate-900 border-amber-800/40',
+  };
+
+  const subRoleBadgeColors: Record<StaffSubRole, string> = {
+    nurse: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    pharmacist: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
+    receptionist: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
+    lab_technician: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+  };
+
+  const subRolePulseColors: Record<StaffSubRole, string> = {
+    nurse: 'bg-emerald-400',
+    pharmacist: 'bg-indigo-400',
+    receptionist: 'bg-sky-400',
+    lab_technician: 'bg-amber-400',
   };
 
   const currentMeta = roleLabels[subRole] || roleLabels.nurse;
@@ -88,28 +107,64 @@ export const StaffDashboardView: React.FC<Props> = ({
   const panelClass = 'bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-xs space-y-4';
   const rowClass = 'p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3';
 
+  // Dynamic actions based on subRole
+  const staffActions = [
+    ...(onOpenNewPatient
+      ? [
+          {
+            label: isFil ? 'Bagong Pasyente' : 'New Patient',
+            onClick: onOpenNewPatient,
+            icon: <UserPlus className="w-4 h-4 text-slate-200" />,
+            variant: 'secondary' as const,
+            ariaLabel: isFil ? 'Magrehistro ng bagong pasyente' : 'Register new clinic patient',
+            title: isFil ? 'Magrehistro ng bagong pasyente' : 'Register a new patient into EMR',
+          },
+        ]
+      : []),
+    ...(onOpenBookAppointment && subRole === 'receptionist'
+      ? [
+          {
+            label: t.common.bookAppointment,
+            onClick: onOpenBookAppointment,
+            icon: <Calendar className="w-4 h-4 text-slate-950" />,
+            variant: 'primary' as const,
+            primaryColor: 'bg-sky-400 hover:bg-sky-300 text-slate-950 shadow-md shadow-sky-500/20 focus-visible:ring-sky-300',
+            ariaLabel: t.common.bookAppointment,
+            title: isFil ? 'Mag-iskedyul ng appointment' : 'Schedule appointment for patient',
+          },
+        ]
+      : []),
+  ];
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto text-xs font-sans pb-12">
-      {/* Staff Hero Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 rounded-3xl p-6 sm:p-7 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-5 border border-teal-800/40">
-        <div className="flex items-center gap-4">
-          <SmartClinicLogo className="w-14 h-14" glow={true} />
-          <div>
-            <div className="flex items-center gap-2">
-              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${currentMeta.color}`}>
-                {currentMeta.badge}
-              </span>
-              <span className="text-[10px] text-teal-300 font-mono">Department Active</span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-black text-white mt-1">
-              {currentMeta.title}
-            </h1>
-            <p className="text-slate-300 text-xs mt-0.5 max-w-xl">
-              {currentMeta.desc} Authenticated as <span className="font-bold text-white">{currentUser.name}</span>.
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* Unified Staff Hero Banner */}
+      <RoleHeroBanner
+        badges={[
+          {
+            text: currentMeta.badge,
+            pulseDot: true,
+            pulseColor: subRolePulseColors[subRole] || 'bg-teal-400',
+            className: subRoleBadgeColors[subRole] || 'bg-teal-500/20 text-teal-300 border-teal-500/40',
+          },
+          {
+            text: isFil ? 'Aktibong Departamento' : 'Department Active',
+            className: 'bg-white/10 text-slate-300 border-white/20 font-mono',
+          },
+        ]}
+        title={currentMeta.title}
+        meta={
+          <span className="max-w-2xl block">
+            {currentMeta.desc}{' '}
+            <span className="text-white/80">
+              {isFil ? 'Naka-authenticate bilang' : 'Authenticated as'}{' '}
+              <strong className="text-white font-bold">{currentUser.name}</strong>.
+            </span>
+          </span>
+        }
+        gradientClass={subRoleGradients[subRole] || 'bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 border-teal-800/40'}
+        actions={staffActions}
+      />
 
       {/* Operational Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
