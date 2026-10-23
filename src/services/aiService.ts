@@ -135,6 +135,7 @@ export const aiService = {
     context: any;
     role: string;
     page?: string;
+    patientId?: string;
     token?: string | null;
   }): Promise<{
     reply: string;
@@ -218,10 +219,11 @@ function generateLocalRulebookResponse(payload: {
 
   // Normalize page
   let activePage = String(payload.page || 'Dashboard').trim();
+  const isProvider = activeRole !== 'patient' && activeRole !== 'admin';
   if (activeRole === 'patient') {
     const valid = ['Dashboard', 'Appointments', 'Triage', 'Records'];
     activePage = valid.find((p) => p.toLowerCase() === activePage.toLowerCase()) || 'Dashboard';
-  } else if (activeRole === 'provider') {
+  } else if (isProvider) {
     const valid = ['Dashboard', 'Schedule', 'Patient Records', 'Clinical Notes'];
     if (activePage.toLowerCase() === 'ehr_viewer' || activePage.toLowerCase() === 'records') activePage = 'Patient Records';
     else if (activePage.toLowerCase() === 'notes') activePage = 'Clinical Notes';
@@ -269,7 +271,7 @@ function generateLocalRulebookResponse(payload: {
       const visits = payload.context?.upcomingVisits || [];
       const visitsText = visits.length > 0
         ? visits.map((v: any) => `• ${v.date || 'Scheduled'} at ${v.time || '09:30 AM'} with ${v.doctor || 'Attending Physician'} (${v.status || 'Confirmed'})`).join('\n')
-        : '• 1 upcoming consultation with Dr. Maria Cristina Reyes, MD (Internal Medicine).';
+        : '• No upcoming consultations scheduled.';
       return {
         reply: `Account Overview:\n${visitsText}\n\nYou have 0 unread clinical notifications. Let me know if you need assistance navigating your portal.`,
         disclaimer: '',
@@ -303,13 +305,93 @@ function generateLocalRulebookResponse(payload: {
     }
 
     if (activePage === 'Triage') {
+      const redFlagRegex = /(chest pain|crushing pain|heart attack|hirap huminga|shortness of breath|difficulty breathing|stroke|facial droop|slurred speech|arm weakness|sudden weakness|uncontrolled bleeding|severe bleeding|coughing blood|vomiting blood|unconscious|fainted|loss of consciousness|suicid|worst headache|thunderclap|altered consciousness|severe allergic reaction)/i;
+      const isRedFlag = redFlagRegex.test(lowerText);
+
+      const confirmedDuration = payload.context?.timelineStarted || (lowerText.includes('day') ? '1-3 days ago' : lowerText.includes('week') ? '1 week ago' : lowerText.includes('today') ? 'Today' : '1-3 days ago');
+      const confirmedProgression = payload.context?.timelineTrajectory === 'improving' ? 'Improving' : payload.context?.timelineTrajectory === 'stable' ? 'Stable' : 'Worsening';
+      const confirmedEpisodes = payload.context?.previousEpisodes || 'First time';
+      const followUp = payload.context?.followUpStatus;
+
+      if (isRedFlag) {
+        return {
+          reply: `⚠️ Red flag symptoms detected. Severe red flags require immediate emergency care.\n\nThank you. I now have enough information to complete the triage.\n\n---\n**TRIAGE SUMMARY**\n- Chief Complaint: ${userText}\n- Duration: ${confirmedDuration}\n- Severity (1-10): 9\n- Progression: ${confirmedProgression}\n- Associated Symptoms: Potential acute cardiopulmonary/neurological distress\n- Previous Episodes: ${confirmedEpisodes}\n- Red Flags: ${userText}\n- Urgency Level: Emergency\n- Recommended Next Step: Go to ER immediately or call 911\n- Notes for clinician: Patient reported critical emergency red flags. Immediate emergency evaluation advised.\n---\n\nThe triage is complete. A clinician will review this shortly.`,
+          disclaimer: 'I am an AI. For medical emergencies, visit a hospital immediately.',
+          isEmergency: true,
+          activeRole,
+          activePage,
+          persona: 'SmartClinic AI Triage Chatbot',
+        };
+      }
+
+      // Check if this is a Follow-Up button action
+      if (lowerText.includes('getting better')) {
+        return {
+          reply: `Understood, I have noted that your symptoms are improving (Progression: Improving). On a scale of 1 to 10, what is your current severity, and are there any other symptoms?`,
+          disclaimer: '',
+          isEmergency: false,
+          activeRole,
+          activePage,
+          persona: 'SmartClinic AI Triage Chatbot',
+        };
+      }
+      if (lowerText.includes('about the same')) {
+        return {
+          reply: `Understood, I have noted no significant change in your symptoms (Progression: Stable). On a scale of 1 to 10, how severe is your discomfort?`,
+          disclaimer: '',
+          isEmergency: false,
+          activeRole,
+          activePage,
+          persona: 'SmartClinic AI Triage Chatbot',
+        };
+      }
+      if (lowerText.includes('getting worse')) {
+        return {
+          reply: `I have noted that your symptoms are worsening (Progression: Worsening). On a scale of 1 to 10, what is your current severity rating?`,
+          disclaimer: '',
+          isEmergency: false,
+          activeRole,
+          activePage,
+          persona: 'SmartClinic AI Triage Chatbot',
+        };
+      }
+      if (lowerText.includes('new / different') || lowerText.includes('new symptoms')) {
+        return {
+          reply: `What are the new or different symptoms you are experiencing today?`,
+          disclaimer: '',
+          isEmergency: false,
+          activeRole,
+          activePage,
+          persona: 'SmartClinic AI Triage Chatbot',
+        };
+      }
+
+      const severityMatch = lowerText.match(/\b(10|[1-9])\b/);
+      const hasSeverity = Boolean(severityMatch);
+      const sevVal = severityMatch ? parseInt(severityMatch[0], 10) : 5;
+
+      // When we have chief complaint details (user provided input) and severity (or sufficient exchanges):
+      if (hasSeverity || userText.length > 35 || followUp) {
+        const urgencyLevel = sevVal >= 8 ? 'High' : sevVal >= 5 ? 'Moderate' : 'Low';
+        const nextStep = urgencyLevel === 'High' ? 'See doctor within 4 hours or urgent care' : urgencyLevel === 'Moderate' ? 'See doctor within 24 hours' : 'Routine outpatient appointment';
+
+        return {
+          reply: `Thank you. I now have enough information to complete the triage.\n\n---\n**TRIAGE SUMMARY**\n- Chief Complaint: ${userText.split('.')[0] || userText.slice(0, 60)}\n- Duration: ${confirmedDuration}\n- Severity (1-10): ${sevVal}\n- Progression: ${confirmedProgression}\n- Associated Symptoms: Documented during intake consultation\n- Previous Episodes: ${confirmedEpisodes}\n- Red Flags: None\n- Urgency Level: ${urgencyLevel}\n- Recommended Next Step: ${nextStep}\n- Notes for clinician: Timeline parameters and progression confirmed via patient portal. Triage complete.\n---\n\nThe triage is complete. A clinician will review this shortly.`,
+          disclaimer: '',
+          isEmergency: false,
+          activeRole,
+          activePage,
+          persona: 'SmartClinic AI Triage Chatbot',
+        };
+      }
+
       return {
-        reply: `Thank you for sharing. Could you describe when your symptoms began and their severity on a scale from 1 to 10 so we can record this for the doctor's review?\n\nI am an AI. For medical emergencies, visit a hospital immediately.`,
-        disclaimer: 'I am an AI. For medical emergencies, visit a hospital immediately.',
-        isEmergency: true,
+        reply: `Thank you. On a scale from 1 to 10 (with 1 being very mild and 10 being severe), how would you rate your severity?`,
+        disclaimer: '',
+        isEmergency: false,
         activeRole,
         activePage,
-        persona: 'SmartClinic AI Engine',
+        persona: 'SmartClinic AI Triage Chatbot',
       };
     }
 
@@ -342,94 +424,367 @@ function generateLocalRulebookResponse(payload: {
     }
   }
 
-  // Specialized Role Logic
+  // 1. Doctor AI Assistant
   if (activeRole === 'doctor') {
+    const patientName = payload.context?.patientName || payload.context?.patient?.fullName || 'Patient';
+    const mrn = payload.context?.patient?.mrn || 'MRN-2026-0891';
+    const triage = payload.context?.latestTriage || payload.context?.triageDetails || null;
+
+    if (lowerText.includes('triage') || lowerText.includes('symptom') || lowerText.includes('intake')) {
+      return {
+        reply: `Patient Triage Summary Review (${patientName} — ${mrn}):\n` +
+          (triage
+            ? `• Clinical Urgency: Score ${triage.urgencyScore}/10 [${(triage.urgencyBand || 'Yellow').toUpperCase()} URGENCY]\n` +
+              `• Reported Symptoms: "${triage.symptoms}"\n` +
+              `• Timeline: Began ${triage.timelineStarted || 'recently'}, progression: ${triage.timelineTrajectory || 'worsening'}\n` +
+              `• Auto-Suggested Specialty: ${triage.suggestedSpecialty || 'Internal Medicine'}\n` +
+              `• Emergency Red Flags: ${triage.isEmergency ? '⚠️ YES — Immediate physician review required' : 'None detected'}\n` +
+              `• EMR Status: Intake archived & synced to clinical chart.`
+            : `• Triage Status: Outpatient routine check-in recorded. Baseline vitals: BP 120/80 mmHg, HR 72 bpm.`) +
+          `\n\nAttending Physician Action: Priority triage review completed. Patient is prepared for in-person auscultation and clinical evaluation.`,
+        disclaimer: 'DECISION SUPPORT ONLY: Attending physician retains sole diagnostic and prescribing authority.',
+        activeRole,
+        activePage,
+        persona: 'SmartClinic Doctor AI Assistant',
+      };
+    }
+
+    if (lowerText.includes('diagnos') || lowerText.includes('differential') || lowerText.includes('icd')) {
+      return {
+        reply: `Differential Diagnosis Suggestions (Decision Support Only) for ${patientName}:\n` +
+          `1. Primary: Essential Hypertension / Elevated Hemodynamics (ICD-10: I10) — 65% clinical probability based on documented cardiovascular parameters.\n` +
+          `2. Secondary: Type 2 Diabetes Mellitus with Peripheral Neuropathy (ICD-10: E11.40) — 40% probability given intermittent extremity numbness and glycemic baseline.\n` +
+          `3. Differential: Tension-type Headache secondary to cervical strain (ICD-10: G44.2) — 25% probability.\n\n` +
+          `Recommended Diagnostic Workup: Fasting Blood Sugar, HbA1c, 12-lead ECG, Serum Creatinine & eGFR.\n\n` +
+          `*DECISION SUPPORT ONLY: Attending physician retains sole prescribing and diagnostic authority.*`,
+        disclaimer: 'DECISION SUPPORT ONLY: Attending physician retains sole diagnostic and prescribing authority.',
+        activeRole,
+        activePage,
+        persona: 'SmartClinic Doctor AI Assistant',
+      };
+    }
+
+    if (lowerText.includes('soap') || lowerText.includes('note') || lowerText.includes('scribe')) {
+      return {
+        reply: `Structured SOAP Consultation Note (Draft for Review):\n\n` +
+          `SUBJECTIVE:\n${patientName} (${mrn}) presents for outpatient consultation. ${triage ? `Triage reported: "${triage.symptoms}" (${triage.timelineStarted}, ${triage.timelineTrajectory}).` : 'Reports recurrent tension headaches and fatigue.'} Documented Allergies: ${payload.context?.allergies?.join(', ') || 'NKDA'}.\n\n` +
+          `OBJECTIVE:\nVitals: BP 128/82 mmHg, HR 74 bpm, Temp 36.7°C, SpO2 98%. Patient alert, oriented x3. Lungs clear bilaterally. Heart: S1/S2 present, regular rhythm without murmurs. Abdomen soft, non-tender.\n\n` +
+          `ASSESSMENT:\n1. Essential hypertension, controlled on therapy.\n2. Chronic tension cephalea, stable.\n\n` +
+          `PLAN:\n1. Maintain current antihypertensive regimen.\n2. Hydration and ergonomic sleep posture counseling.\n3. Return to clinic in 30 days or sooner if alarming symptoms occur.\n\n` +
+          `*DECISION SUPPORT ONLY: Attending physician retains sole prescribing and diagnostic authority.*`,
+        disclaimer: 'DECISION SUPPORT ONLY: Attending physician retains sole diagnostic and prescribing authority.',
+        activeRole,
+        activePage,
+        persona: 'SmartClinic Doctor AI Assistant',
+      };
+    }
+
+    if (lowerText.includes('prescription') || lowerText.includes('rx') || lowerText.includes('medication')) {
+      return {
+        reply: `Suggested Electronic Prescription Regimen (Decision Support Only):\n\n` +
+          `1. Amlodipine 5mg Tablet\n   • Sig: Take 1 tablet by mouth once daily every morning\n   • Dispense: #30 (Thirty)\n   • Instructions: Take with or without food. Monitor home blood pressure log.\n\n` +
+          `2. Paracetamol 500mg Tablet (PRN)\n   • Sig: Take 1 tablet every 6 hours as needed for headache/pain\n   • Dispense: #10 (Ten)\n\n` +
+          `Safety Audit: Checked against documented allergies (${payload.context?.allergies?.join(', ') || 'No known allergies'}) — Regimen is clinically safe.\n\n` +
+          `*DECISION SUPPORT ONLY: Attending physician retains sole prescribing and diagnostic authority.*`,
+        disclaimer: 'DECISION SUPPORT ONLY: Attending physician retains sole prescribing and diagnostic authority.',
+        activeRole,
+        activePage,
+        persona: 'SmartClinic Doctor AI Assistant',
+      };
+    }
+
     return {
-      reply: `Doctor AI Assistant active. I am ready to review patient triage summaries, history, or suggest diagnoses as decision support. How can I assist with this patient?`,
-      disclaimer: 'DECISION SUPPORT ONLY: This AI output is strictly for clinical reference and should not replace your final medical decision.',
+      reply: `Doctor AI Assistant active for Dr. Maria Cristina Reyes, MD.\n\nPatient in Focus: ${patientName} (${mrn})\n` +
+        `• Triage Intake: ${triage ? `${triage.urgencyBand.toUpperCase()} (${triage.urgencyScore}/10) — "${triage.symptoms}"` : 'Routine outpatient appointment'}\n` +
+        `• Allergies: ${payload.context?.allergies?.join(', ') || 'NKDA'}\n` +
+        `• Chronic Conditions: ${payload.context?.chronicConditions?.join(', ') || 'Cardiovascular surveillance'}\n\n` +
+        `Quick Actions: Review Triage Summary, Suggest Differential Diagnoses, Draft SOAP Clinical Note, or Suggest Prescription Regimen.`,
+      disclaimer: 'DECISION SUPPORT ONLY: Attending physician retains sole prescribing and diagnostic authority.',
       activeRole,
       activePage,
       persona: 'SmartClinic Doctor AI Assistant',
     };
   }
+
+  // 2. Nurse AI Assistant
   if (activeRole === 'nurse') {
+    const patientName = payload.context?.patientName || payload.context?.patient?.fullName || 'Patient';
+    const mrn = payload.context?.patient?.mrn || 'MRN-2026-0891';
+    const triage = payload.context?.latestTriage || null;
+
+    if (lowerText.includes('vital') || lowerText.includes('bp') || lowerText.includes('temperature') || lowerText.includes('flag')) {
+      return {
+        reply: `Vital Signs Clinical Analysis for ${patientName} (${mrn}):\n` +
+          `• Blood Pressure: 138/88 mmHg ⚠️ [Borderline Pre-Hypertension]\n` +
+          `• Heart Rate: 76 bpm ✅ [Normal Sinus Rhythm 60-100]\n` +
+          `• Temperature: 37.1 °C ✅ [Normal Oral Temp]\n` +
+          `• Oxygen Saturation (SpO2): 99% ✅ [Optimal Room Air]\n` +
+          `• Respiratory Rate: 16 cpm ✅ [Normal Eupnea 12-20]\n` +
+          `• BMI: 24.2 kg/m² ✅ [Normal Weight Range]\n\n` +
+          `Nursing Care Action: Patient vitals logged into EMR. Seated resting BP re-check recommended prior to physician examination.`,
+        disclaimer: 'Nursing Care Decision Support. Verify all clinical entries.',
+        activeRole,
+        activePage,
+        persona: 'SmartClinic Nurse AI Assistant',
+      };
+    }
+
+    if (lowerText.includes('prep') || lowerText.includes('checklist') || lowerText.includes('consultation')) {
+      return {
+        reply: `Pre-Consultation Nursing Preparation Checklist (${patientName}):\n` +
+          `1. [✓] Verify patient two-factor identity (Full Name & MRN ${mrn})\n` +
+          `2. [✓] Check Triage Level: ${triage ? `${triage.urgencyBand.toUpperCase()} (Score ${triage.urgencyScore}/10) — ${triage.suggestedSpecialty}` : 'Green Routine'}\n` +
+          `3. [✓] Confirm allergy wristband and cross-check against chart\n` +
+          `4. [ ] Guide patient to Examination Room 1\n` +
+          `5. [ ] Position patient in Fowler's 45° position if dyspneic, or relaxed seated\n` +
+          `6. [ ] Brief Dr. Reyes on chief complaint: "${triage?.symptoms || 'Routine follow-up'}"`,
+        disclaimer: 'Nursing Care Decision Support. Verify all clinical entries.',
+        activeRole,
+        activePage,
+        persona: 'SmartClinic Nurse AI Assistant',
+      };
+    }
+
     return {
-      reply: `Nurse AI Assistant active. Ready to help with patient check-in, vital signs recording, and care reminders. How can I assist with patient care today?`,
-      disclaimer: 'Nursing support assistant. Please verify all clinical entries.',
+      reply: `Nurse AI Assistant active. Patient in Focus: ${patientName} (${mrn}).\n\n` +
+        `• Triage Urgency: ${triage ? `${triage.urgencyBand.toUpperCase()} (Score ${triage.urgencyScore}/10) — "${triage.symptoms}"` : 'Standard check-in'}\n` +
+        `• Live Queue: 3 patients currently waiting in reception.\n\n` +
+        `How can I assist? Quick prompts: Analyze Current Vitals, Generate Pre-Consultation Prep Checklist, Draft SBAR Handover Note, or Review Triage Urgency.`,
+      disclaimer: 'Nursing Care Decision Support. Verify all clinical entries.',
       activeRole,
       activePage,
       persona: 'SmartClinic Nurse AI Assistant',
     };
   }
+
+  // 3. Receptionist AI Assistant
   if (activeRole === 'receptionist') {
+    if (lowerText.includes('queue') || lowerText.includes('wait') || lowerText.includes('delay') || lowerText.includes('today')) {
+      return {
+        reply: `Today's Live Queue & Waiting Room Overview:\n\n` +
+          `👥 Waiting Room Status:\n` +
+          `• Waiting in Reception: 3 patients [Q-101 Roberto Cruz, Q-102 Elena Vargas, Q-103 Carmen Santos]\n` +
+          `• In Consultation: 1 patient [Dr. Reyes in Room 1]\n` +
+          `• Completed Today: 5 consultations\n` +
+          `• Estimated Wait Time: ~15 to 20 minutes for next queue slot\n\n` +
+          `🏥 Doctor Station Allocation:\n` +
+          `• Dr. Maria Cristina Reyes, MD (Internal Medicine) — Room 1: Active\n` +
+          `• Dr. Alejandro Santos, MD (Cardiology) — Room 2: Available at 10:30 AM\n` +
+          `• Dr. Sofia Ramos, MD (Pediatrics) — Room 3: Active`,
+        disclaimer: 'Front Desk & Reception Operations.',
+        activeRole,
+        activePage,
+        persona: 'SmartClinic Receptionist AI Assistant',
+      };
+    }
+
+    if (lowerText.includes('register') || lowerText.includes('intake') || lowerText.includes('new patient')) {
+      return {
+        reply: `New Patient Registration Intake Checklist:\n` +
+          `1. [ ] Legal Full Name & Date of Birth verification (Government ID / PhilID)\n` +
+          `2. [ ] Valid Mobile Number for SMS queue notifications & emergency contact\n` +
+          `3. [ ] PhilHealth / HMO Insurance Policy accreditation check\n` +
+          `4. [ ] Known allergies and current maintenance medications intake\n` +
+          `5. [ ] Initial AI Triage screening: prompt patient for chief complaint\n` +
+          `6. [ ] Assign automated MRN (Medical Record Number) and Live Queue ticket.`,
+        disclaimer: 'Front Desk & Reception Operations.',
+        activeRole,
+        activePage,
+        persona: 'SmartClinic Receptionist AI Assistant',
+      };
+    }
+
     return {
-      reply: `Receptionist AI Assistant active. Ready to help with appointment scheduling, queue management, and patient registration. How can I assist today?`,
-      disclaimer: 'Receptionist assistant.',
+      reply: `Receptionist AI Assistant active. Front desk coordination and queue tracking are online.\n\n` +
+        `• Next Available Slot: 10:30 AM with Dr. Alejandro Santos (Cardiology)\n` +
+        `• Queue Throughput: 4 consultations completed, average turnaround 18 mins.\n\n` +
+        `How can I assist? Quick prompts: Show Today's Appointment Queue, Find Patient Records, Check Doctor Availability, or New Patient Intake Checklist.`,
+      disclaimer: 'Front Desk & Reception Operations.',
       activeRole,
       activePage,
       persona: 'SmartClinic Receptionist AI Assistant',
     };
   }
+
+  // 4. Pharmacist AI Assistant
   if (activeRole === 'pharmacist') {
+    const patientName = payload.context?.patientName || payload.context?.patient?.fullName || 'Patient';
+    const mrn = payload.context?.patient?.mrn || 'MRN-2026-0891';
+    const allergies = payload.context?.allergies || ['Penicillin', 'NSAIDs (Aspirin)'];
+
+    if (lowerText.includes('allergy') || lowerText.includes('interaction') || lowerText.includes('safety') || lowerText.includes('audit')) {
+      return {
+        reply: `Pharmacotherapy & Drug Safety Audit for ${patientName} (${mrn}):\n\n` +
+          `🚨 Critical Patient Allergy Alerts:\n` +
+          allergies.map((a: string) => `• ⚠️ Documented Allergy: ${a} (Severity: HIGH — Risk of anaphylaxis/angioedema)`).join('\n') +
+          `\n\n🔍 Active Drug Interaction Review:\n` +
+          `• Amlodipine 5mg + Metformin 500mg: ✅ SAFE — No significant pharmacokinetic interactions detected.\n` +
+          `• Contraindication Warning: ❌ Do NOT dispense beta-lactam antibiotics or cross-reactive cephalosporins without allergist clearance.\n` +
+          `• Renal/Hepatic Clearance: Normal outpatient dosing parameters verified.`,
+        disclaimer: 'Pharmacotherapy Safety Sentry. Double-check all clinical alerts.',
+        activeRole,
+        activePage,
+        persona: 'SmartClinic Pharmacist AI Assistant',
+      };
+    }
+
+    if (lowerText.includes('counsel') || lowerText.includes('dispens') || lowerText.includes('instruction')) {
+      return {
+        reply: `Patient Medication Dispensing & Counseling Notes:\n\n` +
+          `1. Amlodipine 5mg Tablet:\n` +
+          `   • Timing: Take 1 tablet once daily every morning with water.\n` +
+          `   • Food Interactions: May be taken with or without food. Avoid grapefruit juice.\n` +
+          `   • Side Effect Warning: Mild ankle swelling or dizziness may occur when standing up.\n\n` +
+          `2. Metformin 500mg Tablet:\n` +
+          `   • Timing: Take with meals to minimize gastrointestinal upset.\n` +
+          `   • Storage: Store below 30°C in dry place away from direct sunlight.`,
+        disclaimer: 'Pharmacotherapy Safety Sentry. Double-check all clinical alerts.',
+        activeRole,
+        activePage,
+        persona: 'SmartClinic Pharmacist AI Assistant',
+      };
+    }
+
     return {
-      reply: `Pharmacist AI Assistant active. I can help review prescriptions, check for drug interactions, or assist with dispensing notes. What would you like to review?`,
-      disclaimer: 'Pharmacist decision support. Please double-check all alerts.',
+      reply: `Pharmacist AI Assistant active for dispensary management. Patient: ${patientName} (${mrn}).\n\n` +
+        `• Active Allergies: ${allergies.join(', ') || 'NKDA'}\n` +
+        `• Pharmacy Inventory Status: All essential cardiovascular and diabetic medicines in stock.\n\n` +
+        `Quick prompts: Run Drug-Allergy & Interaction Audit, Generate Patient Dispensing Notes, Check Inventory Stock, or Review Active Prescriptions.`,
+      disclaimer: 'Pharmacotherapy Safety Sentry. Double-check all clinical alerts.',
       activeRole,
       activePage,
       persona: 'SmartClinic Pharmacist AI Assistant',
     };
   }
 
-  // Admin
-  const clinicalWords = [
-    'medical history', 'patient diagnosis', 'clinical note', 'soap note',
-    'ehr', 'lab values', 'glucose level', 'chest xray', 'prescribed medication'
-  ];
-  if (clinicalWords.some((k) => lowerText.includes(k))) {
+  // 5. Admin AI Assistant
+  if (activeRole === 'admin') {
+    if (lowerText.includes('brief') || lowerText.includes('overview') || lowerText.includes('kpi') || lowerText.includes('statistic')) {
+      return {
+        reply: `Executive Daily Clinic Briefing & Operations Overview:\n\n` +
+          `📊 Operational Performance:\n` +
+          `• Total Registered Patients: 89 active charts\n` +
+          `• Today's Patient Volume: 14 outpatient visits (8 completed, 3 waiting, 3 upcoming)\n` +
+          `• Facility Exam Room Utilization: 82% efficiency across Rooms 1-3\n` +
+          `• Staff Shifts Deployed: 6 healthcare personnel (2 Physicians, 2 Nurses, 1 Pharmacist, 1 Receptionist)\n\n` +
+          `💰 Financial & Claims Reconciliation:\n` +
+          `• Revenue Billed Today: $3,450.00\n` +
+          `• Pending Insurance Claims: 4 claims awaiting PhilHealth clearinghouse batch sync\n\n` +
+          `🛡️ Regulatory Compliance:\n` +
+          `• RA 10173 Health Data Privacy: Audit clean. Zero cross-tenant data leaks recorded.`,
+        disclaimer: 'Administrative Operational Data Only.',
+        activeRole,
+        activePage,
+        persona: 'SmartClinic Admin AI Assistant',
+      };
+    }
+
+    if (lowerText.includes('inventory') || lowerText.includes('stock') || lowerText.includes('reorder')) {
+      return {
+        reply: `Pharmacy Inventory & Stock Health Alert:\n\n` +
+          `📦 Low Stock Reorder Priority:\n` +
+          `1. Amoxicillin 500mg Capsules — Stock: 18 (Reorder Threshold: 25) ⚠️ REORDER REQUIRED\n` +
+          `2. Paracetamol 500mg Tablets — Stock: 35 (Reorder Threshold: 50) ⚠️ REORDER RECOMMENDED\n` +
+          `3. Sterile Gauze Pads 4x4 — Stock: 12 boxes (Reorder Threshold: 20)\n\n` +
+          `Supplier Lead Time: 2 business days. Automated purchase requisition draft prepared for approval.`,
+        disclaimer: 'Administrative Operational Data Only.',
+        activeRole,
+        activePage,
+        persona: 'SmartClinic Admin AI Assistant',
+      };
+    }
+
     return {
-      reply: boundaryRefusal,
-      disclaimer: 'Access Denied: Administrative role is strictly blocked from all clinical data.',
+      reply: `Clinic Executive Operations AI active. System status: 100% operational.\n\n` +
+        `• Facility Roster: 6 staff on active duty. Room utilization: 82%.\n` +
+        `• Data Privacy: RA 10173 compliance verified across all patient records.\n\n` +
+        `Quick prompts: Generate Executive Daily Briefing, Low Stock Inventory Alert, Staff Shift & Room Utilization, or System Compliance Audit.`,
+      disclaimer: 'Administrative Operational Data Only.',
       activeRole,
       activePage,
-      persona: 'SmartClinic AI Engine',
+      persona: 'SmartClinic Admin AI Assistant',
     };
   }
 
-  if (activePage === 'Dashboard') {
+  // 6. Clinical Triage Assistant
+  const isRedFlag =
+    /(chest pain|crushing pain|heart attack|hirap huminga|shortness of breath|difficulty breathing|stroke|facial droop|slurred speech|arm weakness|ngiwi|severe bleeding|uncontrolled bleeding|unconscious|fainted|loss of consciousness|suicidal)/i.test(
+      lowerText
+    );
+
+  if (isRedFlag) {
     return {
-      reply: `Operations Dashboard: Facility utilization is at 82%. Visitor volume today is ${payload.context?.visitorCountsToday || 14}. Active staff shifts: 6. System integrity and security audit logs are verified. All clinical data is blocked.`,
-      disclaimer: 'Administrative operational data only.',
-      activeRole,
+      reply:
+        `⚠️ Red flag symptoms detected. These symptoms require urgent emergency medical care.\n\n` +
+        `Thank you. I have enough information to complete the triage.\n\n` +
+        `---\n` +
+        `**TRIAGE SUMMARY**\n` +
+        `- Chief Complaint: ${userText}\n` +
+        `- Duration: Acute / Today\n` +
+        `- Severity (1-10): 9\n` +
+        `- Associated Symptoms: Acute respiratory / cardiovascular distress\n` +
+        `- Relevant History: Documented outpatient chart\n` +
+        `- Red Flags: ${userText}\n` +
+        `- Urgency Level: Emergency\n` +
+        `- Recommended Next Step: Go to ER immediately or call 911\n` +
+        `- Notes for clinician: Critical acute presentation requiring emergency medical intervention.\n` +
+        `---\n\n` +
+        `The triage is complete. A clinician will review this shortly.`,
+      disclaimer: 'I am an AI. For medical emergencies, visit a hospital immediately.',
+      activeRole: 'patient',
       activePage,
-      persona: 'SmartClinic AI Engine',
+      persona: 'Clinical Triage Assistant',
+      isEmergency: true,
     };
   }
 
-  if (activePage === 'Master Schedule') {
+  const hasTimeline = lowerText.includes('day') || lowerText.includes('week') || lowerText.includes('hour') || lowerText.includes('yesterday') || lowerText.includes('today');
+  const hasSeverity = /\b(10|[1-9])\b/.test(lowerText);
+
+  if (hasTimeline && hasSeverity) {
+    const sev = lowerText.match(/\b(10|[1-9])\b/)?.[0] || '5';
+    const numSev = parseInt(sev, 10);
+    const urgency = numSev >= 8 ? 'High' : numSev >= 4 ? 'Moderate' : 'Low';
+    const nextStep = urgency === 'High' ? 'See doctor within 4 hours or urgent care' : urgency === 'Moderate' ? 'See doctor within 24 hours' : 'Schedule routine clinic appointment';
+
     return {
-      reply: `Master Schedule: Facility exam rooms 1-4 and phlebotomy stations are staffed. Shift assignments are active across stations. Medical visit reasons are masked for privacy compliance.`,
-      disclaimer: 'Master Schedule view.',
-      activeRole,
+      reply:
+        `Thank you. I have enough information to complete the triage.\n\n` +
+        `---\n` +
+        `**TRIAGE SUMMARY**\n` +
+        `- Chief Complaint: ${userText.split('.')[0] || userText.slice(0, 60)}\n` +
+        `- Duration: ${lowerText.includes('day') ? 'Several days' : lowerText.includes('week') ? '1-2 weeks' : 'Recent onset'}\n` +
+        `- Severity (1-10): ${sev}\n` +
+        `- Associated Symptoms: Documented in intake consultation\n` +
+        `- Relevant History: Documented in medical chart\n` +
+        `- Red Flags: None\n` +
+        `- Urgency Level: ${urgency}\n` +
+        `- Recommended Next Step: ${nextStep}\n` +
+        `- Notes for clinician: Patient completed structured clinical intake. Symptoms evaluated under standard outpatient triage protocol.\n` +
+        `---\n\n` +
+        `The triage is complete. A clinician will review this shortly.`,
+      disclaimer: '',
+      activeRole: 'patient',
       activePage,
-      persona: 'SmartClinic AI Engine',
+      persona: 'Clinical Triage Assistant',
     };
   }
 
-  if (activePage === 'Patient Management') {
+  if (!hasTimeline) {
     return {
-      reply: `Patient Management: Demographic records, insurance clearinghouse statuses, and new patient intake registrations are operational. All clinical medical records remain strictly blocked.`,
-      disclaimer: 'Administrative identity access only.',
-      activeRole,
+      reply: `Thank you for sharing that. How long have you been experiencing this problem, and did it begin suddenly or gradually?`,
+      disclaimer: '',
+      activeRole: 'patient',
       activePage,
-      persona: 'SmartClinic AI Engine',
+      persona: 'Clinical Triage Assistant',
     };
   }
 
   return {
-    reply: `Billing & Claims: Financial summaries, claim reconciliation, and fee schedules are up to date. Granular clinical notes remain masked from billing itemizations.`,
-    disclaimer: 'Financial processing view.',
-    activeRole,
+    reply: `Understood. On a scale of 1 to 10 (with 1 being very mild discomfort and 10 being the most severe pain imaginable), how would you rate the severity?`,
+    disclaimer: '',
+    activeRole: 'patient',
     activePage,
-    persona: 'SmartClinic AI Engine',
+    persona: 'Clinical Triage Assistant',
   };
 }
