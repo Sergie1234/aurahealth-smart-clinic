@@ -57,7 +57,7 @@ interface Message {
   };
 }
 
-type RoleType = 'patient' | 'provider' | 'admin';
+type RoleType = 'patient' | 'doctor' | 'nurse' | 'receptionist' | 'pharmacist' | 'admin';
 type PatientPage = 'Triage' | 'Dashboard' | 'Appointments' | 'Records';
 type ProviderPage = 'Dashboard' | 'Schedule' | 'Patient Records' | 'Clinical Notes';
 type AdminPage = 'Dashboard' | 'Master Schedule' | 'Patient Management' | 'Billing';
@@ -84,12 +84,7 @@ export const AIAssistantHub: React.FC = () => {
   } = useClinic();
 
   // Resolve strict role from user's authenticated clinic account
-  const resolvedRole: RoleType =
-    systemRole === 'patient'
-      ? 'patient'
-      : systemRole === 'admin'
-      ? 'admin'
-      : 'provider';
+  const resolvedRole: RoleType = (systemRole === 'lab_technician' ? 'nurse' : systemRole) as RoleType;
 
   const activeRole: RoleType = resolvedRole;
   const [patientPage, setPatientPage] = useState<PatientPage>('Triage');
@@ -140,14 +135,32 @@ export const AIAssistantHub: React.FC = () => {
 
   // Greetings based on language and role
   const getGreeting = (role: RoleType, pageName: string, lang: 'en' | 'fil') => {
-    if (role === 'patient' && pageName === 'Triage') {
-      if (lang === 'fil') {
-        return `Kumusta po! Ako ang inyong SmartClinic AI Triage Assistant.\n\nAno po ang inyong nararamdaman o mga sintomas ngayon? Maaari po ninyong ilarawan ang inyong karamdaman, at bibigyan namin kayo ng Smart Urgency Score, imumungkahing espesyalista, at ihahanda ang inyong appointment.\n\n⚠️ Paunawa: Ako ay isang AI Assistant. Para sa malubhang emerhensya, pumunta agad sa pinakamalapit na ospital o tumawag sa 911.`;
+    if (role === 'patient') {
+      if (pageName === 'Triage') {
+        return lang === 'fil'
+          ? `Kumusta po! Ako ang inyong SmartClinic AI Triage Assistant.\n\nAno po ang inyong nararamdaman o mga sintomas ngayon?`
+          : `Hello! I am your SmartClinic AI Clinical Triage Assistant.\n\nWhat symptoms or health concerns are you experiencing today?`;
       }
-      return `Hello! I am your SmartClinic AI Clinical Triage Assistant.\n\nWhat symptoms or health concerns are you experiencing today? Please describe your condition below, and I will calculate your Smart Urgency Score, suggest the right medical specialty, and prepare your appointment booking.\n\n⚠️ Reminder: I am an AI. For life-threatening emergencies, visit an emergency room immediately or call 911.`;
+      return `Welcome to your Patient Portal. How can I assist you with your health today?`;
     }
 
-    return `SmartClinic AI Engine initialized.\n\nRole: ${role}\nPage: ${pageName}\nTask: Active security isolation enabled.`;
+    if (role === 'doctor') {
+      return `SmartClinic Doctor AI Assistant active. I am ready to support your clinical review, patient history, and medication decision-support needs. How can I help with this patient?`;
+    }
+    if (role === 'nurse') {
+      return `SmartClinic Nurse AI Assistant active. Ready to assist with vital signs, patient check-in, and care reminders. What do you need help with?`;
+    }
+    if (role === 'receptionist') {
+      return `SmartClinic Receptionist AI Assistant active. Ready to help with scheduling, queue management, and patient registration. What's on the schedule?`;
+    }
+    if (role === 'pharmacist') {
+      return `SmartClinic Pharmacist AI Assistant active. Reviewing prescriptions and checking interactions. What medication can I help you dispense today?`;
+    }
+    if (role === 'admin') {
+      return `SmartClinic Admin Operations Assistant active. Monitoring system health and operational statistics. How can I assist with your reports today?`;
+    }
+
+    return `SmartClinic AI Engine initialized. Role: ${role}. Active security isolation enabled.`;
   };
 
   const [messages, setMessages] = useState<Message[]>([

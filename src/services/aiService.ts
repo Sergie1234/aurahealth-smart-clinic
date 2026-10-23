@@ -208,9 +208,12 @@ function generateLocalRulebookResponse(payload: {
 
   // Normalize role
   const rawRole = (payload.role || 'patient').toLowerCase();
-  let activeRole: 'patient' | 'provider' | 'admin' = 'patient';
-  if (['admin', 'receptionist', 'manager'].includes(rawRole)) activeRole = 'admin';
-  else if (['provider', 'doctor', 'nurse', 'physician'].includes(rawRole)) activeRole = 'provider';
+  let activeRole: 'patient' | 'doctor' | 'nurse' | 'receptionist' | 'pharmacist' | 'admin' = 'patient';
+  if (['admin'].includes(rawRole)) activeRole = 'admin';
+  else if (['doctor', 'physician'].includes(rawRole)) activeRole = 'doctor';
+  else if (['nurse'].includes(rawRole)) activeRole = 'nurse';
+  else if (['receptionist'].includes(rawRole)) activeRole = 'receptionist';
+  else if (['pharmacist'].includes(rawRole)) activeRole = 'pharmacist';
   else activeRole = 'patient';
 
   // Normalize page
@@ -339,57 +342,42 @@ function generateLocalRulebookResponse(payload: {
     }
   }
 
-  if (activeRole === 'provider') {
-    if (activePage === 'Dashboard') {
-      const load = payload.context?.dailyPatientLoad || 6;
-      const queue = payload.context?.waitingQueue || 2;
-      return {
-        reply: `Provider Briefing: Today's scheduled patient load is ${load} consultations, with ${queue} patients currently waiting in the active queue. There are 2 urgent messages and pending lab notifications flagged for review.`,
-        disclaimer: 'DECISION SUPPORT ONLY: This AI output is strictly for clinical reference.',
-        activeRole,
-        activePage,
-        persona: 'SmartClinic AI Engine',
-      };
-    }
-
-    if (activePage === 'Schedule') {
-      if (lowerText.includes('full medical history') || lowerText.includes('show entire ehr') || lowerText.includes('draft soap note')) {
-        return {
-          reply: boundaryRefusal,
-          disclaimer: 'Schedule view is restricted to calendar management and appointment blocks.',
-          activeRole,
-          activePage,
-          persona: 'SmartClinic AI Engine',
-        };
-      }
-      return {
-        reply: `Schedule Management: You have consultation blocks open across today's clinic hours. You may reserve procedure hours or block break intervals. Full patient health records are withheld in this view.`,
-        disclaimer: 'Schedule view only.',
-        activeRole,
-        activePage,
-        persona: 'SmartClinic AI Engine',
-      };
-    }
-
-    if (activePage === 'Patient Records') {
-      return {
-        reply: `Clinical Record Summary: Longitudinal record synthesis based strictly on documented EHR data. Laboratory and vital indicators are compiled under HIPAA compliance.`,
-        disclaimer: 'DECISION SUPPORT ONLY: Rely strictly on provided records.',
-        activeRole,
-        activePage,
-        persona: 'SmartClinic AI Engine',
-      };
-    }
-
-    if (activePage === 'Clinical Notes') {
-      return {
-        reply: `Structured SOAP Note Draft:\n\n• S (Subjective): Interval clinical symptoms documented during intake; context logged from triage report.\n• O (Objective): Documented vital signs and physiological markers within clinical parameters.\n• A (Assessment): Clinical impression formulated for review.\n• P (Plan): Diagnostic workup and therapeutic management outlined.\n\nReminder: The attending provider must manually review and sign this draft before saving.`,
-        disclaimer: 'Decision support only: Must manually review and sign before saving.',
-        activeRole,
-        activePage,
-        persona: 'SmartClinic AI Engine',
-      };
-    }
+  // Specialized Role Logic
+  if (activeRole === 'doctor') {
+    return {
+      reply: `Doctor AI Assistant active. I am ready to review patient triage summaries, history, or suggest diagnoses as decision support. How can I assist with this patient?`,
+      disclaimer: 'DECISION SUPPORT ONLY: This AI output is strictly for clinical reference and should not replace your final medical decision.',
+      activeRole,
+      activePage,
+      persona: 'SmartClinic Doctor AI Assistant',
+    };
+  }
+  if (activeRole === 'nurse') {
+    return {
+      reply: `Nurse AI Assistant active. Ready to help with patient check-in, vital signs recording, and care reminders. How can I assist with patient care today?`,
+      disclaimer: 'Nursing support assistant. Please verify all clinical entries.',
+      activeRole,
+      activePage,
+      persona: 'SmartClinic Nurse AI Assistant',
+    };
+  }
+  if (activeRole === 'receptionist') {
+    return {
+      reply: `Receptionist AI Assistant active. Ready to help with appointment scheduling, queue management, and patient registration. How can I assist today?`,
+      disclaimer: 'Receptionist assistant.',
+      activeRole,
+      activePage,
+      persona: 'SmartClinic Receptionist AI Assistant',
+    };
+  }
+  if (activeRole === 'pharmacist') {
+    return {
+      reply: `Pharmacist AI Assistant active. I can help review prescriptions, check for drug interactions, or assist with dispensing notes. What would you like to review?`,
+      disclaimer: 'Pharmacist decision support. Please double-check all alerts.',
+      activeRole,
+      activePage,
+      persona: 'SmartClinic Pharmacist AI Assistant',
+    };
   }
 
   // Admin
