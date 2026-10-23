@@ -94,6 +94,10 @@ const API_PREFIXES = [
   '/notifications',
   '/communication',
   '/audit',
+  '/audit-logs',
+  '/clinic',
+  '/users',
+  '/supabase',
   '/ai',
   '/health',
   '/status',
@@ -1555,6 +1559,16 @@ app.patch('/api/appointments/:id/status', (req: AuthenticatedRequest, res: Respo
   return res.json({ success: true, appointment: apt });
 });
 
+app.patch('/api/appointments/:id', (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  const aptIdx = memAppointments.findIndex((a) => a.id === id);
+  if (aptIdx === -1) return res.status(404).json({ error: 'Appointment not found' });
+  const updates = req.body || {};
+  memAppointments[aptIdx] = { ...memAppointments[aptIdx], ...updates };
+  flushClinicStateToDisk();
+  return res.json({ success: true, appointment: memAppointments[aptIdx] });
+});
+
 /* ==========================================================================
    CONSULTATIONS (SOAP, Diagnoses, Certs)
    ========================================================================== */
@@ -1577,6 +1591,15 @@ app.post('/api/consultations', (req: Request, res: Response) => {
   const newConsult = req.body;
   if (!newConsult.id) newConsult.id = `con-${Date.now()}`;
   memConsultations.unshift(newConsult);
+
+  // If consultation is linked to an appointment, mark appointment completed
+  if (newConsult.appointmentId) {
+    const apt = memAppointments.find((a) => a.id === newConsult.appointmentId);
+    if (apt) {
+      apt.status = 'Completed';
+    }
+  }
+
   flushClinicStateToDisk();
   return res.status(201).json(newConsult);
 });
@@ -1608,6 +1631,16 @@ app.post('/api/prescriptions', (req: Request, res: Response) => {
   return res.status(201).json(newRx);
 });
 
+app.patch('/api/prescriptions/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const rxIdx = memPrescriptions.findIndex((r) => r.id === id);
+  if (rxIdx === -1) return res.status(404).json({ error: 'Prescription not found' });
+  const updates = req.body || {};
+  memPrescriptions[rxIdx] = { ...memPrescriptions[rxIdx], ...updates };
+  flushClinicStateToDisk();
+  return res.json({ success: true, prescription: memPrescriptions[rxIdx] });
+});
+
 /* ==========================================================================
    DIAGNOSTIC PATHOLOGY & LABORATORY
    ========================================================================== */
@@ -1633,6 +1666,16 @@ app.post('/api/lab-orders', (req: Request, res: Response) => {
   memLabOrders.unshift(newOrder);
   flushClinicStateToDisk();
   return res.status(201).json(newOrder);
+});
+
+app.patch('/api/lab-orders/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const orderIdx = memLabOrders.findIndex((o) => o.id === id);
+  if (orderIdx === -1) return res.status(404).json({ error: 'Lab order not found' });
+  const updates = req.body || {};
+  memLabOrders[orderIdx] = { ...memLabOrders[orderIdx], ...updates };
+  flushClinicStateToDisk();
+  return res.json({ success: true, labOrder: memLabOrders[orderIdx] });
 });
 
 /* ==========================================================================
@@ -1701,6 +1744,16 @@ app.post('/api/invoices', (req: Request, res: Response) => {
   return res.status(201).json(newInv);
 });
 
+app.patch('/api/invoices/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const invIdx = memInvoices.findIndex((i) => i.id === id);
+  if (invIdx === -1) return res.status(404).json({ error: 'Invoice not found' });
+  const updates = req.body || {};
+  memInvoices[invIdx] = { ...memInvoices[invIdx], ...updates };
+  flushClinicStateToDisk();
+  return res.json({ success: true, invoice: memInvoices[invIdx] });
+});
+
 /* ==========================================================================
    AUDIT LOGS & COMPLIANCE (Protected: Staff / Admin only)
    ========================================================================== */
@@ -1712,6 +1765,77 @@ app.get('/api/audit-logs', (req: AuthenticatedRequest, res: Response) => {
     });
   }
   return res.json(memAuditLogs);
+});
+
+app.post('/api/audit-logs', (req: AuthenticatedRequest, res: Response) => {
+  const log = req.body;
+  if (!log || typeof log !== 'object') return res.status(400).json({ error: 'Invalid log payload' });
+  const newLog = {
+    ...log,
+    id: log.id || `aud-${Date.now()}`,
+    timestamp: log.timestamp || new Date().toISOString(),
+    ipAddress: log.ipAddress || req.ip || '127.0.0.1',
+  };
+  memAuditLogs.unshift(newLog);
+  if (memAuditLogs.length > 500) memAuditLogs.pop();
+  flushClinicStateToDisk();
+  return res.status(201).json(newLog);
+});
+
+/* ==========================================================================
+   FULL CLINIC STATE SYNCHRONIZATION (High-speed initial & continuous sync)
+   ========================================================================== */
+app.get('/api/clinic/sync', (req: AuthenticatedRequest, res: Response) => {
+  const isPatient = (req.userRole || req.user?.role) === 'patient';
+  const linkedId = req.linkedPatientId || req.user?.linkedPatientId;
+
+  let patientsData = memPatients;
+  let appointmentsData = memAppointments;
+  let consultationsData = memConsultations;
+  let prescriptionsData = memPrescriptions;
+  let labOrdersData = memLabOrders;
+  let invoicesData = memInvoices;
+  let auditLogsData = isPatient ? [] : memAuditLogs;
+
+  if (isPatient && linkedId) {
+    const patient = memPatients.find((p) => p.id === linkedId);
+    patientsData = memPatients.filter((p) => p.id === linkedId);
+    appointmentsData = memAppointments.filter(
+      (a) => a.patientId === linkedId || (patient && a.patientName === patient.fullName)
+    );
+    consultationsData = memConsultations.filter(
+      (c) => c.patientId === linkedId || (patient && c.patientName === patient.fullName)
+    );
+    prescriptionsData = memPrescriptions.filter(
+      (rx) => rx.patientId === linkedId || (patient && rx.patientName === patient.fullName)
+    );
+    labOrdersData = memLabOrders.filter(
+      (o) => o.patientId === linkedId || (patient && o.patientName === patient.fullName)
+    );
+    invoicesData = memInvoices.filter(
+      (i) => i.patientId === linkedId || (patient && i.patientName === patient.fullName)
+    );
+  }
+
+  const rawRole = (req.userRole || req.user?.role || 'patient').toLowerCase();
+  const roleScope = rawRole === 'patient' ? 'patient' : rawRole === 'admin' ? 'admin' : 'provider';
+  const notificationsData = memNotifications.filter((n) => n.targetRole === roleScope);
+
+  return res.json({
+    status: 'synced',
+    timestamp: new Date().toISOString(),
+    patients: patientsData,
+    appointments: appointmentsData,
+    consultations: consultationsData,
+    prescriptions: prescriptionsData,
+    labOrders: labOrdersData,
+    inventory: memInventory,
+    invoices: invoicesData,
+    auditLogs: auditLogsData,
+    notifications: notificationsData,
+    doctors: memUsers.filter((u) => u.role === 'doctor'),
+    users: isPatient ? [] : memUsers,
+  });
 });
 
 /* ==========================================================================

@@ -159,6 +159,7 @@ interface ClinicContextType {
   supabaseInfo: { isConfigured: boolean; url: string; domain: string; hasKey: boolean };
   syncAllToSupabase: () => Promise<{ success: boolean; syncedCounts: Record<string, number>; message: string }>;
   refreshSupabaseConfig: () => void;
+  syncClinicFromBackend: () => Promise<void>;
   language: AppLanguage;
   setLanguage: (lang: AppLanguage) => void;
   t: Translations;
@@ -464,6 +465,79 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => { localStorage.setItem('smart_clinic_notifications', JSON.stringify(notifications)); }, [notifications]);
   useEffect(() => { localStorage.setItem('smart_clinic_audit_logs', JSON.stringify(auditLogs)); }, [auditLogs]);
 
+  // High-speed bidirectional synchronization with backend API
+  const syncClinicFromBackend = useCallback(async () => {
+    try {
+      const token = authToken || localStorage.getItem('smart_clinic_token');
+      const headers: Record<string, string> = {
+        'x-user-role': activeRole,
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (linkedPatientId) headers['x-linked-patient-id'] = linkedPatientId;
+
+      const res = await fetch(`${API_BASE_URL}/api/clinic/sync`, { headers });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && data.status === 'synced') {
+        if (Array.isArray(data.patients) && data.patients.length > 0) {
+          setPatients((prev) => {
+            const map = new Map<string, Patient>();
+            data.patients.forEach((p: Patient) => map.set(p.id, p));
+            prev.forEach((p) => {
+              if (!map.has(p.id)) map.set(p.id, p);
+            });
+            return Array.from(map.values());
+          });
+        }
+        if (Array.isArray(data.appointments)) {
+          setAppointments(data.appointments);
+        }
+        if (Array.isArray(data.consultations)) {
+          setConsultations(data.consultations);
+        }
+        if (Array.isArray(data.prescriptions)) {
+          setPrescriptions(data.prescriptions);
+        }
+        if (Array.isArray(data.labOrders)) {
+          setLabOrders(data.labOrders);
+        }
+        if (Array.isArray(data.inventory) && data.inventory.length > 0) {
+          setInventory(data.inventory);
+        }
+        if (Array.isArray(data.invoices)) {
+          setInvoices(data.invoices);
+        }
+        if (Array.isArray(data.auditLogs) && activeRole !== 'patient') {
+          setAuditLogs(data.auditLogs);
+        }
+        if (Array.isArray(data.doctors) && data.doctors.length > 0) {
+          setUsers((prev) => {
+            const map = new Map<string, User>();
+            prev.forEach((u) => map.set(u.id, u));
+            data.doctors.forEach((d: User) => map.set(d.id, d));
+            return Array.from(map.values());
+          });
+        }
+      }
+    } catch {
+      // Offline fallback silent
+    }
+  }, [authToken, activeRole, linkedPatientId]);
+
+  // Trigger sync on boot, role switch, tab visibility, and periodic refresh
+  useEffect(() => {
+    syncClinicFromBackend();
+    const interval = setInterval(syncClinicFromBackend, 15000);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') syncClinicFromBackend();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [syncClinicFromBackend]);
+
   // Session recovery on app startup
   useEffect(() => {
     try {
@@ -535,6 +609,19 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
     setAuditLogs((prev) => [newLog, ...prev]);
     syncAuditLogToSupabase(newLog);
+
+    try {
+      const token = authToken || localStorage.getItem('smart_clinic_token');
+      fetch(`${API_BASE_URL}/api/audit-logs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': activeRole,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(newLog),
+      }).catch(() => {});
+    } catch {}
   };
 
   const switchRole = (role: UserRole) => {
@@ -948,7 +1035,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return { success: true };
       }
 
-      return { success: false, error: 'Authentication failed. Please check your credentials.' };
+      return { success: false, error: 'Server unavailable and credentials invalid for offline mode. Please ensure the backend is running.' };
     }
   };
 
@@ -968,9 +1055,29 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setActiveTab(redirectTab);
   };
 
-  // ==============================================================================
-  // STRICT TENANT/PATIENT DATA ISOLATION (Fix Data Leaks & Enforce RA 10173)
-  // ==============================================================================
+  const syncToBackend = async (url: string, options: RequestInit, contextDescription: string) => {
+    try {
+      const token = authToken || localStorage.getItem('smart_clinic_token');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'x-user-role': activeRole,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers as Record<string, string> || {}),
+      };
+      
+      const res = await fetch(`${API_BASE_URL}${url}`, {
+        ...options,
+        headers,
+      });
+      
+      if (!res.ok) {
+          console.error(`[Smart Clinic API] Error in ${contextDescription}: ${res.status} ${res.statusText}`);
+      }
+    } catch (err) {
+        console.error(`[Smart Clinic API] Network error in ${contextDescription}:`, err);
+    }
+  };
+
   const isPatientScope = primaryRole === 'patient' || activeRole === 'patient';
 
   // Identify current authenticated patient record
@@ -1061,6 +1168,12 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setSelectedPatientId(newPatient.id);
     logAction('PATIENT_CREATE', 'Patient', newPatient.id, `Registered patient: ${newPatient.fullName} (${mrn})`);
     syncPatientToSupabase(newPatient);
+
+    syncToBackend('/api/patients', {
+      method: 'POST',
+      body: JSON.stringify(newPatient),
+    }, 'Create patient');
+
     return newPatient;
   };
 
@@ -1094,20 +1207,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       syncPatientToSupabase(updatedPatientRecord);
     }
 
-    // Persist to server API
-    try {
-      const token = authToken || localStorage.getItem('smart_clinic_token');
-      fetch(`${API_BASE_URL}/api/patients/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-role': activeRole,
-          'x-linked-patient-id': id,
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(updates),
-      }).catch((err) => console.error('Patient API sync error:', err));
-    } catch {}
+    syncToBackend(`/api/patients/${id}`, {
+      method: 'PATCH',
+      headers: { 'x-linked-patient-id': id },
+      body: JSON.stringify(updates),
+    }, 'Update patient');
   };
 
   const addVitals = (patientId: string, vitalsData: Omit<Vitals, 'id' | 'recordedAt'>) => {
@@ -1202,6 +1306,12 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setAppointments((prev) => [newApt, ...prev]);
     logAction('APPOINTMENT_BOOKED', 'Appointment', newApt.id, `Booked appointment for ${newApt.patientName}`);
     syncAppointmentToSupabase(newApt);
+
+    syncToBackend('/api/appointments', {
+      method: 'POST',
+      body: JSON.stringify(newApt),
+    }, 'Create appointment');
+
     return newApt;
   };
 
@@ -1223,25 +1333,16 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
     }
 
-    // Sync status change with server
-    try {
-      const token = authToken || localStorage.getItem('smart_clinic_token');
-      fetch(`${API_BASE_URL}/api/appointments/${id}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-role': activeRole,
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ status }),
-      }).catch(() => {});
+    syncToBackend(`/api/appointments/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }, 'Update appointment status');
 
-      if (typeof window !== 'undefined' && window.BroadcastChannel) {
-        const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
-        channel.postMessage({ type: 'UPDATE_APPOINTMENT_STATUS', id, status });
-        channel.close();
-      }
-    } catch {}
+    if (typeof window !== 'undefined' && window.BroadcastChannel) {
+      const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
+      channel.postMessage({ type: 'UPDATE_APPOINTMENT_STATUS', id, status });
+      channel.close();
+    }
   };
 
   const rescheduleAppointment = (id: string, newDate: string, newTime: string) => {
@@ -1249,6 +1350,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       prev.map((a) => (a.id === id ? { ...a, date: newDate, time: newTime, status: 'Scheduled' } : a))
     );
     logAction('APPOINTMENT_RESCHEDULE', 'Appointment', id, `Rescheduled to ${newDate} ${newTime}`);
+
+    syncToBackend(`/api/appointments/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ date: newDate, time: newTime, status: 'Scheduled' }),
+    }, 'Reschedule appointment');
   };
 
   const addConsultation = (consData: Omit<Consultation, 'id'>) => {
@@ -1257,6 +1363,12 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (consData.appointmentId) updateAppointmentStatus(consData.appointmentId, 'Completed');
     logAction('CONSULTATION_SAVED', 'Consultation', newCons.id, `Clinical SOAP consultation recorded for ${newCons.patientName}`);
     syncConsultationToSupabase(newCons);
+
+    syncToBackend('/api/consultations', {
+      method: 'POST',
+      body: JSON.stringify(newCons),
+    }, 'Create consultation');
+
     return newCons;
   };
 
@@ -1269,6 +1381,12 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setPrescriptions((prev) => [newRx, ...prev]);
     logAction('PRESCRIPTION_CREATED', 'Prescription', newRx.id, `Created e-Prescription ${newRx.prescriptionNumber} for ${newRx.patientName}`);
     syncPrescriptionToSupabase(newRx);
+
+    syncToBackend('/api/prescriptions', {
+      method: 'POST',
+      body: JSON.stringify(newRx),
+    }, 'Create prescription');
+
     return newRx;
   };
 
@@ -1291,17 +1409,28 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       logAction('DISPENSE_MEDICATION', 'Prescription', rx?.id || prescriptionId, `Dispensed ${item.quantity} units of ${item.medicationName}`);
     }
 
+    let updatedItems: any[] = [];
+    let updatedStatus: Prescription['status'] = 'Active';
+
     setPrescriptions((prev) =>
       prev.map((r) => {
         if (r.id !== prescriptionId) return r;
         const items = r.items.map((it) => (it.id === itemId ? { ...it, dispensed: true } : it));
+        const status = items.every((it) => it.dispensed) ? 'Dispensed' : 'Partially Dispensed';
+        updatedItems = items;
+        updatedStatus = status;
         return {
           ...r,
           items,
-          status: items.every((it) => it.dispensed) ? 'Dispensed' : 'Partially Dispensed',
+          status,
         };
       })
     );
+
+    syncToBackend(`/api/prescriptions/${prescriptionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ items: updatedItems, status: updatedStatus }),
+    }, 'Dispense medication');
   };
 
   const addLabOrder = (orderData: Omit<LabTestOrder, 'id' | 'orderNumber' | 'requestedAt'>) => {
@@ -1314,38 +1443,68 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setLabOrders((prev) => [newOrder, ...prev]);
     logAction('LAB_ORDER_CREATED', 'Laboratory', newOrder.id, `Ordered ${newOrder.testName} for ${newOrder.patientName}`);
     syncLabOrderToSupabase(newOrder);
+
+    syncToBackend('/api/lab-orders', {
+      method: 'POST',
+      body: JSON.stringify(newOrder),
+    }, 'Create lab order');
+
     return newOrder;
   };
 
   const updateLabStatus = (orderId: string, status: LabTestOrder['status']) => {
+    const updates: Partial<LabTestOrder> = { status };
+    if (status === 'Sample Collected') updates.collectedAt = new Date().toISOString();
+    if (status === 'Completed' || status === 'Reviewed') updates.completedAt = new Date().toISOString();
+
     setLabOrders((prev) =>
       prev.map((o) => {
         if (o.id !== orderId) return o;
-        const updates: Partial<LabTestOrder> = { status };
-        if (status === 'Sample Collected') updates.collectedAt = new Date().toISOString();
-        if (status === 'Completed' || status === 'Reviewed') updates.completedAt = new Date().toISOString();
         return { ...o, ...updates };
       })
     );
     logAction('LAB_STATUS_UPDATE', 'Laboratory', orderId, `Status updated to: ${status}`);
+
+    try {
+      const token = authToken || localStorage.getItem('smart_clinic_token');
+      fetch(`${API_BASE_URL}/api/lab-orders/${orderId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': activeRole,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(updates),
+      }).catch(() => {});
+    } catch {}
   };
 
   const enterLabResults = (orderId: string, results: LabResultItem[], interpretation?: string, aiSummary?: string) => {
+    const updates = {
+      results,
+      interpretation,
+      aiSummary,
+      status: 'Completed' as const,
+      completedAt: new Date().toISOString(),
+    };
+
     setLabOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? {
-              ...o,
-              results,
-              interpretation,
-              aiSummary,
-              status: 'Completed',
-              completedAt: new Date().toISOString(),
-            }
-          : o
-      )
+      prev.map((o) => (o.id === orderId ? { ...o, ...updates } : o))
     );
     logAction('LAB_RESULTS_ENTERED', 'Laboratory', orderId, `Diagnostic results entered for order`);
+
+    try {
+      const token = authToken || localStorage.getItem('smart_clinic_token');
+      fetch(`${API_BASE_URL}/api/lab-orders/${orderId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': activeRole,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(updates),
+      }).catch(() => {});
+    } catch {}
   };
 
   // Audited stock adjustment
@@ -1357,6 +1516,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       )
     );
     logAction('STOCK_ADJUSTMENT', 'Inventory', itemId, `Audited stock adjustment: ${quantityChange > 0 ? '+' : ''}${quantityChange} on ${item?.name || 'Item'} (${reason})`);
+
+    syncToBackend('/api/inventory/adjust', {
+      method: 'POST',
+      body: JSON.stringify({ itemId, quantityChange, reason }),
+    }, 'Adjust stock');
   };
 
   const addInvoice = (invData: Omit<Invoice, 'id' | 'invoiceNumber'>) => {
@@ -1368,15 +1532,26 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setInvoices((prev) => [newInv, ...prev]);
     logAction('INVOICE_CREATED', 'Billing', newInv.id, `Generated invoice ${newInv.invoiceNumber} for ${newInv.patientName}`);
     syncInvoiceToSupabase(newInv);
+
+    syncToBackend('/api/invoices', {
+      method: 'POST',
+      body: JSON.stringify(newInv),
+    }, 'Create invoice');
+
     return newInv;
   };
 
   const payInvoice = (invoiceId: string, amount: number, method: Invoice['paymentMethod']) => {
+    let updatedPaidAmount = 0;
+    let isFullyPaid = false;
+
     setInvoices((prev) =>
       prev.map((inv) => {
         if (inv.id !== invoiceId) return inv;
         const newPaid = (inv.paidAmount || 0) + amount;
         const isPaid = newPaid >= inv.totalAmount;
+        updatedPaidAmount = newPaid;
+        isFullyPaid = isPaid;
         return {
           ...inv,
           paidAmount: newPaid,
@@ -1388,6 +1563,17 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       })
     );
     logAction('PAYMENT_RECORDED', 'Billing', invoiceId, `Payment of ₱${amount} recorded via ${method}`);
+
+    syncToBackend(`/api/invoices/${invoiceId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        paidAmount: updatedPaidAmount,
+        paymentMethod: method,
+        paymentDate: new Date().toISOString(),
+        paidAt: isFullyPaid ? new Date().toISOString() : undefined,
+        status: isFullyPaid ? 'Paid' : 'Partially Paid',
+      }),
+    }, 'Pay invoice');
   };
 
   // ==============================================================================
@@ -1775,6 +1961,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         supabaseInfo,
         syncAllToSupabase,
         refreshSupabaseConfig,
+        syncClinicFromBackend,
         language,
         setLanguage,
         t,

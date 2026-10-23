@@ -63,6 +63,30 @@ export interface PredictiveRiskResponse {
   recommendedSurveillanceSchedule: string;
 }
 
+function getAiAuthHeaders(customHeaders?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...customHeaders,
+  };
+  try {
+    const token = localStorage.getItem('smart_clinic_token');
+    if (token && !headers['Authorization']) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const session = localStorage.getItem('smart_clinic_auth_session');
+    if (session) {
+      const parsed = JSON.parse(session);
+      if (parsed.activeRole && !headers['x-user-role']) {
+        headers['x-user-role'] = parsed.activeRole;
+      }
+      if (parsed.linkedPatientId && !headers['x-linked-patient-id']) {
+        headers['x-linked-patient-id'] = parsed.linkedPatientId;
+      }
+    }
+  } catch {}
+  return headers;
+}
+
 export const aiService = {
   // 1. Generate Structured Clinical Consultation (SOAP)
   async generateClinicalNotes(payload: {
@@ -73,7 +97,7 @@ export const aiService = {
   }): Promise<{ data: SOAPResponse; disclaimer: string }> {
     const res = await fetch('/api/ai/clinical-notes', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAiAuthHeaders(),
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error('Failed to generate clinical notes');
@@ -89,7 +113,7 @@ export const aiService = {
   }): Promise<{ data: PatientSummaryResponse; disclaimer: string }> {
     const res = await fetch('/api/ai/patient-summary', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAiAuthHeaders(),
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error('Failed to generate patient summary');
@@ -105,7 +129,7 @@ export const aiService = {
   }): Promise<{ data: LabInterpretationResponse; disclaimer: string }> {
     const res = await fetch('/api/ai/lab-interpretation', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAiAuthHeaders(),
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error('Failed to interpret lab results');
@@ -121,7 +145,7 @@ export const aiService = {
   }): Promise<{ data: MedicationSafetyResponse; disclaimer: string }> {
     const res = await fetch('/api/ai/medication-safety', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAiAuthHeaders(),
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error('Failed to run medication safety check');
@@ -146,10 +170,11 @@ export const aiService = {
     activePage?: string;
     activeRole?: string;
   }> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const extraHeaders: Record<string, string> = {};
     if (payload.token) {
-      headers['Authorization'] = `Bearer ${payload.token}`;
+      extraHeaders['Authorization'] = `Bearer ${payload.token}`;
     }
+    const headers = getAiAuthHeaders(extraHeaders);
 
     try {
       const controller = new AbortController();
@@ -185,7 +210,7 @@ export const aiService = {
   }): Promise<{ data: PredictiveRiskResponse; disclaimer: string }> {
     const res = await fetch('/api/ai/predictive-risk', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAiAuthHeaders(),
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error('Failed to generate predictive risk assessment');
