@@ -59,130 +59,171 @@ html:not(.dark) select option {
 }
 
 /* ==========================================================================
-   High-Fidelity Document Printing (Prescription, Receipt & Lab Report)
-   Ensures printed documents match the active light or dark mode theme
-   and completely isolates the printable document from the rest of the application.
+   GLOBAL REAL-TIME DOCUMENT PRINTING SYSTEM
+   Guarantees that when printing, ONLY the pure medical stationery inside
+   #smartclinic-print-root renders, completely hiding all on-screen modals,
+   headers, sidebars, buttons, toolbars, and background controls.
    ========================================================================== */
-@media print {
-  @page {
-    size: auto;
-    margin: 8mm 12mm;
-  }
-
-  /* Reset body and background */
-  html, body {
-    margin: 0 !important;
-    padding: 0 !important;
-    background: transparent !important;
-    width: 100% !important;
-    min-height: 100% !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  /* Completely suppress all background app content when printing modal document */
-  body.printing-active > #root,
-  body.printing-active > *:not(.print-modal-overlay),
-  body:has(.print-modal-overlay) > #root {
+@media screen {
+  #smartclinic-print-root {
     display: none !important;
     visibility: hidden !important;
   }
+}
 
-  /* Suppress all interactive UI chrome, headers, navigation, and toasts */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm;
+  }
+
+  /* Reset html & body */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 100% !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-scheme: light !important;
+    overflow: visible !important;
+  }
+
+  /* HIDE EVERYTHING ON SCREEN EXCEPT THE DEDICATED PRINT ROOT */
+  #root,
+  .print-modal-overlay,
+  .no-print,
+  .print-hidden,
+  .modal-screen-container,
+  .modal-screen-backdrop,
+  [data-print-hide="true"],
+  .modal-header-chrome,
+  .modal-footer-chrome,
+  .global-system-controls,
+  #smartclinic-notifications,
+  .toast-viewport,
+  button,
   header,
   aside,
   nav,
   main,
-  button,
-  .no-print,
-  #smartclinic-notifications,
-  .toast-viewport,
+  footer,
+  [role="dialog"],
   [role="status"],
   [role="alert"] {
     display: none !important;
     visibility: hidden !important;
-  }
-
-  /* Break the modal overlay container out of fixed viewport constraints */
-  .print-modal-overlay {
-    position: static !important;
-    inset: auto !important;
-    background: transparent !important;
-    backdrop-filter: none !important;
-    padding: 0 !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    width: 0 !important;
+    max-width: 0 !important;
     margin: 0 !important;
-    overflow: visible !important;
-    display: block !important;
-    width: 100% !important;
-    height: auto !important;
-    min-height: auto !important;
-    z-index: auto !important;
-  }
-
-  .print-modal-container {
-    position: static !important;
-    max-width: 100% !important;
-    max-height: none !important;
-    width: 100% !important;
+    padding: 0 !important;
     border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    overflow: visible !important;
-    display: block !important;
-    background: transparent !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
   }
 
-  /* Document content print area */
-  .print-area {
-    position: static !important;
+  /* DISPLAY ONLY THE DEDICATED CLINICAL PRINT DOCUMENT */
+  #smartclinic-print-root {
     display: block !important;
+    visibility: visible !important;
+    position: static !important;
     width: 100% !important;
     max-width: 100% !important;
-    min-height: auto !important;
-    padding: 4mm 6mm !important;
+    min-width: 100% !important;
     margin: 0 !important;
-    overflow: visible !important;
-    box-shadow: none !important;
-    border: none !important;
-    border-radius: 0 !important;
-    page-break-inside: avoid;
-    break-inside: avoid;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  /* Force exact background colors and text contrast for all children */
-  .print-area * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  /* Dark mode print formatting */
-  html.dark,
-  html.dark body {
-    background-color: #0b1120 !important;
-    color: #f1f5f9 !important;
-  }
-
-  html.dark .print-area {
-    background-color: #0b1120 !important;
-    color: #f1f5f9 !important;
-    color-scheme: dark !important;
-  }
-
-  /* Light mode print formatting */
-  html:not(.dark),
-  html:not(.dark) body {
+    padding: 0 !important;
     background-color: #ffffff !important;
-    color: #0f172a !important;
-  }
-
-  html:not(.dark) .print-area {
-    background-color: #ffffff !important;
+    background: #ffffff !important;
     color: #0f172a !important;
     color-scheme: light !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+
+  #smartclinic-print-root,
+  #smartclinic-print-root * {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  .force-light,
+  .force-light * {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  #smartclinic-print-root *:not(.no-print) {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Force clean white paper styling across all subcontainers in the print root */
+  #smartclinic-print-root .bg-slate-900,
+  #smartclinic-print-root .dark\:bg-slate-900,
+  #smartclinic-print-root .bg-slate-950,
+  #smartclinic-print-root .dark\:bg-slate-950,
+  #smartclinic-print-root .bg-slate-900\/60,
+  #smartclinic-print-root .dark\:bg-slate-900\/60 {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  #smartclinic-print-root .text-white,
+  #smartclinic-print-root .dark\:text-white,
+  #smartclinic-print-root .text-slate-100,
+  #smartclinic-print-root .dark\:text-slate-100,
+  #smartclinic-print-root .text-slate-200,
+  #smartclinic-print-root .dark\:text-slate-200 {
+    color: #0f172a !important;
+  }
+
+  #smartclinic-print-root .text-slate-400,
+  #smartclinic-print-root .dark\:text-slate-400,
+  #smartclinic-print-root .text-slate-500,
+  #smartclinic-print-root .dark\:text-slate-500 {
+    color: #475569 !important;
+  }
+
+  #smartclinic-print-root .bg-slate-800,
+  #smartclinic-print-root .dark\:bg-slate-800,
+  #smartclinic-print-root .bg-slate-800\/60,
+  #smartclinic-print-root .dark\:bg-slate-800\/60,
+  #smartclinic-print-root .bg-slate-800\/40,
+  #smartclinic-print-root .dark\:bg-slate-800\/40,
+  #smartclinic-print-root .bg-slate-50,
+  #smartclinic-print-root .dark\:bg-slate-800 {
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+  }
+
+  #smartclinic-print-root .border-slate-800,
+  #smartclinic-print-root .dark\:border-slate-800,
+  #smartclinic-print-root .border-slate-700,
+  #smartclinic-print-root .dark\:border-slate-700,
+  #smartclinic-print-root .border-slate-700\/80,
+  #smartclinic-print-root .dark\:border-slate-700\/80,
+  #smartclinic-print-root .border-slate-700\/60,
+  #smartclinic-print-root .dark\:border-slate-700\/60 {
+    border-color: #e2e8f0 !important;
+  }
+
+  #smartclinic-print-root .divide-slate-800 > :not([hidden]) ~ :not([hidden]),
+  #smartclinic-print-root .dark\:divide-slate-800 > :not([hidden]) ~ :not([hidden]) {
+    border-color: #e2e8f0 !important;
   }
 }
 

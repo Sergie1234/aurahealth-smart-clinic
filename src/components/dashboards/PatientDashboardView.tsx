@@ -62,15 +62,17 @@ export const PatientDashboardView: React.FC<Props> = ({
   const handlePrintPrescription = (rx: Prescription) => {
     if (onOpenPrescription) {
       onOpenPrescription(rx);
+    } else {
+      setViewingRx(rx);
     }
-    setViewingRx(rx);
   };
 
   const handlePrintLabReport = (lab: LabTestOrder) => {
     if (onOpenLabReport) {
       onOpenLabReport(lab);
+    } else {
+      setViewingLab(lab);
     }
-    setViewingLab(lab);
   };
 
   // Active patient (logged-in portal patient)

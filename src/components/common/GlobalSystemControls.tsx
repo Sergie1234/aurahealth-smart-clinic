@@ -12,7 +12,10 @@ export const GlobalSystemControls: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-5 left-5 z-[80] flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full px-3.5 py-2 shadow-2xl text-xs font-bold text-slate-800 dark:text-slate-100 transition">
+    <div
+      data-print-hide="true"
+      className="fixed bottom-5 left-5 z-[80] flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full px-3.5 py-2 shadow-2xl text-xs font-bold text-slate-800 dark:text-slate-100 transition no-print print:hidden !print:hidden global-system-controls"
+    >
       {/* Theme Toggle Button */}
       <button
         type="button"

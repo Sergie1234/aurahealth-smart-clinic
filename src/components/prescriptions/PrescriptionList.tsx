@@ -106,7 +106,7 @@ export const PrescriptionList: React.FC<Props> = ({
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             {isPatient
-              ? 'Specific Task: View and download your doctor-issued electronic prescriptions with digital signature verification.'
+              ? 'Specific Task: View and print your doctor-issued electronic prescriptions with digital signature verification.'
               : 'Specific Task: Computerized Physician Order Entry (CPOE), drug-allergy safety audits, and pharmacist dispensing.'}
           </p>
         </div>

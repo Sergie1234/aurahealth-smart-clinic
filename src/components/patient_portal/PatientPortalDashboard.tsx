@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { AIDisclaimerBanner } from '../common/AIDisclaimerBanner';
 import { formatPeso } from '../../utils/currency';
+import { Invoice } from '../../types/clinic';
+import { ReceiptPrintModal } from '../billing/ReceiptPrintModal';
 
 interface Props {
   onOpenBookAppointment: () => void;
@@ -32,6 +34,7 @@ export const PatientPortalDashboard: React.FC<Props> = ({
 }) => {
   const { patients, appointments, prescriptions, labOrders, invoices, setActiveTab, linkedPatientId, currentUser, t, language } = useClinic();
   const isFil = language === 'fil';
+  const [viewingReceipt, setViewingReceipt] = useState<Invoice | null>(null);
 
   // Active logged-in patient or fallback
   const patient =
@@ -214,21 +217,32 @@ export const PatientPortalDashboard: React.FC<Props> = ({
               <p className="text-slate-400 italic py-3">{t.common.noData}</p>
             ) : (
               myInvoices.map((inv) => (
-                <div key={inv.id} className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                  <div>
+                <div key={inv.id} className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 flex justify-between items-center gap-3">
+                  <div className="min-w-0 flex-1">
                     <span className="font-bold text-slate-900 dark:text-slate-100 block font-mono">{inv.invoiceNumber}</span>
                     <p className="text-[10px] text-slate-500 mt-0.5">Date: {inv.date}</p>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">{inv.items.map((i) => i.description).join(', ')}</p>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 truncate">{inv.items.map((i) => i.description).join(', ')}</p>
                   </div>
-                  <div className="text-right">
-                    <span className="font-bold text-slate-900 dark:text-slate-100 text-sm block">{formatPeso(inv.totalAmount)}</span>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        inv.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                      }`}
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <div className="text-right">
+                      <span className="font-bold text-slate-900 dark:text-slate-100 text-sm block">{formatPeso(inv.totalAmount)}</span>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          inv.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {inv.status}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setViewingReceipt(inv)}
+                      className="px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-teal-400 rounded-lg text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 font-semibold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                      title={isFil ? 'I-print ang Resibo' : 'Print Receipt'}
+                      type="button"
                     >
-                      {inv.status}
-                    </span>
+                      <Printer className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                      <span>{isFil ? 'I-print' : 'Print'}</span>
+                    </button>
                   </div>
                 </div>
               ))
@@ -236,6 +250,13 @@ export const PatientPortalDashboard: React.FC<Props> = ({
           </div>
         </div>
       </div>
+
+      {viewingReceipt && (
+        <ReceiptPrintModal
+          invoice={viewingReceipt}
+          onClose={() => setViewingReceipt(null)}
+        />
+      )}
     </div>
   );
 };

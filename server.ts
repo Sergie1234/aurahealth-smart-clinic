@@ -25,7 +25,7 @@ const PORT = Number(process.env.PORT) || 3000;
 async function startServer() {
   const distPath = path.resolve(__dirname, 'dist');
   const hasDist = fs.existsSync(distPath);
-  const isProd = process.env.NODE_ENV === 'production' || hasDist;
+  const isProd = process.env.NODE_ENV === 'production';
 
   if (!isProd) {
     const { createServer: createViteServer } = await import('vite');

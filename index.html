@@ -22,6 +22,106 @@
         }
       });
     </script>
+    <style id="smartclinic-print-engine">
+      @media screen {
+        #smartclinic-print-root {
+          display: none !important;
+          visibility: hidden !important;
+        }
+      }
+
+      @media print {
+        @page {
+          size: A4 portrait;
+          margin: 10mm 12mm;
+        }
+
+        html, body {
+          background-color: #ffffff !important;
+          background: #ffffff !important;
+          color: #0f172a !important;
+          width: 100% !important;
+          min-width: 100% !important;
+          max-width: 100% !important;
+          height: auto !important;
+          min-height: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          overflow: visible !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-scheme: light !important;
+        }
+
+        /* Suppress everything on the screen except the dedicated clinical print root */
+        #root,
+        .no-print,
+        .global-system-controls,
+        .modal-screen-container,
+        .modal-screen-backdrop,
+        [data-print-hide="true"],
+        header,
+        aside,
+        nav,
+        main,
+        footer,
+        button,
+        [role="dialog"],
+        [role="status"],
+        [role="alert"],
+        .toast-viewport {
+          display: none !important;
+          visibility: hidden !important;
+          position: static !important;
+          height: 0 !important;
+          max-height: 0 !important;
+          width: 0 !important;
+          max-width: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: none !important;
+          overflow: hidden !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+        }
+
+        /* Display exclusively the pure clinical document stationery spanning full printable width */
+        #smartclinic-print-root {
+          display: block !important;
+          visibility: visible !important;
+          position: static !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+          background-color: #ffffff !important;
+          color: #0f172a !important;
+          box-shadow: none !important;
+          border: none !important;
+          border-radius: 0 !important;
+          overflow: visible !important;
+        }
+
+        #smartclinic-print-root * {
+          visibility: visible !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+      }
+
+      /* Active JavaScript print trigger class support */
+      html.is-printing-document #root,
+      html.is-printing-document .modal-screen-container,
+      html.is-printing-document .global-system-controls {
+        display: none !important;
+      }
+      html.is-printing-document #smartclinic-print-root {
+        display: block !important;
+        visibility: visible !important;
+      }
+    </style>
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased selection:bg-teal-500 selection:text-white">
     <div id="root"></div>

@@ -213,7 +213,7 @@ export const INITIAL_NOTIFICATIONS: Notification[] = [
     targetRole: 'patient',
     title: 'Lab Result Ready',
     message: 'Your Comprehensive Metabolic Panel and HbA1c results are now available for review.',
-    content: 'Dr. Maria Cristina Reyes has reviewed and certified your Comprehensive Metabolic Panel (CMP) and HbA1c laboratory report. Your results show optimal glycaemic stabilization. You may review the full breakdown or download your official digital pathology report from the Diagnostic Lab section.',
+    content: 'Dr. Maria Cristina Reyes has reviewed and certified your Comprehensive Metabolic Panel (CMP) and HbA1c laboratory report. Your results show optimal glycaemic stabilization. You may review the full breakdown or print your official digital pathology report from the Diagnostic Lab section.',
     category: 'lab',
     priority: 'normal',
     read: false,
