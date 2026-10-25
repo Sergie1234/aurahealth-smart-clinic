@@ -58,15 +58,13 @@ export function registerUserCredentials(email: string, rawPassword: string, role
 function initializeDefaultCredentials() {
   const defaults: [string, string, string][] = [
     ['smartclinicrealacc@gmail.com', 'SmartClinic@Admin2026', 'admin'],
-    ['sgt.spartan19@gmail.com', 'SmartClinic@Admin2026', 'admin'],
-    ['admin@smartclinic.ph', 'SmartClinic@Admin2026', 'admin'],
-    ['elena.vargas@example.com', 'patient123', 'patient'],
-    ['carlos.delacruz@example.com', 'password123', 'patient'],
+    ['elena.vargas@smartclinic.ph', 'patient123', 'patient'],
     ['maria.reyes@smartclinic.ph', 'doctor123', 'doctor'],
+    ['juan.santos@smartclinic.ph', 'doctor123', 'doctor'],
     ['ana.villanueva@smartclinic.ph', 'nurse123', 'staff'],
-    ['pharmacy@smartclinic.ph', 'pharm123', 'staff'],
-    ['reception@smartclinic.ph', 'reception123', 'staff'],
-    ['lab@smartclinic.ph', 'lab123', 'staff'],
+    ['claire.mendoza@smartclinic.ph', 'reception123', 'staff'],
+    ['julian.delacruz@smartclinic.ph', 'pharm123', 'staff'],
+    ['amina.bautista@smartclinic.ph', 'lab123', 'staff'],
   ];
 
   for (const [em, pw, ro] of defaults) {

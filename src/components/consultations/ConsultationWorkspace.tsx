@@ -70,6 +70,12 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
     initialPatientId || patients[0]?.id || ''
   );
 
+  React.useEffect(() => {
+    if (initialPatientId && initialPatientId !== selectedPatId) {
+      setSelectedPatId(initialPatientId);
+    }
+  }, [initialPatientId]);
+
   const patient = patients.find((p) => p.id === selectedPatId) || patients[0];
 
   // Consultation SOAP States
@@ -102,6 +108,21 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
   const [spo2, setSpo2] = useState('98');
   const [weight, setWeight] = useState(String(patient?.vitalsHistory[0]?.weight || 72));
   const [height, setHeight] = useState(String(patient?.vitalsHistory[0]?.height || 165));
+
+  // Reset vitals when selected patient changes
+  React.useEffect(() => {
+    if (patient?.vitalsHistory?.[0]) {
+      const v = patient.vitalsHistory[0];
+      if (v.bloodPressureSystolic) setBpSys(String(v.bloodPressureSystolic));
+      if (v.bloodPressureDiastolic) setBpDia(String(v.bloodPressureDiastolic));
+      if (v.heartRate) setHr(String(v.heartRate));
+      if (v.respiratoryRate) setRr(String(v.respiratoryRate));
+      if (v.temperature) setTemp(String(v.temperature));
+      if (v.oxygenSaturation) setSpo2(String(v.oxygenSaturation));
+      if (v.weight) setWeight(String(v.weight));
+      if (v.height) setHeight(String(v.height));
+    }
+  }, [patient?.id]);
 
   // Prescriptions created in this consult
   const [prescriptionsToAdd, setPrescriptionsToAdd] = useState<PrescriptionItem[]>([
@@ -272,7 +293,7 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
         doctorName: currentUser.name,
         doctorSpecialty: currentUser.specialty || 'General Medicine',
         doctorLicense: currentUser.licenseNumber || 'MD-88190',
-        date: '2026-10-06',
+        date: new Date().toISOString().split('T')[0],
         items: prescriptionsToAdd,
         status: 'Active',
       });
@@ -302,7 +323,7 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
       patientName: patient.fullName,
       doctorId: currentUser.id,
       doctorName: currentUser.name,
-      date: '2026-10-06',
+      date: new Date().toISOString().split('T')[0],
       chiefComplaint,
       historyOfPresentIllness: hpi || doctorRawNotes,
       reviewOfSystems: ros,

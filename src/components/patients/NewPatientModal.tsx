@@ -13,7 +13,7 @@ export const NewPatientModal: React.FC<Props> = ({ onClose }) => {
   const [dob, setDob] = useState('1990-01-01');
   const [gender, setGender] = useState<'Male' | 'Female' | 'Other'>('Female');
   const [bloodType, setBloodType] = useState<'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-'>('O+');
-  const [phone, setPhone] = useState('+1 (555) ');
+  const [phone, setPhone] = useState('+63 9');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [emergencyName, setEmergencyName] = useState('');
@@ -22,12 +22,12 @@ export const NewPatientModal: React.FC<Props> = ({ onClose }) => {
   const [allergiesText, setAllergiesText] = useState(''); // e.g. "Penicillin (severe), Latex (mild)"
   const [conditionsText, setConditionsText] = useState(''); // e.g. "Hypertension, Asthma"
   const [medsText, setMedsText] = useState('');
-  const [insurance, setInsurance] = useState('BlueCross Care');
+  const [insurance, setInsurance] = useState('PhilHealth / HMO Care');
   const [insuranceNum, setInsuranceNum] = useState('');
 
   const calculateAge = (dobString: string) => {
     const birthday = new Date(dobString);
-    const today = new Date('2026-10-06');
+    const today = new Date();
     let age = today.getFullYear() - birthday.getFullYear();
     const m = today.getMonth() - birthday.getMonth();
     if (m < 0 || (m === 0 && today.getDate() < birthday.getDate())) {
@@ -72,20 +72,20 @@ export const NewPatientModal: React.FC<Props> = ({ onClose }) => {
       age: calculateAge(dob),
       gender,
       bloodType,
-      phone,
-      email: email || `${fullName.toLowerCase().replace(/\s+/g, '.')}@example.com`,
-      address: address || '123 Medical Center Ave, Eugene, OR',
+      phone: phone || '+63 917 000 0000',
+      email: email || `${fullName.toLowerCase().replace(/\s+/g, '.')}@smartclinic.ph`,
+      address: address || 'Metro Manila, Philippines',
       emergencyContact: {
         name: emergencyName || 'Family Member',
         relationship: emergencyRel,
-        phone: emergencyPhone || phone,
+        phone: emergencyPhone || phone || '+63 917 000 0000',
       },
       allergies: parsedAllergies,
       chronicConditions: parsedConditions,
       currentMedications: parsedMeds,
       primaryDoctorId: 'usr-1',
       insuranceProvider: insurance,
-      insurancePolicyNumber: insuranceNum || `POL-${Math.floor(100000 + Math.random() * 900000)}`,
+      insurancePolicyNumber: insuranceNum || `PHIL-${Math.floor(100000 + Math.random() * 900000)}`,
       vitalsHistory: [],
     });
 
@@ -94,18 +94,18 @@ export const NewPatientModal: React.FC<Props> = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-auto animate-in fade-in duration-150">
-        <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+      <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden my-auto animate-in fade-in duration-150">
+        <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-lg bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 flex items-center justify-center font-bold">
               <UserPlus className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">Register New Patient</h2>
-              <p className="text-xs text-slate-500">Create electronic medical record profile</p>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">Register New Patient</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Create electronic medical record profile</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>

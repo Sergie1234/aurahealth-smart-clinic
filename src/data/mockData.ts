@@ -18,17 +18,17 @@ export const INITIAL_USERS: User[] = [
   { id: 'usr-10', name: 'Dr. Anthony Lee, MD', email: 'anthony.lee@smartclinic.ph', role: 'doctor', avatar: '', department: 'Dermatology', specialty: 'Clinical & Cosmetic Dermatology', licenseNumber: 'MD-519283' },
   { id: 'usr-11', name: 'Dr. Roberto Tan, MD', email: 'roberto.tan@smartclinic.ph', role: 'doctor', avatar: '', department: 'Pulmonology', specialty: 'Pulmonology & Respiratory Care', licenseNumber: 'MD-481029' },
   { id: 'usr-3', name: 'Nurse Ana Patricia Villanueva, RN', email: 'ana.villanueva@smartclinic.ph', role: 'nurse', avatar: '', department: 'Outpatient Triage', licenseNumber: 'RN-382914' },
-  { id: 'usr-4', name: 'Claire Mendoza', email: 'reception@smartclinic.ph', role: 'receptionist', avatar: '', department: 'Front Desk & Patient Access' },
-  { id: 'usr-5', name: 'Julian Dela Cruz, RPh', email: 'pharmacy@smartclinic.ph', role: 'pharmacist', avatar: '', department: 'Clinic Pharmacy & Dispensary', licenseNumber: 'RPh-102948' },
-  { id: 'usr-6', name: 'Amina Bautista, RMT', email: 'lab@smartclinic.ph', role: 'lab_technician', avatar: '', department: 'Diagnostic Pathology & Laboratory', licenseNumber: 'RMT-559102' },
-  { id: 'usr-7', name: 'Admin Smart Clinic', email: 'smartclinicrealacc@gmail.com', role: 'admin', avatar: '', department: 'Clinical Operations Administration' },
-  { id: 'usr-8', name: 'Elena Vargas (Patient)', email: 'elena.vargas@example.com', role: 'patient', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80', department: 'Patient Portal' }
+  { id: 'usr-4', name: 'Claire Mendoza', email: 'claire.mendoza@smartclinic.ph', role: 'receptionist', avatar: '', department: 'Front Desk & Patient Access' },
+  { id: 'usr-5', name: 'Julian Dela Cruz, RPh', email: 'julian.delacruz@smartclinic.ph', role: 'pharmacist', avatar: '', department: 'Clinic Pharmacy & Dispensary', licenseNumber: 'RPh-102948' },
+  { id: 'usr-6', name: 'Amina Bautista, RMT', email: 'amina.bautista@smartclinic.ph', role: 'lab_technician', avatar: '', department: 'Diagnostic Pathology & Laboratory', licenseNumber: 'RMT-559102' },
+  { id: 'usr-admin', name: 'Admin Smart Clinic', email: 'smartclinicrealacc@gmail.com', role: 'admin', avatar: '', department: 'Clinical Operations Administration' },
+  { id: 'usr-8', name: 'Elena Vargas', email: 'elena.vargas@smartclinic.ph', role: 'patient', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80', department: 'Patient Portal' }
 ];
 
 export const INITIAL_PATIENTS: Patient[] = [
   {
     id: 'pat-1', mrn: 'MRN-2026-081', fullName: 'Elena Vargas', dob: '1978-04-12', age: 48, gender: 'Female', bloodType: 'A+',
-    phone: '+63 917 234 5678', email: 'elena.vargas@example.com',
+    phone: '+63 917 234 5678', email: 'elena.vargas@smartclinic.ph',
     address: '742 Mabini Street, Barangay San Antonio, Quezon City, Metro Manila',
     emergencyContact: { name: 'Roberto Vargas', relationship: 'Spouse', phone: '+63 917 234 9988' },
     allergies: [{ allergen: 'Penicillin', severity: 'severe', reaction: 'Anaphylaxis, hives' }, { allergen: 'Sulfa Drugs', severity: 'moderate', reaction: 'Skin rash, pruritus' }],

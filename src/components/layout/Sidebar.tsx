@@ -50,25 +50,42 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
 
   // Exact navigation item registry with strict role-based access control (RBAC)
   const navItems: NavItem[] = [
-    // 1. PATIENT MODULES (Strictly for Patient role)
     {
       id: 'dashboard',
-      label: t.nav.patientPortal,
+      label: isPatient ? t.nav.patientPortal : isAdmin ? t.admin.dashboardTitle : t.nav.dashboard,
       icon: LayoutDashboard,
-      roles: ['patient'],
+      roles: ['patient', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician', 'admin'],
+    },
+    {
+      id: 'patients',
+      label: isAdmin ? t.admin.totalPatients : t.nav.patients,
+      icon: Users,
+      roles: ['doctor', 'nurse', 'receptionist', 'admin'],
+    },
+    {
+      id: 'scan-qr',
+      label: t.nav.scanHealthId,
+      icon: QrCode,
+      roles: ['nurse', 'receptionist'],
     },
     {
       id: 'appointments',
       label: t.nav.appointments,
       icon: Calendar,
-      roles: ['patient'],
+      roles: ['patient', 'doctor', 'nurse', 'receptionist'],
     },
     {
       id: 'queue',
       label: t.nav.queue,
       icon: Layers,
       badge: waitingCount > 0 ? waitingCount : undefined,
-      roles: ['patient'],
+      roles: ['patient', 'doctor', 'nurse', 'receptionist'],
+    },
+    {
+      id: 'consultations',
+      label: t.nav.consultations,
+      icon: Stethoscope,
+      roles: ['doctor', 'nurse'],
     },
     {
       id: 'emr',
@@ -80,110 +97,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
       id: 'prescriptions',
       label: t.nav.prescriptions,
       icon: Pill,
-      roles: ['patient'],
-    },
-    {
-      id: 'laboratory',
-      label: t.nav.laboratory,
-      icon: FlaskConical,
-      roles: ['patient'],
-    },
-    {
-      id: 'billing',
-      label: t.nav.billing,
-      icon: Receipt,
-      roles: ['patient'],
-    },
-    {
-      id: 'ai-assistant',
-      label: t.nav.aiAssistant,
-      icon: Sparkles,
-      roles: ['patient'],
-    },
-
-    // 2. PROVIDER MODULES (Doctor, Nurse, Staff)
-    {
-      id: 'dashboard',
-      label: t.nav.dashboard,
-      icon: LayoutDashboard,
-      roles: ['doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician'],
-    },
-    {
-      id: 'patients',
-      label: t.nav.patients,
-      icon: Users,
-      roles: ['doctor', 'nurse', 'receptionist'],
-    },
-    {
-      id: 'appointments',
-      label: t.nav.appointments,
-      icon: Calendar,
-      roles: ['doctor', 'nurse', 'receptionist'],
-    },
-    {
-      id: 'queue',
-      label: t.nav.queue,
-      icon: Layers,
-      badge: waitingCount > 0 ? waitingCount : undefined,
-      roles: ['doctor', 'nurse', 'receptionist'],
-    },
-    {
-      id: 'scan-qr',
-      label: t.nav.scanHealthId,
-      icon: QrCode,
-      roles: ['nurse', 'receptionist'],
-    },
-    {
-      id: 'consultations',
-      label: t.nav.consultations,
-      icon: Stethoscope,
-      roles: ['doctor', 'nurse'],
-    },
-    {
-      id: 'prescriptions',
-      label: t.nav.prescriptions,
-      icon: Pill,
-      roles: ['doctor', 'pharmacist'],
+      roles: ['patient', 'doctor', 'pharmacist'],
     },
     {
       id: 'laboratory',
       label: t.nav.laboratory,
       icon: FlaskConical,
       badge: pendingLabs > 0 ? pendingLabs : undefined,
-      roles: ['doctor', 'lab_technician', 'nurse'],
+      roles: ['patient', 'doctor', 'lab_technician', 'nurse'],
     },
     {
       id: 'inventory',
       label: t.nav.inventory,
       icon: PackageCheck,
       badge: lowStockCount > 0 ? lowStockCount : undefined,
-      roles: ['pharmacist', 'doctor'],
+      roles: ['pharmacist', 'doctor', 'admin'],
     },
     {
-      id: 'ai-assistant',
-      label: t.nav.aiAssistant,
-      icon: Sparkles,
-      roles: ['doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician'],
-    },
-
-    // 3. ADMIN MODULES (Strictly for Executive Admin - No QR scanner access)
-    {
-      id: 'dashboard',
-      label: t.admin.dashboardTitle,
-      icon: LayoutDashboard,
-      roles: ['admin'],
-    },
-    {
-      id: 'patients',
-      label: t.admin.totalPatients,
-      icon: Users,
-      roles: ['admin'],
-    },
-    {
-      id: 'audit-logs',
-      label: t.nav.auditLogs,
-      icon: ShieldAlert,
-      roles: ['admin'],
+      id: 'billing',
+      label: t.nav.billing,
+      icon: Receipt,
+      roles: ['patient', 'admin'],
     },
     {
       id: 'reports',
@@ -198,23 +132,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
       roles: ['admin'],
     },
     {
-      id: 'billing',
-      label: t.nav.billing,
-      icon: Receipt,
-      roles: ['admin'],
-    },
-    {
-      id: 'inventory',
-      label: t.nav.inventory,
-      icon: PackageCheck,
-      badge: lowStockCount > 0 ? lowStockCount : undefined,
+      id: 'audit-logs',
+      label: t.nav.auditLogs,
+      icon: ShieldAlert,
       roles: ['admin'],
     },
     {
       id: 'ai-assistant',
       label: t.nav.aiAssistant,
       icon: Sparkles,
-      roles: ['admin'],
+      roles: ['patient', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician', 'admin'],
     },
   ];
 

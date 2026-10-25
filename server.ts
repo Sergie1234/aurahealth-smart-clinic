@@ -7,11 +7,6 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Register tsx loader dynamically so Node can resolve TypeScript imports without flags
-try {
-  const { register } = await import('tsx/esm/api');
-  register();
-} catch {}
 
 const { app } = await import('./src/serverApp');
 

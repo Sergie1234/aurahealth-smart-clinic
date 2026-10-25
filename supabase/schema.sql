@@ -219,3 +219,22 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authentic
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
 
+-- ==============================================================================
+-- SYNTHETIC DATA SEED SCRIPT (PostgreSQL)
+-- ==============================================================================
+
+-- Seed Patients
+INSERT INTO public.patients (id, mrn, full_name, dob, age, gender, blood_type, phone, email, address, emergency_contact, allergies, chronic_conditions, current_medications, primary_doctor_id, insurance_provider, insurance_policy_number)
+VALUES
+('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'MRN-2026-081', 'Elena Vargas', '1978-04-12', 48, 'Female', 'A+', '+63 917 234 5678', 'elena.vargas@smartclinic.ph', '742 Mabini Street, Barangay San Antonio, Quezon City, Metro Manila', '{"name": "Roberto Vargas", "phone": "+63 917 234 9988", "relationship": "Spouse"}'::jsonb, '[{"allergen": "Penicillin", "reaction": "Anaphylaxis, hives", "severity": "severe"}]'::jsonb, '["Type 2 Diabetes Mellitus", "Essential Hypertension", "Dyslipidemia"]'::jsonb, '["Metformin 500mg PO BID", "Lisinopril 10mg PO Daily"]'::jsonb, 'usr-1', 'PhilHealth', 'PH-992-1849-01'),
+('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12', 'MRN-2026-104', 'Liam Gabriel Torres', '1992-08-25', 34, 'Male', 'O+', '+63 918 871 3342', 'liam.torres@smartclinic.ph', '1204 Pine Street, Apt 3B, Makati City, Metro Manila', '{"name": "Hannah Torres", "phone": "+63 918 871 9921", "relationship": "Sister"}'::jsonb, '[{"allergen": "NSAIDs", "reaction": "Bronchospasm", "severity": "moderate"}]'::jsonb, '["Mild Asthma"]'::jsonb, '["Albuterol Inhaler 90mcg PRN"]'::jsonb, 'usr-1', 'Maxicare', 'MX-552-3011-09')
+ON CONFLICT (mrn) DO NOTHING;
+
+-- Seed Inventory Items
+INSERT INTO public.inventory_items (sku, name, generic_name, brand, category, batch_number, expiration_date, supplier, stock_quantity, reorder_level, purchase_price, selling_price, unit, location)
+VALUES
+('MED-MET-500', 'Metformin Hydrochloride 500mg', 'Metformin HCl', 'Glucophage', 'Antidiabetic', 'MET-2026-B81', '2027-11-30', 'Unilab Pharma Supply', 420, 100, 2.50, 8.00, 'Tablets', 'Shelf B-2'),
+('MED-LIS-10', 'Lisinopril 10mg Tablets', 'Lisinopril', 'Prinivil', 'Cardiovascular', 'LIS-2025-C12', '2026-11-15', 'Zuellig Pharma Logistics', 45, 50, 4.20, 12.50, 'Tablets', 'Shelf A-1'),
+('MED-ALB-90', 'Albuterol Sulfate Inhaler 90mcg', 'Albuterol', 'Ventolin', 'Respiratory', 'ALB-2026-D05', '2027-06-30', 'GSK Philippines', 28, 15, 180.00, 320.00, 'Inhalers', 'Shelf C-3')
+ON CONFLICT (sku) DO NOTHING;
+

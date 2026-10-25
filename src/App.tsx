@@ -241,7 +241,7 @@ const ClinicAppContent: React.FC = () => {
               onClose={() => setIsMobileNavOpen(false)}
             />
             <main className="flex-1 overflow-y-auto p-4 md:p-6">
-              {activeTab === 'dashboard' && primaryRole === 'patient' && (
+              {activeTab === 'dashboard' && activeRole === 'patient' && (
                 <PatientDashboardView
                   onOpenBookAppointment={openBookAppointment}
                   onOpenQR={() => {
@@ -253,20 +253,24 @@ const ClinicAppContent: React.FC = () => {
                   onOpenProfileSettings={() => setShowProfileSettings(true)}
                 />
               )}
-              {activeTab === 'dashboard' && primaryRole === 'staff' && (
-                <StaffDashboardView
-                  subRole={staffSubRole || 'nurse'}
-                  onOpenBookAppointment={openBookAppointment}
-                  onOpenNewPatient={() => setShowNewPatient(true)}
-                />
-              )}
-              {activeTab === 'dashboard' && (primaryRole === 'doctor' || activeRole === 'doctor') && (
+              {activeTab === 'dashboard' &&
+                (activeRole === 'nurse' ||
+                  activeRole === 'pharmacist' ||
+                  activeRole === 'receptionist' ||
+                  activeRole === 'lab_technician') && (
+                  <StaffDashboardView
+                    subRole={activeRole as any}
+                    onOpenBookAppointment={openBookAppointment}
+                    onOpenNewPatient={() => setShowNewPatient(true)}
+                  />
+                )}
+              {activeTab === 'dashboard' && activeRole === 'doctor' && (
                 <DoctorDashboardView
                   onStartConsultation={handleStartConsultation}
                   onOpenBookAppointment={openBookAppointment}
                 />
               )}
-              {activeTab === 'dashboard' && primaryRole === 'admin' && (
+              {activeTab === 'dashboard' && activeRole === 'admin' && (
                 <AdminDashboardView />
               )}
               {activeTab === 'patients' && activeRole !== 'patient' && (

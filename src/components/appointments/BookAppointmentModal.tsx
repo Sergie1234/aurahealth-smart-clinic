@@ -141,8 +141,7 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
   }, [selectedDoctorId, selectedDoctor]);
 
   // Calendar monthly view navigation
-  // Reference date base: October 2026
-  const [calendarMonth, setCalendarMonth] = useState<Date>(() => new Date(2026, 9, 1)); // October 2026
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => new Date());
 
   const prevMonth = () => {
     setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));

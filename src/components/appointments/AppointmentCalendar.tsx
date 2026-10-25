@@ -48,7 +48,7 @@ export const AppointmentCalendar: React.FC<Props> = ({
   } = useClinic();
 
   const isPatient = activeRole === 'patient';
-  const todayStr = '2026-10-06'; // Clinic standard reference date
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   // View & Filter States
   const [selectedDate, setSelectedDate] = useState<string>(''); // empty string means all dates visible
@@ -57,8 +57,8 @@ export const AppointmentCalendar: React.FC<Props> = ({
   const [doctorFilter, setDoctorFilter] = useState<string>('ALL');
   const [showMonthGrid, setShowMonthGrid] = useState<boolean>(true);
 
-  // Calendar monthly navigation: defaults to October 2026
-  const [calendarMonth, setCalendarMonth] = useState<Date>(() => new Date(2026, 9, 1));
+  // Calendar monthly navigation
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => new Date());
 
   // Reschedule state
   const [reschedulingApt, setReschedulingApt] = useState<Appointment | null>(null);

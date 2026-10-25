@@ -1210,7 +1210,7 @@ export const LoginPage: React.FC = () => {
                 onClick={() => {
                   setError('');
                   setPrimaryRole('patient');
-                  setEmail('elena.vargas@example.com');
+                  setEmail('elena.vargas@smartclinic.ph');
                   setPassword('patient123');
                   setConfirmPassword('');
                   setMode('login');
@@ -1222,7 +1222,7 @@ export const LoginPage: React.FC = () => {
                 className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
                 <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Patient</div>
-                <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">elena.vargas@example.com</div>
+                <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">elena.vargas@smartclinic.ph</div>
                 <div className="text-[9px] text-teal-600 dark:text-teal-400 font-medium">CAPTCHA Security</div>
               </button>
 
@@ -1271,7 +1271,7 @@ export const LoginPage: React.FC = () => {
                   setError('');
                   setPrimaryRole('staff');
                   setStaffSubRole('pharmacist');
-                  setEmail('pharmacy@smartclinic.ph');
+                  setEmail('julian.delacruz@smartclinic.ph');
                   setPassword('pharm123');
                   setConfirmPassword('');
                   setMode('login');
@@ -1281,7 +1281,7 @@ export const LoginPage: React.FC = () => {
                 className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
                 <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Pharmacist</div>
-                <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">pharmacy@smartclinic.ph</div>
+                <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">julian.delacruz@smartclinic.ph</div>
                 <div className="text-[9px] text-slate-400">Pharmacy & Dispense</div>
               </button>
 
@@ -1291,7 +1291,7 @@ export const LoginPage: React.FC = () => {
                   setError('');
                   setPrimaryRole('staff');
                   setStaffSubRole('receptionist');
-                  setEmail('reception@smartclinic.ph');
+                  setEmail('claire.mendoza@smartclinic.ph');
                   setPassword('reception123');
                   setConfirmPassword('');
                   setMode('login');
@@ -1301,7 +1301,7 @@ export const LoginPage: React.FC = () => {
                 className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
                 <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Receptionist</div>
-                <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">reception@smartclinic.ph</div>
+                <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">claire.mendoza@smartclinic.ph</div>
                 <div className="text-[9px] text-slate-400">Front Desk & Intake</div>
               </button>
 
@@ -1311,7 +1311,7 @@ export const LoginPage: React.FC = () => {
                   setError('');
                   setPrimaryRole('staff');
                   setStaffSubRole('lab_technician');
-                  setEmail('lab@smartclinic.ph');
+                  setEmail('amina.bautista@smartclinic.ph');
                   setPassword('lab123');
                   setConfirmPassword('');
                   setMode('login');
@@ -1321,7 +1321,7 @@ export const LoginPage: React.FC = () => {
                 className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
                 <div className="text-[11px] font-bold text-slate-800 dark:text-slate-100">Lab Technician</div>
-                <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">lab@smartclinic.ph</div>
+                <div className="text-[9px] text-slate-500 dark:text-slate-400 truncate">amina.bautista@smartclinic.ph</div>
                 <div className="text-[9px] text-slate-400">Pathology & Diagnostic Lab</div>
               </button>
 

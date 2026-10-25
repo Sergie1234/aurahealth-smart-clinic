@@ -102,7 +102,7 @@ export const NewPrescriptionModal: React.FC<Props> = ({ onClose }) => {
       doctorName: currentUser.name,
       doctorSpecialty: currentUser.specialty || 'General Practice',
       doctorLicense: currentUser.licenseNumber || 'MD-77192',
-      date: '2026-10-06',
+      date: new Date().toISOString().split('T')[0],
       items,
       status: 'Active',
       aiSafetyAudit: safetyReport
@@ -119,18 +119,18 @@ export const NewPrescriptionModal: React.FC<Props> = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden my-auto animate-in fade-in duration-150">
-        <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+      <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden my-auto animate-in fade-in duration-150">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-lg bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 flex items-center justify-center font-bold">
               <Pill className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Issue Electronic Prescription</h2>
-              <p className="text-[11px] text-slate-500">With Gemini AI Drug-Allergy & Interaction Verification</p>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Issue Electronic Prescription</h2>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">With Gemini AI Drug-Allergy & Interaction Verification</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>

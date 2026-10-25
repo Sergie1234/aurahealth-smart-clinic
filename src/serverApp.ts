@@ -223,8 +223,6 @@ hydrateClinicStateFromDisk();
 // Tracks accounts with active Authenticator 2FA (Strictly Admin / Staff accounts — NEVER patients)
 const twoFactorEnabledUsers = new Set<string>([
   'smartclinicrealacc@gmail.com',
-  'sgt.spartan19@gmail.com',
-  'admin@smartclinic.ph',
 ]);
 
 // Supabase cloud integration check
@@ -295,6 +293,78 @@ app.get('/api/supabase/status', (_req: Request, res: Response) => {
     supabaseUrl: supabaseUrl || 'https://your-project.supabase.co',
     hasKey: Boolean(supabaseKey),
   });
+});
+
+async function syncAllClinicDataToSupabase(data: {
+  patients: any[];
+  appointments: any[];
+  consultations: any[];
+  prescriptions: any[];
+  labOrders: any[];
+  inventory: any[];
+  invoices: any[];
+  auditLogs: any[];
+}) {
+  if (!supabaseServer) return;
+  try {
+    if (data.patients.length) await supabaseServer.from('patients').upsert(data.patients, { onConflict: 'id' });
+    if (data.appointments.length) await supabaseServer.from('appointments').upsert(data.appointments, { onConflict: 'id' });
+    if (data.consultations.length) await supabaseServer.from('consultations').upsert(data.consultations, { onConflict: 'id' });
+    if (data.prescriptions.length) await supabaseServer.from('prescriptions').upsert(data.prescriptions, { onConflict: 'id' });
+    if (data.labOrders.length) await supabaseServer.from('lab_orders').upsert(data.labOrders, { onConflict: 'id' });
+    if (data.inventory.length) await supabaseServer.from('inventory_items').upsert(data.inventory, { onConflict: 'id' });
+    if (data.invoices.length) await supabaseServer.from('invoices').upsert(data.invoices, { onConflict: 'id' });
+    if (data.auditLogs.length) await supabaseServer.from('audit_logs').upsert(data.auditLogs, { onConflict: 'id' });
+  } catch (err) {
+    console.error('Failed to sync data to Supabase:', err);
+  }
+}
+
+app.post('/api/clinic/seed', async (_req: Request, res: Response) => {
+  try {
+    memPatients = [...INITIAL_PATIENTS];
+    memAppointments = [...INITIAL_APPOINTMENTS];
+    memConsultations = [...INITIAL_CONSULTATIONS];
+    memPrescriptions = [...INITIAL_PRESCRIPTIONS];
+    memLabOrders = [...INITIAL_LAB_ORDERS];
+    memInventory = [...INITIAL_INVENTORY];
+    memInvoices = [...INITIAL_INVOICES];
+    memAuditLogs = [...INITIAL_AUDIT_LOGS];
+    memNotifications = [...INITIAL_NOTIFICATIONS];
+    memUsers = [...INITIAL_USERS];
+
+    flushClinicStateToDisk();
+
+    if (supabaseServer) {
+      await syncAllClinicDataToSupabase({
+        patients: memPatients,
+        appointments: memAppointments,
+        consultations: memConsultations,
+        prescriptions: memPrescriptions,
+        labOrders: memLabOrders,
+        inventory: memInventory,
+        invoices: memInvoices,
+        auditLogs: memAuditLogs,
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Clinic database successfully reseeded with synthetic production records.',
+      counts: {
+        patients: memPatients.length,
+        appointments: memAppointments.length,
+        consultations: memConsultations.length,
+        prescriptions: memPrescriptions.length,
+        labOrders: memLabOrders.length,
+        inventory: memInventory.length,
+        invoices: memInvoices.length,
+        users: memUsers.length,
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || 'Database seeding failed.' });
+  }
 });
 
 /* ==========================================================================
@@ -454,10 +524,7 @@ app.get('/api/auth/2fa/status', (req: Request, res: Response) => {
   if (role === 'patient') {
     return res.json({ email, enabled: false, method: 'none' });
   }
-  const isAdminAccount =
-    email === ADMIN_EMAIL.toLowerCase() ||
-    email === 'admin@smartclinic.ph' ||
-    email === 'sgt.spartan19@gmail.com';
+  const isAdminAccount = email === ADMIN_EMAIL.toLowerCase();
   const enabled = isAdminAccount || twoFactorEnabledUsers.has(email);
   return res.json({ email, enabled, method: 'authenticator' });
 });

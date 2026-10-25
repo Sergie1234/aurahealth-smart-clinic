@@ -54,20 +54,20 @@ export const EnterLabResultsModal: React.FC<Props> = ({ order, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden my-auto animate-in fade-in duration-150">
-        <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+      <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden my-auto animate-in fade-in duration-150">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold">
               <FlaskConical className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-900">Enter Certified Lab Results</h2>
-              <p className="text-[11px] text-slate-500">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Enter Certified Lab Results</h2>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
                 {order.testName} ({order.orderNumber}) • Patient: {order.patientName}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -75,15 +75,15 @@ export const EnterLabResultsModal: React.FC<Props> = ({ order, onClose }) => {
         <form onSubmit={handleSave} className="p-5 flex-1 overflow-y-auto space-y-4 text-xs">
           {/* Current Parameter Rows */}
           <div className="space-y-2">
-            <label className="font-bold text-slate-800 text-[10px] uppercase tracking-wider block">
+            <label className="font-bold text-slate-800 dark:text-slate-200 text-[10px] uppercase tracking-wider block">
               Parameter Results ({items.length})
             </label>
             <div className="space-y-1.5">
               {items.map((item, idx) => (
-                <div key={idx} className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between gap-2">
+                <div key={idx} className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700/80 flex items-center justify-between gap-2">
                   <div className="flex-1">
-                    <span className="font-bold text-slate-900">{item.parameter}</span>
-                    <span className="ml-2 font-mono text-slate-600 font-bold">{item.value} {item.unit}</span>
+                    <span className="font-bold text-slate-900 dark:text-white">{item.parameter}</span>
+                    <span className="ml-2 font-mono text-slate-700 dark:text-slate-300 font-bold">{item.value} {item.unit}</span>
                     <span className="text-[10px] text-slate-400 ml-2">Ref: {item.referenceRange}</span>
                   </div>
 
