@@ -1162,7 +1162,7 @@ export const AIAssistantHub: React.FC = () => {
                               className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-teal-900/20 cursor-pointer self-start sm:self-auto"
                             >
                               <CalendarCheck className="w-4 h-4" />
-                              <span>Book Pre-filled Visit ({specialty})</span>
+                              <span>Book Pre-filled Appointment ({specialty})</span>
                               <ArrowRight className="w-3.5 h-3.5" />
                             </button>
                           </div>

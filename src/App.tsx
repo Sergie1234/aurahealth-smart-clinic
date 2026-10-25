@@ -8,7 +8,6 @@ import { ClinicProvider, useClinic } from './context/ClinicContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider, ToastViewport } from './context/ToastContext';
 import { PrintProvider, usePrint } from './context/PrintContext';
-import { GlobalPrintModal } from './components/common/GlobalPrintModal';
 import { GlobalSystemControls } from './components/common/GlobalSystemControls';
 import { SessionWarningModal } from './components/common/SessionWarningModal';
 import { Header } from './components/layout/Header';
@@ -394,7 +393,6 @@ export default function App() {
         <ClinicProvider>
           <PrintProvider>
             <ClinicAppContent />
-            <GlobalPrintModal />
             <ToastViewport />
           </PrintProvider>
         </ClinicProvider>

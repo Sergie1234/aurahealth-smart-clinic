@@ -371,7 +371,7 @@ export const translations: Record<AppLanguage, Translations> = {
       featuresTitle: 'Complete Healthcare Services at Your Fingertips',
       featuresSubtitle: 'Engineered for seamless clinical operations, zero delays, and patient safety.',
       feat1Title: 'Smart Appointment Scheduling',
-      feat1Desc: 'Book outpatient visits with verified specialists with real-time doctor availability and SMS reminders.',
+      feat1Desc: 'Book outpatient appointments with verified specialists with real-time doctor availability and SMS reminders.',
       feat2Title: 'Live Queue & Waiting Room',
       feat2Desc: 'Monitor your queue position live from home or mobile to minimize waiting room congestion.',
       feat3Title: 'Electronic Medical Records (EMR)',

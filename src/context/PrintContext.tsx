@@ -1,85 +1,87 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { Prescription, Invoice, LabTestOrder } from '../types/clinic';
-import { triggerRealtimePrint } from '../utils/printDocument';
-
-export type PrintableDocument =
-  | { type: 'prescription'; data: Prescription }
-  | { type: 'receipt'; data: Invoice }
-  | { type: 'lab_report'; data: LabTestOrder };
+import { DirectPrintMount, PrintableDoc } from '../components/common/DirectPrintMount';
 
 export interface PrintContextType {
-  activeDocument: PrintableDocument | null;
   isPrinting: boolean;
   printPrescription: (prescription: Prescription) => void;
   printReceipt: (invoice: Invoice) => void;
   printLabReport: (labOrder: LabTestOrder) => void;
-  closePrint: () => void;
-  triggerPrint: () => void;
 }
 
 const PrintContext = createContext<PrintContextType | undefined>(undefined);
 
 export const PrintProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [activeDocument, setActiveDocument] = useState<PrintableDocument | null>(null);
+  const [activeDocument, setActiveDocument] = useState<PrintableDoc | null>(null);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
 
-  const getDocTitle = useCallback((doc: PrintableDocument | null): string => {
-    if (!doc) return 'SmartClinic-Document';
-    switch (doc.type) {
-      case 'prescription':
-        return `SmartClinic-Prescription-${doc.data.prescriptionNumber}`;
-      case 'receipt':
-        return `SmartClinic-OfficialReceipt-${doc.data.invoiceNumber}`;
-      case 'lab_report':
-        return `SmartClinic-LabReport-${doc.data.orderNumber}`;
-    }
-  }, []);
-
-  const triggerPrint = useCallback(() => {
-    if (!activeDocument) return;
+  const executePrint = useCallback((doc: PrintableDoc, docTitle: string) => {
     setIsPrinting(true);
-    const title = getDocTitle(activeDocument);
-    triggerRealtimePrint({
-      title,
-      documentType: activeDocument.type,
-    });
-    // Reset printing state indicator after brief delay
-    setTimeout(() => {
+    setActiveDocument(doc);
+
+    const originalTitle = document.title;
+    document.title = docTitle;
+
+    const cleanup = () => {
+      document.title = originalTitle;
+      setActiveDocument(null);
       setIsPrinting(false);
-    }, 500);
-  }, [activeDocument, getDocTitle]);
+      window.removeEventListener('afterprint', cleanup);
+    };
+
+    window.addEventListener('afterprint', cleanup, { once: true });
+
+    // Allow React a single tick to mount the print stationery to #smartclinic-print-mount
+    setTimeout(() => {
+      try {
+        window.focus();
+        window.print();
+      } catch (err) {
+        console.error('Direct window.print() failed:', err);
+        cleanup();
+      }
+      // Safety reset timer in case browser does not fire afterprint event
+      setTimeout(cleanup, 2000);
+    }, 100);
+  }, []);
 
   const printPrescription = useCallback((prescription: Prescription) => {
-    setActiveDocument({ type: 'prescription', data: prescription });
-  }, []);
+    executePrint(
+      { type: 'prescription', data: prescription },
+      `SmartClinic-Rx-${prescription.prescriptionNumber}`
+    );
+  }, [executePrint]);
 
   const printReceipt = useCallback((invoice: Invoice) => {
-    setActiveDocument({ type: 'receipt', data: invoice });
-  }, []);
+    executePrint(
+      { type: 'receipt', data: invoice },
+      `SmartClinic-Receipt-${invoice.invoiceNumber}`
+    );
+  }, [executePrint]);
 
   const printLabReport = useCallback((labOrder: LabTestOrder) => {
-    setActiveDocument({ type: 'lab_report', data: labOrder });
-  }, []);
-
-  const closePrint = useCallback(() => {
-    setActiveDocument(null);
-    setIsPrinting(false);
-  }, []);
+    executePrint(
+      { type: 'lab_report', data: labOrder },
+      `SmartClinic-LabReport-${labOrder.orderNumber}`
+    );
+  }, [executePrint]);
 
   const value = useMemo(
     () => ({
-      activeDocument,
       isPrinting,
       printPrescription,
       printReceipt,
       printLabReport,
-      closePrint,
-      triggerPrint,
     }),
-    [activeDocument, isPrinting, printPrescription, printReceipt, printLabReport, closePrint, triggerPrint]
+    [isPrinting, printPrescription, printReceipt, printLabReport]
   );
 
-  return <PrintContext.Provider value={value}>{children}</PrintContext.Provider>;
+  return (
+    <PrintContext.Provider value={value}>
+      {children}
+      <DirectPrintMount activeDocument={activeDocument} />
+    </PrintContext.Provider>
+  );
 };
 
 export const usePrint = (): PrintContextType => {

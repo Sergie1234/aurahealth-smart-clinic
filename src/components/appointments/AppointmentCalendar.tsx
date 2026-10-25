@@ -274,7 +274,7 @@ export const AppointmentCalendar: React.FC<Props> = ({
             className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-teal-700/20 cursor-pointer transition"
           >
             <Plus className="w-4 h-4" />
-            <span>{isPatient ? (t?.common?.bookAppointment || 'Book Appointment') : 'Book Visit'}</span>
+            <span>{t?.common?.bookAppointment || 'Book Appointment'}</span>
           </button>
         </div>
       </div>
@@ -641,7 +641,7 @@ export const AppointmentCalendar: React.FC<Props> = ({
                 className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-semibold text-xs inline-flex items-center gap-1.5 shadow-sm cursor-pointer transition"
               >
                 <Plus className="w-4 h-4" />
-                <span>Book Outpatient Visit</span>
+                <span>{t?.common?.bookAppointment || 'Book Appointment'}</span>
               </button>
             </div>
           </div>

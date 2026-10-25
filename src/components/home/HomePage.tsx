@@ -571,7 +571,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenBookAppointment }) => 
                         onClick={onOpenBookAppointment}
                         className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 dark:text-teal-400 hover:text-teal-700 hover:underline cursor-pointer"
                       >
-                        <span>Book Outpatient Visit</span>
+                        <span>Book Outpatient Appointment</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     </div>

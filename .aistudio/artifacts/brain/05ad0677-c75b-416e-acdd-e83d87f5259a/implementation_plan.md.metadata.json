@@ -1,0 +1,6 @@
+{
+  "summary":  "Complete rewrite of the SmartClinic global print feature for Print Receipt, Print Prescription, and Print Lab Report. Directly triggers the browser print dialog without an intermediate preview modal, utilizing a dedicated A4 portrait clinical stationery mount and clean @media print stylesheet engine.",
+  "updatedAt":  "2026-10-25T18:00:54.661182306Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

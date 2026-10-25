@@ -1,21 +1,17 @@
 /**
- * High-Fidelity Real-Time Document Printing Utility
- * Handles browser print dialog triggering, document titles for PDF export,
- * and reliable print flow across desktop, tablet, and mobile browsers.
+ * Direct Real-Time Print Helper
+ * Dispatches native browser window.print() after setting dynamic document title.
  */
 
 export interface PrintDocumentOptions {
   title: string;
   isDark?: boolean;
   documentType: 'prescription' | 'receipt' | 'lab_report';
-  htmlContent?: string;
 }
 
-/**
- * Triggers real-time printing using the browser's native print engine.
- * Sets document title for automatic PDF export naming and triggers window.print().
- */
 export function triggerRealtimePrint(options: PrintDocumentOptions): boolean {
+  if (typeof window === 'undefined') return false;
+
   const originalTitle = document.title;
   if (options.title) {
     document.title = options.title;
@@ -29,25 +25,13 @@ export function triggerRealtimePrint(options: PrintDocumentOptions): boolean {
   window.addEventListener('afterprint', cleanup, { once: true });
 
   try {
-    // Focus window before triggering print (crucial for iframe environments)
-    if (typeof window !== 'undefined') {
-      window.focus();
-      window.print();
-    }
+    window.focus();
+    window.print();
+    setTimeout(cleanup, 2000);
     return true;
   } catch (err) {
-    console.warn('Native window.print() exception:', err);
+    console.error('window.print() error:', err);
     cleanup();
     return false;
   }
-}
-
-/**
- * Backward compatibility wrapper
- */
-export async function printHtmlViaIframe(
-  _elementHtml: string,
-  options: PrintDocumentOptions
-): Promise<boolean> {
-  return triggerRealtimePrint(options);
 }

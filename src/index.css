@@ -59,12 +59,13 @@ html:not(.dark) select option {
 }
 
 /* ==========================================================================
-   GLOBAL REAL-TIME DOCUMENT PRINTING SYSTEM
+   GLOBAL DIRECT REAL-TIME DOCUMENT PRINTING SYSTEM
    Guarantees that when printing, ONLY the pure medical stationery inside
-   #smartclinic-print-root renders, completely hiding all on-screen modals,
-   headers, sidebars, buttons, toolbars, and background controls.
+   #smartclinic-print-mount renders on standard A4 portrait paper, completely
+   hiding all on-screen UI, headers, sidebars, buttons, and dialogs.
    ========================================================================== */
 @media screen {
+  #smartclinic-print-mount,
   #smartclinic-print-root {
     display: none !important;
     visibility: hidden !important;
@@ -77,7 +78,7 @@ html:not(.dark) select option {
     margin: 10mm 12mm;
   }
 
-  /* Reset html & body */
+  /* Reset html & body to pure white paper */
   html, body {
     margin: 0 !important;
     padding: 0 !important;
@@ -95,16 +96,10 @@ html:not(.dark) select option {
     overflow: visible !important;
   }
 
-  /* HIDE EVERYTHING ON SCREEN EXCEPT THE DEDICATED PRINT ROOT */
+  /* HIDE EVERYTHING ON SCREEN EXCEPT THE DEDICATED PRINT MOUNT */
   #root,
-  .print-modal-overlay,
   .no-print,
   .print-hidden,
-  .modal-screen-container,
-  .modal-screen-backdrop,
-  [data-print-hide="true"],
-  .modal-header-chrome,
-  .modal-footer-chrome,
   .global-system-controls,
   #smartclinic-notifications,
   .toast-viewport,
@@ -131,7 +126,8 @@ html:not(.dark) select option {
     pointer-events: none !important;
   }
 
-  /* DISPLAY ONLY THE DEDICATED CLINICAL PRINT DOCUMENT */
+  /* DISPLAY ONLY THE DEDICATED CLINICAL PRINT STATIONERY */
+  #smartclinic-print-mount,
   #smartclinic-print-root {
     display: block !important;
     visibility: visible !important;
@@ -148,82 +144,14 @@ html:not(.dark) select option {
     overflow: visible !important;
     box-shadow: none !important;
     border: none !important;
-    border-radius: 0 !important;
   }
 
-  #smartclinic-print-root,
+  #smartclinic-print-mount *,
   #smartclinic-print-root * {
-    background-color: #ffffff !important;
-    color: #0f172a !important;
-    border-color: #cbd5e1 !important;
-  }
-
-  .force-light,
-  .force-light * {
-    background-color: #ffffff !important;
-    color: #0f172a !important;
-    border-color: #cbd5e1 !important;
-  }
-
-  #smartclinic-print-root *:not(.no-print) {
     visibility: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-
-  /* Force clean white paper styling across all subcontainers in the print root */
-  #smartclinic-print-root .bg-slate-900,
-  #smartclinic-print-root .dark\:bg-slate-900,
-  #smartclinic-print-root .bg-slate-950,
-  #smartclinic-print-root .dark\:bg-slate-950,
-  #smartclinic-print-root .bg-slate-900\/60,
-  #smartclinic-print-root .dark\:bg-slate-900\/60 {
-    background-color: #ffffff !important;
-    color: #0f172a !important;
-  }
-
-  #smartclinic-print-root .text-white,
-  #smartclinic-print-root .dark\:text-white,
-  #smartclinic-print-root .text-slate-100,
-  #smartclinic-print-root .dark\:text-slate-100,
-  #smartclinic-print-root .text-slate-200,
-  #smartclinic-print-root .dark\:text-slate-200 {
-    color: #0f172a !important;
-  }
-
-  #smartclinic-print-root .text-slate-400,
-  #smartclinic-print-root .dark\:text-slate-400,
-  #smartclinic-print-root .text-slate-500,
-  #smartclinic-print-root .dark\:text-slate-500 {
-    color: #475569 !important;
-  }
-
-  #smartclinic-print-root .bg-slate-800,
-  #smartclinic-print-root .dark\:bg-slate-800,
-  #smartclinic-print-root .bg-slate-800\/60,
-  #smartclinic-print-root .dark\:bg-slate-800\/60,
-  #smartclinic-print-root .bg-slate-800\/40,
-  #smartclinic-print-root .dark\:bg-slate-800\/40,
-  #smartclinic-print-root .bg-slate-50,
-  #smartclinic-print-root .dark\:bg-slate-800 {
-    background-color: #f8fafc !important;
-    color: #0f172a !important;
-  }
-
-  #smartclinic-print-root .border-slate-800,
-  #smartclinic-print-root .dark\:border-slate-800,
-  #smartclinic-print-root .border-slate-700,
-  #smartclinic-print-root .dark\:border-slate-700,
-  #smartclinic-print-root .border-slate-700\/80,
-  #smartclinic-print-root .dark\:border-slate-700\/80,
-  #smartclinic-print-root .border-slate-700\/60,
-  #smartclinic-print-root .dark\:border-slate-700\/60 {
-    border-color: #e2e8f0 !important;
-  }
-
-  #smartclinic-print-root .divide-slate-800 > :not([hidden]) ~ :not([hidden]),
-  #smartclinic-print-root .dark\:divide-slate-800 > :not([hidden]) ~ :not([hidden]) {
-    border-color: #e2e8f0 !important;
-  }
 }
+
 

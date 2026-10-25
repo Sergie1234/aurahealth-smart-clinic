@@ -322,7 +322,7 @@ function generateLocalRulebookResponse(payload: {
         };
       }
       return {
-        reply: `Appointments Assistant: You can schedule, view, reschedule, or cancel your clinic consultations here. If you need to make changes to your upcoming visit or book a specialty slot, please use the Book Visit action in the portal.`,
+        reply: `Appointments Assistant: You can schedule, view, reschedule, or cancel your clinic consultations here. If you need to make changes to your upcoming visit or book a specialty slot, please use the Book Appointment action in the portal.`,
         disclaimer: '',
         activeRole,
         activePage,

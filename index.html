@@ -24,6 +24,7 @@
     </script>
     <style id="smartclinic-print-engine">
       @media screen {
+        #smartclinic-print-mount,
         #smartclinic-print-root {
           display: none !important;
           visibility: hidden !important;
@@ -53,13 +54,10 @@
           color-scheme: light !important;
         }
 
-        /* Suppress everything on the screen except the dedicated clinical print root */
+        /* Suppress everything on the screen except the dedicated clinical print stationery */
         #root,
         .no-print,
         .global-system-controls,
-        .modal-screen-container,
-        .modal-screen-backdrop,
-        [data-print-hide="true"],
         header,
         aside,
         nav,
@@ -85,7 +83,8 @@
           pointer-events: none !important;
         }
 
-        /* Display exclusively the pure clinical document stationery spanning full printable width */
+        /* Display exclusively the pure clinical document stationery */
+        #smartclinic-print-mount,
         #smartclinic-print-root {
           display: block !important;
           visibility: visible !important;
@@ -104,13 +103,13 @@
           overflow: visible !important;
         }
 
+        #smartclinic-print-mount *,
         #smartclinic-print-root * {
           visibility: visible !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
         }
       }
-
     </style>
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased selection:bg-teal-500 selection:text-white">

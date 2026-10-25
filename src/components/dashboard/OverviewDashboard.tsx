@@ -94,7 +94,7 @@ export const OverviewDashboard: React.FC<Props> = ({ onStartConsultation, onOpen
                 onClick={onOpenBookAppointment}
                 className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white font-medium text-xs rounded-xl border border-white/20 transition cursor-pointer"
               >
-                + Schedule Visit
+                + Book Appointment
               </button>
             )}
           </div>
