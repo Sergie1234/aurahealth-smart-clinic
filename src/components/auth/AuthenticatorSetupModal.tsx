@@ -130,16 +130,19 @@ export const AuthenticatorSetupModal: React.FC<Props> = ({
       setVerifying(false);
 
       if (!res.success) {
+        setConfirmCode('');
         setErrorMessage(res.error || 'Invalid code. Check your device clock.');
         toastError(res.error || 'Failed to activate 2FA.');
         return;
       }
 
       setIs2FaActive(true);
+      setConfirmCode('');
       setStatusMessage('Authenticator App (2FA) is now active! You will be prompted for your 6-digit code during login.');
       toastSuccess('Authenticator App (2FA) successfully activated!');
     } catch {
       setVerifying(false);
+      setConfirmCode('');
       setErrorMessage('Connection failure. Unable to verify Authenticator code.');
       toastError('Verification failed.');
     }
@@ -288,6 +291,10 @@ export const AuthenticatorSetupModal: React.FC<Props> = ({
                 value={confirmCode}
                 onChange={(e) => setConfirmCode(e.target.value.replace(/\D/g, ''))}
                 placeholder="123456"
+                autoComplete="one-time-code"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
                 className="w-32 rounded-xl border border-teal-300 dark:border-teal-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-xs font-mono font-bold tracking-widest text-center focus:ring-2 focus:ring-teal-500"
               />
               <button
@@ -318,7 +325,12 @@ export const AuthenticatorSetupModal: React.FC<Props> = ({
           <span>RFC 6238 Standard (30-second rolling token)</span>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              setConfirmCode('');
+              setErrorMessage('');
+              setStatusMessage('');
+              onClose();
+            }}
             className="px-4 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold cursor-pointer transition shadow-xs"
           >
             Done

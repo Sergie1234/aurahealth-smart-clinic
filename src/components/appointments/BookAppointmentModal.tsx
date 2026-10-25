@@ -515,7 +515,15 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
                   return (
                     <div
                       key={doc.id}
-                      onClick={() => setSelectedDoctorId(doc.id)}
+                      onClick={() => {
+                        if (selectedDoctorId !== doc.id) {
+                          setSelectedDoctorId(doc.id);
+                          setSelectedTimeSlot('');
+                          if (selectedDate && !isDoctorWorkingOnDate(doc.id, selectedDate)) {
+                            setSelectedDate('');
+                          }
+                        }
+                      }}
                       className={`p-4 rounded-2xl border-2 transition cursor-pointer flex flex-col justify-between gap-3 ${
                         isSelected
                           ? 'border-teal-500 bg-teal-50/50 dark:bg-teal-950/40 shadow-sm'

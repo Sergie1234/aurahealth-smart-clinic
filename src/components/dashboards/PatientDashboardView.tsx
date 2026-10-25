@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import {
   Calendar,
@@ -11,13 +11,17 @@ import {
   Heart,
   Activity,
   AlertTriangle,
-  Sparkles,
-  User,
+  Search,
+  X,
+  RotateCcw,
+  ArrowUpRight
 } from 'lucide-react';
-import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import { RoleHeroBanner } from '../common/RoleHeroBanner';
-import { EmergencyDisclaimerBanner } from '../common/EmergencyDisclaimerBanner';
 import { formatPeso } from '../../utils/currency';
+import { Invoice, Prescription, LabTestOrder } from '../../types/clinic';
+import { ReceiptPrintModal } from '../billing/ReceiptPrintModal';
+import { PrescriptionPrintModal } from '../prescriptions/PrescriptionPrintModal';
+import { LabReportModal } from '../laboratory/LabReportModal';
 
 interface Props {
   onOpenBookAppointment?: () => void;
@@ -32,7 +36,6 @@ export const PatientDashboardView: React.FC<Props> = ({
   onOpenQR,
   onOpenLabReport,
   onOpenPrescription,
-  onOpenProfileSettings,
 }) => {
   const {
     patients,
@@ -47,6 +50,28 @@ export const PatientDashboardView: React.FC<Props> = ({
     t,
     language,
   } = useClinic();
+
+  // Search states for patient dashboard sections
+  const [rxSearch, setRxSearch] = useState('');
+  const [labSearch, setLabSearch] = useState('');
+  const [billingSearch, setBillingSearch] = useState('');
+  const [viewingReceipt, setViewingReceipt] = useState<Invoice | null>(null);
+  const [viewingRx, setViewingRx] = useState<Prescription | null>(null);
+  const [viewingLab, setViewingLab] = useState<LabTestOrder | null>(null);
+
+  const handlePrintPrescription = (rx: Prescription) => {
+    if (onOpenPrescription) {
+      onOpenPrescription(rx);
+    }
+    setViewingRx(rx);
+  };
+
+  const handlePrintLabReport = (lab: LabTestOrder) => {
+    if (onOpenLabReport) {
+      onOpenLabReport(lab);
+    }
+    setViewingLab(lab);
+  };
 
   // Active patient (logged-in portal patient)
   const patient =
@@ -78,76 +103,127 @@ export const PatientDashboardView: React.FC<Props> = ({
   const patientLabs = labOrders.filter((l) => l.patientId === patient.id || l.patientName === patient.fullName);
   const patientInvoices = invoices.filter((i) => i.patientId === patient.id || i.patientName === patient.fullName);
 
+  // Filtered Prescriptions with real-time multi-field search
+  const filteredPrescriptions = useMemo(() => {
+    const query = rxSearch.trim().toLowerCase();
+    if (!query) return patientPrescriptions;
+
+    return patientPrescriptions.filter((rx) => {
+      const rxNum = rx.prescriptionNumber?.toLowerCase() || '';
+      const doc = rx.doctorName?.toLowerCase() || '';
+      const date = rx.date?.toLowerCase() || '';
+      const status = rx.status?.toLowerCase() || '';
+      const itemsMatch = rx.items?.some((it) => {
+        const med = it.medicationName?.toLowerCase() || '';
+        const gen = it.genericName?.toLowerCase() || '';
+        const dosage = it.dosage?.toLowerCase() || '';
+        const freq = it.frequency?.toLowerCase() || '';
+        const inst = it.instructions?.toLowerCase() || '';
+        return med.includes(query) || gen.includes(query) || dosage.includes(query) || freq.includes(query) || inst.includes(query);
+      });
+      return rxNum.includes(query) || doc.includes(query) || date.includes(query) || status.includes(query) || itemsMatch;
+    });
+  }, [patientPrescriptions, rxSearch]);
+
+  // Filtered Lab Orders with real-time multi-field search
+  const filteredLabs = useMemo(() => {
+    const query = labSearch.trim().toLowerCase();
+    if (!query) return patientLabs;
+
+    return patientLabs.filter((lab) => {
+      const test = lab.testName?.toLowerCase() || '';
+      const orderNum = lab.orderNumber?.toLowerCase() || '';
+      const status = lab.status?.toLowerCase() || '';
+      const urgency = lab.urgency?.toLowerCase() || '';
+      const doc = lab.doctorName?.toLowerCase() || '';
+      const rawDate = lab.requestedAt?.toLowerCase() || '';
+      let formattedDate = '';
+      try {
+        if (lab.requestedAt) formattedDate = new Date(lab.requestedAt).toLocaleDateString().toLowerCase();
+      } catch {}
+      const resultsMatch = lab.results?.some((r) => {
+        const param = r.parameter?.toLowerCase() || '';
+        const val = String(r.value || '').toLowerCase();
+        return param.includes(query) || val.includes(query);
+      });
+      return test.includes(query) || orderNum.includes(query) || status.includes(query) || urgency.includes(query) || doc.includes(query) || rawDate.includes(query) || formattedDate.includes(query) || resultsMatch;
+    });
+  }, [patientLabs, labSearch]);
+
+  // Filtered Invoices with real-time multi-field search
+  const filteredInvoices = useMemo(() => {
+    const query = billingSearch.trim().toLowerCase();
+    if (!query) return patientInvoices;
+
+    return patientInvoices.filter((inv) => {
+      const invNum = inv.invoiceNumber?.toLowerCase() || '';
+      const date = inv.date?.toLowerCase() || '';
+      const status = inv.status?.toLowerCase() || '';
+      const payMethod = inv.paymentMethod?.toLowerCase() || '';
+      const totalStr = String(inv.totalAmount || '');
+      const paidStr = String(inv.paidAmount || '');
+      const formattedTotal = formatPeso(inv.totalAmount).toLowerCase();
+      const itemsMatch = inv.items?.some((it) => {
+        const desc = it.description?.toLowerCase() || '';
+        const cat = it.category?.toLowerCase() || '';
+        return desc.includes(query) || cat.includes(query);
+      });
+      return invNum.includes(query) || date.includes(query) || status.includes(query) || payMethod.includes(query) || totalStr.includes(query) || paidStr.includes(query) || formattedTotal.includes(query) || itemsMatch;
+    });
+  }, [patientInvoices, billingSearch]);
+
   return (
     <div className="space-y-5 max-w-6xl mx-auto text-xs font-sans pb-12">
       {/* Unified Role Hero Banner */}
-      <div className="space-y-3">
-        <RoleHeroBanner
-          badges={[
-            {
-              text: t.patient.healthPortalTitle,
-              pulseDot: true,
-              pulseColor: 'bg-emerald-400',
-              className: 'bg-white/10 text-teal-200 border-white/20',
-            },
-          ]}
-          title={`${language === 'fil' ? 'Maligayang pagbabalik' : 'Welcome'}, ${patient.fullName}`}
-          onTitleClick={onOpenProfileSettings}
-          titleTooltip={onOpenProfileSettings ? (language === 'fil' ? 'Buksan ang mga setting ng profile' : 'Click to open Profile Settings') : undefined}
-          meta={
-            <span>
-              {t.patient.mrnLabel}: <span className="font-mono font-bold text-white">{patient.mrn}</span> •{' '}
-              {t.patient.bloodTypeLabel}: <span className="font-bold text-white">{patient.bloodType}</span> •{' '}
-              {t.patient.primaryDoctorLabel}: <span className="font-semibold text-white">{primaryDoctorName}</span>
-            </span>
-          }
-          gradientClass="bg-gradient-to-r from-teal-900 via-teal-800 to-slate-900 border-teal-700/40"
-          actions={[
-            ...(onOpenProfileSettings
-              ? [
-                  {
-                    label: t.nav.profileSettings,
-                    onClick: onOpenProfileSettings,
-                    icon: <User className="w-4 h-4 text-teal-300" />,
-                    variant: 'secondary' as const,
-                    ariaLabel: t.nav.profileSettings,
-                    title: language === 'fil' ? 'Tingnan at i-edit ang iyong impormasyon sa profile' : 'View and edit your personal profile and EMR details',
-                  },
-                ]
-              : []),
-            ...(onOpenQR
-              ? [
-                  {
-                    label: t.patient.healthIdBtn,
-                    onClick: onOpenQR,
-                    icon: <QrCode className="w-4 h-4 text-teal-300" />,
-                    variant: 'secondary' as const,
-                    ariaLabel: t.patient.healthIdBtn,
-                    title: language === 'fil' ? 'Ipakita ang iyong Health ID QR Code' : 'Display your personal Health ID QR Code',
-                  },
-                ]
-              : []),
-            ...(onOpenBookAppointment
-              ? [
-                  {
-                    label: t.common.bookAppointment,
-                    onClick: onOpenBookAppointment,
-                    icon: <Calendar className="w-4 h-4 text-slate-950" />,
-                    variant: 'primary' as const,
-                    primaryColor: 'bg-teal-400 hover:bg-teal-300 text-slate-950 shadow-md shadow-teal-500/20 focus-visible:ring-teal-300',
-                    ariaLabel: t.common.bookAppointment,
-                    title: language === 'fil' ? 'Magtakda ng bagong appointment' : 'Schedule a new clinical consultation',
-                  },
-                ]
-              : []),
-          ]}
-        />
-
-        <EmergencyDisclaimerBanner />
-      </div>
+      <RoleHeroBanner
+        badges={[
+          {
+            text: t.patient.healthPortalTitle,
+            pulseDot: true,
+            pulseColor: 'bg-emerald-400',
+            className: 'bg-white/10 text-teal-200 border-white/20',
+          },
+        ]}
+        title={`${language === 'fil' ? 'Maligayang pagbabalik' : 'Welcome'}, ${patient.fullName}`}
+        meta={
+          <span>
+            {t.patient.mrnLabel}: <span className="font-mono font-bold text-white">{patient.mrn}</span> •{' '}
+            {t.patient.bloodTypeLabel}: <span className="font-bold text-white">{patient.bloodType}</span> •{' '}
+            {t.patient.primaryDoctorLabel}: <span className="font-semibold text-white">{primaryDoctorName}</span>
+          </span>
+        }
+        gradientClass="bg-gradient-to-r from-teal-900 via-teal-800 to-slate-900 border-teal-700/40"
+        actions={[
+          ...(onOpenQR
+            ? [
+                {
+                  label: t.patient.healthIdBtn,
+                  onClick: onOpenQR,
+                  icon: <QrCode className="w-4 h-4 text-teal-300" />,
+                  variant: 'secondary' as const,
+                  ariaLabel: t.patient.healthIdBtn,
+                  title: language === 'fil' ? 'Ipakita ang iyong Health ID QR Code' : 'Display your personal Health ID QR Code',
+                },
+              ]
+            : []),
+          ...(onOpenBookAppointment
+            ? [
+                {
+                  label: t.common.bookAppointment,
+                  onClick: onOpenBookAppointment,
+                  icon: <Calendar className="w-4 h-4 text-slate-950" />,
+                  variant: 'primary' as const,
+                  primaryColor: 'bg-teal-400 hover:bg-teal-300 text-slate-950 shadow-md shadow-teal-500/20 focus-visible:ring-teal-300',
+                  ariaLabel: t.common.bookAppointment,
+                  title: language === 'fil' ? 'Magtakda ng bagong appointment' : 'Schedule a new clinical consultation',
+                },
+              ]
+            : []),
+        ]}
+      />
 
       {/* Specific Task & Privacy Directive Banner */}
-      <div className="p-3 bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 rounded-xl flex items-center justify-between gap-3 text-xs">
+      <div className="p-3 bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 rounded-xl flex items-center justify-between gap-3 text-xs transition-colors">
         <div className="flex items-center gap-2 text-teal-900 dark:text-teal-200">
           <Heart className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
           <span>
@@ -159,8 +235,9 @@ export const PatientDashboardView: React.FC<Props> = ({
         </span>
       </div>
 
+      {/* Vital Signs Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1 transition-colors">
           <div className="flex items-center justify-between text-slate-500">
             <span>{t.patient.bloodPressure}</span>
             <Heart className="w-4 h-4 text-rose-500" />
@@ -169,7 +246,7 @@ export const PatientDashboardView: React.FC<Props> = ({
           <span className="text-[10px] text-amber-600 font-semibold">{language === 'fil' ? 'Yugto 1 Pre-HTN' : 'Stage 1 Pre-HTN'}</span>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1 transition-colors">
           <div className="flex items-center justify-between text-slate-500">
             <span>{t.patient.heartRate}</span>
             <Activity className="w-4 h-4 text-emerald-500" />
@@ -178,7 +255,7 @@ export const PatientDashboardView: React.FC<Props> = ({
           <span className="text-[10px] text-emerald-600 font-semibold">{language === 'fil' ? 'Normal na Lebel' : 'Normal Resting Range'}</span>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1 transition-colors">
           <div className="flex items-center justify-between text-slate-500">
             <span>{t.patient.oxygenSat}</span>
             <Activity className="w-4 h-4 text-cyan-500" />
@@ -187,12 +264,12 @@ export const PatientDashboardView: React.FC<Props> = ({
           <span className="text-[10px] text-emerald-600 font-semibold">{language === 'fil' ? 'Tamang Lebel ng Oksiheno' : 'Optimal Oxygenation'}</span>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1 transition-colors">
           <div className="flex items-center justify-between text-slate-500">
             <span>{t.patient.allergies}</span>
             <AlertTriangle className="w-4 h-4 text-rose-500" />
           </div>
-          <p className="text-sm font-bold text-rose-700 truncate">
+          <p className="text-sm font-bold text-rose-700 dark:text-rose-400 truncate">
             {patient.allergies?.map((a: any) => typeof a === 'string' ? a : a.allergen).join(', ') || t.patient.noKnownAllergies}
           </p>
           <span className="text-[10px] text-rose-600 font-semibold">{language === 'fil' ? 'May Babala' : 'Medical Flagged'}</span>
@@ -201,15 +278,20 @@ export const PatientDashboardView: React.FC<Props> = ({
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-7 space-y-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4">
+          {/* Upcoming Appointments Card */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4 transition-colors">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-teal-600" />
+                <Calendar className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                 <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{t.patient.nextAppointment}</h3>
               </div>
-              <span className="text-[11px] font-semibold text-teal-700">
-                {patientAppointments.length} {language === 'fil' ? 'Nakatakda' : 'Booked'}
-              </span>
+              <button
+                onClick={() => setActiveTab('appointments')}
+                className="text-[11px] font-semibold text-teal-700 dark:text-teal-300 hover:underline flex items-center gap-0.5 cursor-pointer"
+              >
+                <span>{patientAppointments.length} {language === 'fil' ? 'Nakatakda' : 'Booked'}</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
 
             <div className="space-y-3">
@@ -224,15 +306,15 @@ export const PatientDashboardView: React.FC<Props> = ({
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-slate-900 dark:text-slate-100">{apt.doctorName}</span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
                           {apt.status}
                         </span>
                       </div>
-                      <p className="text-slate-500 text-[11px] mt-0.5">
+                      <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">
                         {apt.date} at {apt.time} • {apt.reason}
                       </p>
                     </div>
-                    <span className="text-xs font-mono text-slate-600 font-bold bg-white dark:bg-slate-900 px-2.5 py-1 rounded border border-slate-200 dark:border-slate-700">
+                    <span className="text-xs font-mono text-slate-600 dark:text-slate-300 font-bold bg-white dark:bg-slate-900 px-2.5 py-1 rounded border border-slate-200 dark:border-slate-700">
                       #{apt.queueNumber || 'Q-10'}
                     </span>
                   </div>
@@ -241,44 +323,93 @@ export const PatientDashboardView: React.FC<Props> = ({
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4">
+          {/* Active Prescriptions Card with Interactive Real-Time Search */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4 transition-colors">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <Pill className="w-4 h-4 text-teal-600" />
+                <Pill className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                 <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{t.patient.activePrescriptions}</h3>
               </div>
-              <span className="text-[11px] font-semibold text-teal-700">
-                {patientPrescriptions.length} {language === 'fil' ? 'Reseta' : 'Records'}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-teal-700 dark:text-teal-300">
+                  {filteredPrescriptions.length} {language === 'fil' ? 'Reseta' : 'Records'}
+                </span>
+                <button
+                  onClick={() => setActiveTab('prescriptions')}
+                  className="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 p-1 rounded transition cursor-pointer"
+                  title="View all in full Prescriptions tab"
+                >
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
+            {/* Real-time RX Search Bar */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder={language === 'fil' ? 'Maghanap ng gamot, doktor, o dosage...' : 'Search medicine, dosage, doctor, or Rx number...'}
+                value={rxSearch}
+                onChange={(e) => setRxSearch(e.target.value)}
+                className="w-full pl-8 pr-8 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors"
+              />
+              {rxSearch && (
+                <button
+                  onClick={() => setRxSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Prescriptions List */}
             <div className="space-y-3">
-              {patientPrescriptions.length === 0 ? (
-                <p className="text-slate-400 py-4 text-center">{t.patient.noActivePrescriptions}</p>
+              {filteredPrescriptions.length === 0 ? (
+                <div className="py-6 text-center text-slate-400 space-y-2">
+                  <Pill className="w-6 h-6 text-slate-300 dark:text-slate-600 mx-auto" />
+                  <p>{rxSearch ? `No prescriptions match "${rxSearch}".` : t.patient.noActivePrescriptions}</p>
+                  {rxSearch && (
+                    <button
+                      onClick={() => setRxSearch('')}
+                      className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded text-xs font-semibold cursor-pointer transition inline-flex items-center gap-1"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Clear search</span>
+                    </button>
+                  )}
+                </div>
               ) : (
-                patientPrescriptions.slice(0, 3).map((rx) => (
+                filteredPrescriptions.slice(0, 4).map((rx) => (
                   <div
                     key={rx.id}
-                    className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-between gap-3"
+                    className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-between gap-3 hover:border-teal-300 dark:hover:border-teal-700 transition"
                   >
                     <div>
-                      <h4 className="font-bold text-slate-900 dark:text-slate-100">{rx.items[0]?.medicationName}</h4>
-                      <p className="text-slate-500 text-[11px] mt-0.5">
-                        {rx.items[0]?.dosage} • {rx.items[0]?.frequency} • {rx.items[0]?.instructions}
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-slate-900 dark:text-slate-100">{rx.items[0]?.medicationName}</h4>
+                        <span className="font-mono text-[10px] text-teal-700 dark:text-teal-300 font-semibold bg-teal-50 dark:bg-teal-950 px-1.5 py-0.2 rounded border border-teal-200 dark:border-teal-800">
+                          {rx.items[0]?.dosage}
+                        </span>
+                      </div>
+                      <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">
+                        {rx.items[0]?.frequency} • {rx.items[0]?.instructions}
                       </p>
-                      <p className="text-[10px] text-teal-700 font-semibold mt-1">
+                      <p className="text-[10px] text-teal-700 dark:text-teal-400 font-semibold mt-1">
                         {language === 'fil' ? 'Nireseta ni' : 'Prescribed by'} {rx.doctorName} on {rx.date}
                       </p>
                     </div>
-                    {onOpenPrescription && (
-                      <button
-                        onClick={() => onOpenPrescription(rx)}
-                        className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-teal-400 rounded-lg text-slate-700 dark:text-slate-200 font-semibold flex items-center gap-1 cursor-pointer shrink-0"
-                      >
-                        <Printer className="w-3.5 h-3.5 text-teal-600" />
-                        <span>{language === 'fil' ? 'I-print ang Rx' : 'Print Rx'}</span>
-                      </button>
-                    )}
+                    <button
+                      onClick={() => handlePrintPrescription(rx)}
+                      className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-teal-400 rounded-lg text-slate-700 dark:text-slate-200 hover:text-teal-600 dark:hover:text-teal-400 font-semibold flex items-center gap-1.5 cursor-pointer shrink-0 transition shadow-2xs"
+                      title={language === 'fil' ? 'I-print ang Reseta' : 'Print Prescription'}
+                      type="button"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                      <span>{language === 'fil' ? 'I-print ang Reseta' : 'Print Prescription'}</span>
+                    </button>
                   </div>
                 ))
               )}
@@ -287,75 +418,215 @@ export const PatientDashboardView: React.FC<Props> = ({
         </div>
 
         <div className="lg:col-span-5 space-y-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4">
+          {/* Diagnostic Lab Section with Interactive Real-Time Search */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4 transition-colors">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <FlaskConical className="w-4 h-4 text-teal-600" />
+                <FlaskConical className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                 <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{t.patient.recentLabResults}</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-teal-700 dark:text-teal-300">
+                  {filteredLabs.length} {language === 'fil' ? 'Pagsusuri' : 'Tests'}
+                </span>
+                <button
+                  onClick={() => setActiveTab('laboratory')}
+                  className="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 p-1 rounded transition cursor-pointer"
+                  title="View all in full Laboratory tab"
+                >
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
 
+            {/* Real-time Lab Search Bar */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder={language === 'fil' ? 'Maghanap ng lab test, petsa, o resulta...' : 'Search lab test, status, or date...'}
+                value={labSearch}
+                onChange={(e) => setLabSearch(e.target.value)}
+                className="w-full pl-8 pr-8 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors"
+              />
+              {labSearch && (
+                <button
+                  onClick={() => setLabSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
             <div className="space-y-3">
-              {patientLabs.length === 0 ? (
-                <p className="text-slate-400 py-4 text-center">{t.patient.noLabResults}</p>
+              {filteredLabs.length === 0 ? (
+                <div className="py-6 text-center text-slate-400 space-y-2">
+                  <FlaskConical className="w-6 h-6 text-slate-300 dark:text-slate-600 mx-auto" />
+                  <p>{labSearch ? `No lab results match "${labSearch}".` : t.patient.noLabResults}</p>
+                  {labSearch && (
+                    <button
+                      onClick={() => setLabSearch('')}
+                      className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded text-xs font-semibold cursor-pointer transition inline-flex items-center gap-1"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Clear search</span>
+                    </button>
+                  )}
+                </div>
               ) : (
-                patientLabs.map((lab) => (
+                filteredLabs.map((lab) => (
                   <div
                     key={lab.id}
-                    className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-between gap-2"
+                    className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-between gap-2 hover:border-teal-300 dark:hover:border-teal-700 transition"
                   >
                     <div>
                       <h4 className="font-bold text-slate-900 dark:text-slate-100">{lab.testName}</h4>
-                      <p className="text-slate-500 text-[11px] mt-0.5">
+                      <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">
                         {language === 'fil' ? 'Petsa ng Pagsusuri' : 'Ordered'}: {new Date(lab.requestedAt).toLocaleDateString()}
                       </p>
-                      <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                         {lab.status}
                       </span>
                     </div>
-                    {onOpenLabReport && (
-                      <button
-                        onClick={() => onOpenLabReport(lab)}
-                        className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-teal-400 rounded-lg text-slate-700 dark:text-slate-200 font-semibold flex items-center gap-1 cursor-pointer shrink-0"
-                      >
-                        <ChevronRight className="w-3.5 h-3.5 text-teal-600" />
-                        <span>{language === 'fil' ? 'Tingnan ang Ulat' : 'View Report'}</span>
-                      </button>
-                    )}
+                    <button
+                      onClick={() => handlePrintLabReport(lab)}
+                      className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-teal-400 rounded-lg text-slate-700 dark:text-slate-200 hover:text-teal-600 dark:hover:text-teal-400 font-semibold flex items-center gap-1.5 cursor-pointer shrink-0 transition shadow-2xs"
+                      title={language === 'fil' ? 'I-print ang Ulat ng Lab' : 'Print Lab Report'}
+                      type="button"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                      <span>{language === 'fil' ? 'I-print ang Lab' : 'Print Lab Report'}</span>
+                    </button>
                   </div>
                 ))
               )}
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4">
+          {/* Billing & Invoice Summary Section with Interactive Real-Time Search */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4 transition-colors">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <Receipt className="w-4 h-4 text-teal-600" />
+                <Receipt className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                 <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{t.patient.billingSummary}</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-teal-700 dark:text-teal-300">
+                  {filteredInvoices.length} {language === 'fil' ? 'Kuwenta' : 'Invoices'}
+                </span>
+                <button
+                  onClick={() => setActiveTab('billing')}
+                  className="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 p-1 rounded transition cursor-pointer"
+                  title="View all in full Billing tab"
+                >
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
 
-            <div className="space-y-2.5">
-              {patientInvoices.map((inv) => (
-                <div
-                  key={inv.id}
-                  className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-between text-[11px]"
+            {/* Real-time Billing Search Bar */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder={language === 'fil' ? 'Maghanap ng invoice #, serbisyo, halaga...' : 'Search invoice #, service, amount...'}
+                value={billingSearch}
+                onChange={(e) => setBillingSearch(e.target.value)}
+                className="w-full pl-8 pr-8 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors"
+              />
+              {billingSearch && (
+                <button
+                  onClick={() => setBillingSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+                  title="Clear search"
                 >
-                  <div>
-                    <span className="font-bold text-slate-900 dark:text-slate-100">{inv.invoiceNumber}</span>
-                    <p className="text-slate-500 text-[10px]">{inv.date}</p>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-bold text-slate-900 dark:text-slate-100">{formatPeso(inv.totalAmount)}</span>
-                    <span className="block text-[10px] font-semibold text-emerald-700">{inv.status}</span>
-                  </div>
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-2.5">
+              {filteredInvoices.length === 0 ? (
+                <div className="py-6 text-center text-slate-400 space-y-2">
+                  <Receipt className="w-6 h-6 text-slate-300 dark:text-slate-600 mx-auto" />
+                  <p>{billingSearch ? `No invoices match "${billingSearch}".` : 'No billing statements found.'}</p>
+                  {billingSearch && (
+                    <button
+                      onClick={() => setBillingSearch('')}
+                      className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded text-xs font-semibold cursor-pointer transition inline-flex items-center gap-1"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Clear search</span>
+                    </button>
+                  )}
                 </div>
-              ))}
+              ) : (
+                filteredInvoices.map((inv) => (
+                  <div
+                    key={inv.id}
+                    className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-between gap-3 text-[11px] hover:border-teal-300 dark:hover:border-teal-700 transition"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-slate-900 dark:text-slate-100 block font-mono">{inv.invoiceNumber}</span>
+                      <p className="text-slate-500 dark:text-slate-400 text-[10px] truncate">
+                        {inv.date} • {inv.items.map((i) => i.description).join(', ')}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <div className="text-right">
+                        <span className="font-bold text-slate-900 dark:text-slate-100 block">{formatPeso(inv.totalAmount)}</span>
+                        <span
+                          className={`inline-block text-[10px] font-semibold px-1.5 py-0.2 rounded-full ${
+                            inv.status === 'Paid'
+                              ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950'
+                              : 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950'
+                          }`}
+                        >
+                          {inv.status}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={() => setViewingReceipt(inv)}
+                        className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-teal-400 rounded-lg text-slate-700 dark:text-slate-200 hover:text-teal-600 dark:hover:text-teal-400 font-semibold flex items-center gap-1.5 cursor-pointer transition shadow-2xs"
+                        title={language === 'fil' ? 'I-print ang Resibo' : 'Print Receipt'}
+                        type="button"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                        <span>{language === 'fil' ? 'I-print ang Resibo' : 'Print Receipt'}</span>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {viewingRx && (
+        <PrescriptionPrintModal
+          prescription={viewingRx}
+          onClose={() => setViewingRx(null)}
+        />
+      )}
+
+      {viewingLab && (
+        <LabReportModal
+          order={viewingLab}
+          onClose={() => setViewingLab(null)}
+        />
+      )}
+
+      {viewingReceipt && (
+        <ReceiptPrintModal
+          invoice={viewingReceipt}
+          onClose={() => setViewingReceipt(null)}
+        />
+      )}
     </div>
   );
 };

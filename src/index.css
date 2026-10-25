@@ -58,3 +58,131 @@ html:not(.dark) select option {
   display: none !important;
 }
 
+/* ==========================================================================
+   High-Fidelity Document Printing (Prescription, Receipt & Lab Report)
+   Ensures printed documents match the active light or dark mode theme
+   and completely isolates the printable document from the rest of the application.
+   ========================================================================== */
+@media print {
+  @page {
+    size: auto;
+    margin: 8mm 12mm;
+  }
+
+  /* Reset body and background */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    width: 100% !important;
+    min-height: 100% !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Completely suppress all background app content when printing modal document */
+  body.printing-active > #root,
+  body.printing-active > *:not(.print-modal-overlay),
+  body:has(.print-modal-overlay) > #root {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Suppress all interactive UI chrome, headers, navigation, and toasts */
+  header,
+  aside,
+  nav,
+  main,
+  button,
+  .no-print,
+  #smartclinic-notifications,
+  .toast-viewport,
+  [role="status"],
+  [role="alert"] {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Break the modal overlay container out of fixed viewport constraints */
+  .print-modal-overlay {
+    position: static !important;
+    inset: auto !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    z-index: auto !important;
+  }
+
+  .print-modal-container {
+    position: static !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    width: 100% !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+    background: transparent !important;
+  }
+
+  /* Document content print area */
+  .print-area {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important;
+    padding: 4mm 6mm !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Force exact background colors and text contrast for all children */
+  .print-area * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Dark mode print formatting */
+  html.dark,
+  html.dark body {
+    background-color: #0b1120 !important;
+    color: #f1f5f9 !important;
+  }
+
+  html.dark .print-area {
+    background-color: #0b1120 !important;
+    color: #f1f5f9 !important;
+    color-scheme: dark !important;
+  }
+
+  /* Light mode print formatting */
+  html:not(.dark),
+  html:not(.dark) body {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  html:not(.dark) .print-area {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    color-scheme: light !important;
+  }
+}
+

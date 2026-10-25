@@ -98,6 +98,54 @@ export const LoginPage: React.FC = () => {
     }, 600);
   };
 
+  // Cleanly flush stale input and credential states when switching roles
+  const handleRoleSwitch = (newRole: PrimaryAuthRole) => {
+    setPrimaryRole(newRole);
+    setMode('login');
+    setError('');
+    setPassword('');
+    setConfirmPassword('');
+    setTwoFactorCode('');
+    setEnablePatient2Fa(false);
+    setIsCaptchaVerified(false);
+    setIsCaptchaChecking(false);
+    setCaptchaError(false);
+    setShowLoginPassword(false);
+    setShowRegisterPassword(false);
+    setShowRegisterConfirmPassword(false);
+    if (newRole !== 'patient') {
+      setFullName('');
+      setPhone('');
+      setAddress('');
+      setEmergencyContactName('');
+      setEmergencyContactPhone('');
+      setAllergies('');
+      setChronicConditions('');
+      setHasAgreedPrivacy(false);
+    }
+  };
+
+  // Cleanly flush credentials and verification states when switching auth mode
+  const handleModeSwitch = (newMode: AuthMode) => {
+    setMode(newMode);
+    setError('');
+    setPassword('');
+    setConfirmPassword('');
+    setShowLoginPassword(false);
+    setShowRegisterPassword(false);
+    setShowRegisterConfirmPassword(false);
+    setIsCaptchaVerified(false);
+    setIsCaptchaChecking(false);
+    setCaptchaError(false);
+  };
+
+  const handleStaffSubRoleSwitch = (newSubRole: StaffSubRole) => {
+    setStaffSubRole(newSubRole);
+    setPassword('');
+    setTwoFactorCode('');
+    setError('');
+  };
+
   // Proactively check if entered email has Authenticator 2FA enabled (Admin, Doctor, Staff only — NEVER Patient)
   useEffect(() => {
     if (primaryRole === 'patient' || justResetPassword) {
@@ -437,11 +485,7 @@ export const LoginPage: React.FC = () => {
               <button
                 key={id}
                 type="button"
-                onClick={() => {
-                  setPrimaryRole(id);
-                  setError('');
-                  setMode('login');
-                }}
+                onClick={() => handleRoleSwitch(id)}
                 className={`flex flex-col items-center justify-center gap-1.5 py-2.5 sm:py-3 px-1 sm:px-2 rounded-2xl border text-xs font-bold transition-all cursor-pointer ${
                   primaryRole === id
                     ? 'border-teal-500 bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 shadow-sm'
@@ -462,7 +506,7 @@ export const LoginPage: React.FC = () => {
               <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl">
                 <button
                   type="button"
-                  onClick={() => { setMode('login'); setError(''); }}
+                  onClick={() => handleModeSwitch('login')}
                   className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
                     mode === 'login' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                   }`}
@@ -471,7 +515,7 @@ export const LoginPage: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setMode('register'); setError(''); }}
+                  onClick={() => handleModeSwitch('register')}
                   className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer ${
                     mode === 'register' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs' : 'text-slate-500 hover:text-slate-700'
                   }`}
@@ -496,7 +540,7 @@ export const LoginPage: React.FC = () => {
               </p>
               <select
                 value={staffSubRole}
-                onChange={(e) => setStaffSubRole(e.target.value as StaffSubRole)}
+                onChange={(e) => handleStaffSubRoleSwitch(e.target.value as StaffSubRole)}
                 className="w-full rounded-xl border border-teal-300 dark:border-teal-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-teal-500 cursor-pointer"
               >
                 <option value="nurse">Nurse — Outpatient Triage & Vitals Workbench</option>
@@ -540,7 +584,12 @@ export const LoginPage: React.FC = () => {
           {/* ========================================================================= */}
           {/* AUTHENTICATION FORM */}
           {/* ========================================================================= */}
-          <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          <form
+            key={`auth-form-${primaryRole}-${mode}-${isStaff ? staffSubRole : ''}`}
+            onSubmit={handleSubmit}
+            className="space-y-4 text-xs"
+            autoComplete="off"
+          >
             {/* PATIENT REGISTRATION: COMPREHENSIVE EMR INTAKE */}
             {isPatient && mode === 'register' ? (
               <div className="space-y-4">
@@ -773,11 +822,16 @@ export const LoginPage: React.FC = () => {
                       <div className="relative">
                         <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                         <input
+                          key="reg-password"
                           type={showRegisterPassword ? 'text' : 'password'}
                           required
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="Min 8 chars, upper, lower, num, special"
+                          autoComplete="new-password"
+                          autoCorrect="off"
+                          autoCapitalize="none"
+                          spellCheck={false}
                           className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-8 pr-8 py-2 text-xs focus:ring-2 focus:ring-teal-500"
                         />
                       </div>
@@ -800,11 +854,16 @@ export const LoginPage: React.FC = () => {
                       <div className="relative">
                         <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                         <input
+                          key="reg-confirm-password"
                           type={showRegisterConfirmPassword ? 'text' : 'password'}
                           required
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
                           placeholder="Re-enter password"
+                          autoComplete="new-password"
+                          autoCorrect="off"
+                          autoCapitalize="none"
+                          spellCheck={false}
                           className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-8 pr-8 py-2 text-xs focus:ring-2 focus:ring-teal-500"
                         />
                       </div>
@@ -933,11 +992,16 @@ export const LoginPage: React.FC = () => {
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
+                      key={`login-pass-${primaryRole}-${isStaff ? staffSubRole : ''}`}
                       type={showLoginPassword ? 'text' : 'password'}
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder={isAdmin ? 'SmartClinic@Admin2026' : '••••••••'}
+                      autoComplete="current-password"
+                      autoCorrect="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
                       className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500"
                     />
                   </div>
@@ -1046,11 +1110,16 @@ export const LoginPage: React.FC = () => {
                     <div className="relative">
                       <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input
+                        key={`login-2fa-${primaryRole}-${isStaff ? staffSubRole : ''}`}
                         type="text"
                         maxLength={6}
                         value={twoFactorCode}
-                        onChange={(e) => setTwoFactorCode(e.target.value)}
+                        onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
                         placeholder="Enter 6-digit rolling code from phone"
+                        autoComplete="one-time-code"
+                        autoCorrect="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
                         className="w-full rounded-xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-3 py-2.5 text-xs font-mono font-bold tracking-widest focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
@@ -1102,10 +1171,7 @@ export const LoginPage: React.FC = () => {
                 Already registered with Smart Clinic?{' '}
                 <button
                   type="button"
-                  onClick={() => {
-                    setMode('login');
-                    setError('');
-                  }}
+                  onClick={() => handleModeSwitch('login')}
                   className="font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
                 >
                   Sign In to Health Portal
@@ -1118,10 +1184,7 @@ export const LoginPage: React.FC = () => {
                 New outpatient?{' '}
                 <button
                   type="button"
-                  onClick={() => {
-                    setMode('register');
-                    setError('');
-                  }}
+                  onClick={() => handleModeSwitch('register')}
                   className="font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
                 >
                   Create Patient Account (Full EMR Intake)
@@ -1149,9 +1212,12 @@ export const LoginPage: React.FC = () => {
                   setPrimaryRole('patient');
                   setEmail('elena.vargas@example.com');
                   setPassword('patient123');
+                  setConfirmPassword('');
                   setMode('login');
                   setEnablePatient2Fa(false);
                   setTwoFactorCode('');
+                  setIsCaptchaVerified(false);
+                  setCaptchaError(false);
                 }}
                 className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
@@ -1167,6 +1233,10 @@ export const LoginPage: React.FC = () => {
                   setPrimaryRole('doctor');
                   setEmail('maria.reyes@smartclinic.ph');
                   setPassword('doctor123');
+                  setConfirmPassword('');
+                  setMode('login');
+                  setTwoFactorCode('');
+                  setIsCaptchaVerified(false);
                 }}
                 className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
@@ -1183,6 +1253,10 @@ export const LoginPage: React.FC = () => {
                   setStaffSubRole('nurse');
                   setEmail('ana.villanueva@smartclinic.ph');
                   setPassword('nurse123');
+                  setConfirmPassword('');
+                  setMode('login');
+                  setTwoFactorCode('');
+                  setIsCaptchaVerified(false);
                 }}
                 className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
@@ -1199,6 +1273,10 @@ export const LoginPage: React.FC = () => {
                   setStaffSubRole('pharmacist');
                   setEmail('pharmacy@smartclinic.ph');
                   setPassword('pharm123');
+                  setConfirmPassword('');
+                  setMode('login');
+                  setTwoFactorCode('');
+                  setIsCaptchaVerified(false);
                 }}
                 className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
@@ -1215,6 +1293,10 @@ export const LoginPage: React.FC = () => {
                   setStaffSubRole('receptionist');
                   setEmail('reception@smartclinic.ph');
                   setPassword('reception123');
+                  setConfirmPassword('');
+                  setMode('login');
+                  setTwoFactorCode('');
+                  setIsCaptchaVerified(false);
                 }}
                 className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
@@ -1231,6 +1313,10 @@ export const LoginPage: React.FC = () => {
                   setStaffSubRole('lab_technician');
                   setEmail('lab@smartclinic.ph');
                   setPassword('lab123');
+                  setConfirmPassword('');
+                  setMode('login');
+                  setTwoFactorCode('');
+                  setIsCaptchaVerified(false);
                 }}
                 className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500 hover:bg-teal-50/50 dark:hover:bg-teal-950/30 text-left transition cursor-pointer"
               >
@@ -1246,7 +1332,10 @@ export const LoginPage: React.FC = () => {
                   setPrimaryRole('admin');
                   setEmail('smartclinicrealacc@gmail.com');
                   setPassword('SmartClinic@Admin2026');
+                  setConfirmPassword('');
+                  setMode('login');
                   setTwoFactorCode('');
+                  setIsCaptchaVerified(false);
                 }}
                 className="p-2 rounded-xl border border-amber-300 dark:border-amber-700/60 bg-amber-50/50 dark:bg-amber-950/30 hover:border-amber-500 text-left transition cursor-pointer"
               >

@@ -53,21 +53,51 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [resetToken, setResetToken] = useState('');
+  const [lifecycleVersion, setLifecycleVersion] = useState(0);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    setStep('request');
+  const resetVerificationState = (keepIdentifier = true) => {
     setCode('');
     setNewPassword('');
     setConfirmPassword('');
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
     setError('');
     setLoading(false);
     setQrCodeDataUrl('');
     setTotpSecret('');
     setResetToken('');
-    setIsEmailRegistered(null);
-    if (defaultIdentifier) setIdentifier(defaultIdentifier);
+    setLifecycleVersion((v) => v + 1);
+    if (!keepIdentifier) {
+      setIdentifier('');
+      setIsEmailRegistered(null);
+      setHasAuthenticatorAvailable(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setStep('request');
+    resetVerificationState(true);
+    if (defaultIdentifier) {
+      setIdentifier(defaultIdentifier);
+    }
   }, [isOpen, defaultIdentifier]);
+
+  const handleGoBackToRequest = () => {
+    setStep('request');
+    resetVerificationState(true);
+  };
+
+  const handleIdentifierChange = (val: string) => {
+    setIdentifier(val);
+    resetVerificationState(true);
+  };
+
+  const handleModalClose = () => {
+    setStep('request');
+    resetVerificationState(true);
+    onClose();
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -187,14 +217,14 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
       setError('This email address is not registered in our clinic system.');
       return;
     }
-    setError('');
+    // Flush any previous verification codes or passwords
+    resetVerificationState(true);
     setRecoveryMethod('authenticator');
     setStep('confirm');
   };
 
   const handleSendEmailCode = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    setError('');
     const cleanId = identifier.trim();
     if (!cleanId || !cleanId.includes('@')) {
       setError('Please enter your registered email address.');
@@ -204,6 +234,9 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
       setError('This email address is not registered in our clinic system.');
       return;
     }
+
+    // Flush previous verification codes or passwords before sending new OTP
+    resetVerificationState(true);
 
     setLoading(true);
     try {
@@ -312,12 +345,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
 
       toastSuccess('Password updated successfully! You can now log in with your new credentials.');
       if (onPasswordResetSuccess) onPasswordResetSuccess(newPassword, cleanId);
-      setStep('request');
-      setCode('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setResetToken('');
-      onClose();
+      handleModalClose();
     } catch (err: any) {
       setLoading(false);
       const isAbort = err?.name === 'AbortError';
@@ -333,7 +361,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-7 max-h-[90vh] overflow-y-auto">
         <button
-          onClick={onClose}
+          onClick={handleModalClose}
           className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
         >
           <X className="w-5 h-5" />
@@ -365,11 +393,16 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Registered Account Email</label>
               <input
+                key={`forgot-req-email-${lifecycleVersion}`}
                 type="email"
                 required
                 value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
+                onChange={(e) => handleIdentifierChange(e.target.value)}
                 placeholder="name@example.com"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
                 className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500"
               />
               <p className="mt-1.5 text-[11px] text-slate-400">
@@ -424,7 +457,11 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleConfirmReset} className="space-y-4">
+          <form
+            key={`forgot-confirm-${recoveryMethod}-${lifecycleVersion}`}
+            onSubmit={handleConfirmReset}
+            className="space-y-4"
+          >
             <div className="p-3 rounded-2xl bg-teal-50/80 dark:bg-teal-950/40 border border-teal-200/80 dark:border-teal-800 flex items-center justify-between text-xs text-teal-900 dark:text-teal-200">
               <div className="flex items-center gap-2 font-medium">
                 {recoveryMethod === 'authenticator' ? (
@@ -439,7 +476,11 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                   </>
                 )}
               </div>
-              <button type="button" onClick={() => setStep('request')} className="text-[11px] font-bold text-teal-700 dark:text-teal-300 hover:underline cursor-pointer">
+              <button
+                type="button"
+                onClick={handleGoBackToRequest}
+                className="text-[11px] font-bold text-teal-700 dark:text-teal-300 hover:underline cursor-pointer"
+              >
                 Change
               </button>
             </div>
@@ -490,12 +531,17 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 )}
               </div>
               <input
+                key={`forgot-code-${recoveryMethod}-${lifecycleVersion}`}
                 type="text"
                 maxLength={6}
                 required
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
                 placeholder={recoveryMethod === 'authenticator' ? 'Enter from Authenticator' : '••••••'}
+                autoComplete="one-time-code"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
                 className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-xs font-mono font-bold tracking-widest text-center focus:ring-2 focus:ring-teal-500"
               />
             </div>
@@ -510,7 +556,19 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input type={showNewPassword ? 'text' : 'password'} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Create high-security password" className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-9 py-2 text-xs focus:ring-2 focus:ring-teal-500" />
+                <input
+                  key={`forgot-newpass-${lifecycleVersion}`}
+                  type={showNewPassword ? 'text' : 'password'}
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Create high-security password"
+                  autoComplete="new-password"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-9 py-2 text-xs focus:ring-2 focus:ring-teal-500"
+                />
               </div>
               {newPassword && (
                 <div className="mt-2.5">
@@ -529,16 +587,36 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input type={showConfirmPassword ? 'text' : 'password'} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Re-type new password" className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-9 py-2 text-xs focus:ring-2 focus:ring-teal-500" />
+                <input
+                  key={`forgot-confirmpass-${lifecycleVersion}`}
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-type new password"
+                  autoComplete="new-password"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-9 py-2 text-xs focus:ring-2 focus:ring-teal-500"
+                />
               </div>
             </div>
 
             <div className="flex gap-2 pt-2">
-              <button type="button" onClick={() => setStep('request')} className="flex-1 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center gap-1">
+              <button
+                type="button"
+                onClick={handleGoBackToRequest}
+                className="flex-1 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center gap-1"
+              >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Back</span>
               </button>
-              <button type="submit" disabled={loading} className="flex-2 py-2 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-teal-600/20 transition cursor-pointer disabled:opacity-60">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-2 py-2 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-teal-600/20 transition cursor-pointer disabled:opacity-60"
+              >
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>{loading ? 'Updating Credentials…' : 'Save New Password'}</span>
               </button>

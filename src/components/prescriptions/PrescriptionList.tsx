@@ -1,19 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { Prescription } from '../../types/clinic';
 import {
   Pill,
   Plus,
   Printer,
-  ShieldAlert,
-  CheckCircle2,
-  AlertTriangle,
-  Search,
-  Filter,
-  User,
-  Sparkles,
   ShieldCheck,
-  Lock
+  Search,
+  X,
+  Sparkles,
+  Calendar,
+  User,
+  RotateCcw
 } from 'lucide-react';
 
 interface Props {
@@ -31,29 +29,72 @@ export const PrescriptionList: React.FC<Props> = ({
     prescriptions,
     dispenseMedication,
     activeRole,
-    currentUser,
-    selectPatient,
-    setActiveTab,
+    primaryRole,
   } = useClinic();
 
-  const isPatient = activeRole === 'patient';
+  const isPatient = activeRole === 'patient' || primaryRole === 'patient';
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
-  const filteredRx = prescriptions.filter((rx) => {
-    const matchesSearch =
-      (isPatient ? true : rx.patientName.toLowerCase().includes(search.toLowerCase())) &&
-      (rx.prescriptionNumber.toLowerCase().includes(search.toLowerCase()) ||
-        rx.items.some((i) => i.medicationName.toLowerCase().includes(search.toLowerCase())));
+  const filteredRx = useMemo(() => {
+    const query = search.trim().toLowerCase();
 
-    const matchesStatus = statusFilter === 'ALL' || rx.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+    return prescriptions.filter((rx) => {
+      // Status filter
+      if (statusFilter !== 'ALL' && rx.status !== statusFilter) {
+        return false;
+      }
+
+      // If query is empty, all records matching status are included
+      if (!query) {
+        return true;
+      }
+
+      // Comprehensive search matching
+      const rxNumMatch = rx.prescriptionNumber?.toLowerCase().includes(query);
+      const doctorMatch = rx.doctorName?.toLowerCase().includes(query) || rx.doctorLicense?.toLowerCase().includes(query);
+      const dateMatch = rx.date?.toLowerCase().includes(query);
+      const statusMatch = rx.status?.toLowerCase().includes(query);
+      const patientMatch = rx.patientName?.toLowerCase().includes(query) || rx.patientMrn?.toLowerCase().includes(query);
+
+      // Deep medication item inspection (medication name, generic name, dosage, instructions, frequency)
+      const itemMatch = rx.items?.some((item) => {
+        const medName = item.medicationName?.toLowerCase() || '';
+        const genName = item.genericName?.toLowerCase() || '';
+        const dosage = item.dosage?.toLowerCase() || '';
+        const freq = item.frequency?.toLowerCase() || '';
+        const instructions = item.instructions?.toLowerCase() || '';
+        const duration = item.duration?.toLowerCase() || '';
+
+        return (
+          medName.includes(query) ||
+          genName.includes(query) ||
+          dosage.includes(query) ||
+          freq.includes(query) ||
+          instructions.includes(query) ||
+          duration.includes(query)
+        );
+      });
+
+      const safetyWarningMatch = rx.aiSafetyAudit?.warnings?.some((w) => w.toLowerCase().includes(query));
+
+      return Boolean(rxNumMatch || doctorMatch || dateMatch || statusMatch || itemMatch || safetyWarningMatch || patientMatch);
+    });
+  }, [prescriptions, search, statusFilter]);
+
+  const handleClearSearch = () => {
+    setSearch('');
+  };
+
+  const handleResetFilters = () => {
+    setSearch('');
+    setStatusFilter('ALL');
+  };
 
   return (
     <div className="space-y-4 max-w-6xl mx-auto text-xs font-sans pb-10">
       {/* Header and Actions */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
@@ -74,7 +115,7 @@ export const PrescriptionList: React.FC<Props> = ({
         {!isPatient && activeRole !== 'pharmacist' && (
           <button
             onClick={onOpenNewPrescription}
-            className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-teal-700/20 cursor-pointer self-start sm:self-auto"
+            className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-teal-700/20 cursor-pointer self-start sm:self-auto transition"
           >
             <Plus className="w-4 h-4" />
             <span>Write New Prescription</span>
@@ -83,7 +124,7 @@ export const PrescriptionList: React.FC<Props> = ({
       </div>
 
       {/* Security & Privacy Notice */}
-      <div className="p-3 bg-teal-50/60 dark:bg-teal-950/30 border border-teal-200/80 dark:border-teal-900/60 rounded-xl flex items-center justify-between gap-3 text-xs">
+      <div className="p-3 bg-teal-50/60 dark:bg-teal-950/30 border border-teal-200/80 dark:border-teal-900/60 rounded-xl flex items-center justify-between gap-3 text-xs transition-colors">
         <div className="flex items-center gap-2 text-teal-900 dark:text-teal-200">
           <ShieldCheck className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
           <span>
@@ -97,45 +138,91 @@ export const PrescriptionList: React.FC<Props> = ({
         </span>
       </div>
 
-      {/* Filter and Search */}
-      <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex-1 min-w-[200px] relative">
+      {/* Filter and Search Bar */}
+      <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs transition-colors">
+        <div className="flex-1 min-w-[240px] relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder={isPatient ? 'Search medication name or Rx number...' : 'Search by Rx number or drug name...'}
+            placeholder={
+              isPatient
+                ? 'Search medication, dosage, doctor, date, or Rx number...'
+                : 'Search by Rx number, drug name, dosage, doctor, or patient...'
+            }
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+            className="w-full pl-9 pr-9 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors"
           />
+          {search && (
+            <button
+              onClick={handleClearSearch}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md cursor-pointer"
+              aria-label="Clear search query"
+              title="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-slate-400 font-medium">Status:</span>
+          <span className="text-slate-500 dark:text-slate-400 font-medium">Status:</span>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-200 focus:outline-none"
+            className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500/20 cursor-pointer transition-colors"
           >
             <option value="ALL">All Statuses</option>
             <option value="Active">Active</option>
             <option value="Dispensed">Dispensed</option>
             <option value="Partially Dispensed">Partially Dispensed</option>
           </select>
+          {(search || statusFilter !== 'ALL') && (
+            <button
+              onClick={handleResetFilters}
+              className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-medium flex items-center gap-1 transition cursor-pointer"
+              title="Reset all filters"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* Prescription Cards List */}
       <div className="space-y-3">
         {filteredRx.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 p-12 text-center rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-400">
-            {isPatient ? 'No personal prescriptions found.' : 'No prescriptions found matching criteria.'}
+          <div className="bg-white dark:bg-slate-900 p-12 text-center rounded-xl border border-slate-200 dark:border-slate-800 text-xs transition-colors space-y-3">
+            <Pill className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto" />
+            {search || statusFilter !== 'ALL' ? (
+              <div className="space-y-2">
+                <p className="font-semibold text-slate-700 dark:text-slate-300">
+                  No prescriptions found matching &ldquo;{search}&rdquo;
+                  {statusFilter !== 'ALL' ? ` with status &ldquo;${statusFilter}&rdquo;` : ''}.
+                </p>
+                <p className="text-slate-400">
+                  Try checking the medication spelling, searching by doctor name or dosage, or clearing the filter.
+                </p>
+                <button
+                  onClick={handleResetFilters}
+                  className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-semibold text-xs transition cursor-pointer shadow-xs inline-flex items-center gap-1.5 mt-1"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Clear Search &amp; Filters</span>
+                </button>
+              </div>
+            ) : (
+              <p className="text-slate-400">
+                {isPatient ? 'No personal electronic prescriptions on file.' : 'No prescriptions found in the clinic system.'}
+              </p>
+            )}
           </div>
         ) : (
           filteredRx.map((rx) => (
             <div
               key={rx.id}
-              className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs p-4 hover:border-teal-200 dark:hover:border-teal-800 transition space-y-3 text-xs"
+              className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs p-4 hover:border-teal-300 dark:hover:border-teal-700 transition space-y-3 text-xs"
             >
               {/* Rx Top Row */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -145,7 +232,9 @@ export const PrescriptionList: React.FC<Props> = ({
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-slate-900 dark:text-white text-xs">{rx.prescriptionNumber}</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white text-xs">
+                        {rx.prescriptionNumber}
+                      </span>
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                           rx.status === 'Active'
@@ -167,40 +256,49 @@ export const PrescriptionList: React.FC<Props> = ({
                 <div className="flex items-center gap-2 self-end sm:self-center">
                   <button
                     onClick={() => onPrintPrescription(rx)}
-                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                    title="Print Prescription"
                   >
-                    <Printer className="w-3.5 h-3.5" />
-                    <span>Print Official Rx</span>
+                    <Printer className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                    <span>Print Prescription</span>
                   </button>
                 </div>
               </div>
 
               {/* Items List */}
               <div className="space-y-2">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prescribed Medications</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Prescribed Medications ({rx.items.length})
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {rx.items.map((item) => (
                     <div
                       key={item.id}
-                      className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-700/60 flex items-start justify-between gap-2"
+                      className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-700/60 flex items-start justify-between gap-2 transition-colors"
                     >
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-1.5">
                           <Pill className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
-                          <span className="font-bold text-slate-900 dark:text-white text-xs">{item.medicationName}</span>
-                          <span className="text-[10px] text-slate-500 font-mono">({item.dosage})</span>
+                          <span className="font-bold text-slate-900 dark:text-white text-xs">
+                            {item.medicationName}
+                          </span>
+                          <span className="text-[10px] text-teal-700 dark:text-teal-300 font-mono font-semibold">
+                            ({item.dosage})
+                          </span>
                         </div>
                         <p className="text-[11px] text-slate-600 dark:text-slate-300">
                           {item.frequency} • {item.duration} (Quantity: {item.quantity})
                         </p>
-                        <p className="text-[10px] text-slate-400 italic">Sig: {item.instructions}</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 italic">
+                          Sig: {item.instructions}
+                        </p>
                       </div>
 
                       {/* Dispense action for staff/pharmacist */}
                       {(activeRole === 'pharmacist' || activeRole === 'admin') && !item.dispensed && (
                         <button
                           onClick={() => dispenseMedication(rx.id, item.id)}
-                          className="px-2 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded text-[10px] font-semibold shrink-0 cursor-pointer shadow-2xs"
+                          className="px-2 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded text-[10px] font-semibold shrink-0 cursor-pointer shadow-2xs transition"
                         >
                           Dispense
                         </button>
@@ -215,12 +313,12 @@ export const PrescriptionList: React.FC<Props> = ({
                 </div>
               </div>
 
-              {/* Bottom Safety & Signature Row */}
+              {/* Bottom Safety & Physician Row */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400">
                 <div className="flex items-center gap-2">
                   {rx.aiSafetyAudit ? (
                     <div className="flex items-center gap-1 text-teal-700 dark:text-teal-300 font-medium">
-                      <Sparkles className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                      <Sparkles className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
                       <span>Safety Audit: {rx.aiSafetyAudit.warnings[0] || 'No adverse interactions detected.'}</span>
                     </div>
                   ) : (
@@ -229,8 +327,10 @@ export const PrescriptionList: React.FC<Props> = ({
                 </div>
 
                 <div className="text-right">
-                  <span>Prescribing Physician: <strong className="text-slate-800 dark:text-slate-200">{rx.doctorName}</strong> ({rx.doctorLicense})</span>
-                  <span className="ml-2 text-slate-400">{rx.date}</span>
+                  <span>
+                    Prescribing Physician: <strong className="text-slate-800 dark:text-slate-200">{rx.doctorName}</strong> ({rx.doctorLicense})
+                  </span>
+                  <span className="ml-2 text-slate-400 font-mono">{rx.date}</span>
                 </div>
               </div>
             </div>
