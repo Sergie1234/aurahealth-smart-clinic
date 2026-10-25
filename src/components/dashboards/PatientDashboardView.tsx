@@ -19,9 +19,7 @@ import {
 import { RoleHeroBanner } from '../common/RoleHeroBanner';
 import { formatPeso } from '../../utils/currency';
 import { Invoice, Prescription, LabTestOrder } from '../../types/clinic';
-import { ReceiptPrintModal } from '../billing/ReceiptPrintModal';
-import { PrescriptionPrintModal } from '../prescriptions/PrescriptionPrintModal';
-import { LabReportModal } from '../laboratory/LabReportModal';
+import { usePrint } from '../../context/PrintContext';
 
 interface Props {
   onOpenBookAppointment?: () => void;
@@ -50,20 +48,18 @@ export const PatientDashboardView: React.FC<Props> = ({
     t,
     language,
   } = useClinic();
+  const { printPrescription: globalPrintRx, printLabReport: globalPrintLab, printReceipt: globalPrintReceipt } = usePrint();
 
   // Search states for patient dashboard sections
   const [rxSearch, setRxSearch] = useState('');
   const [labSearch, setLabSearch] = useState('');
   const [billingSearch, setBillingSearch] = useState('');
-  const [viewingReceipt, setViewingReceipt] = useState<Invoice | null>(null);
-  const [viewingRx, setViewingRx] = useState<Prescription | null>(null);
-  const [viewingLab, setViewingLab] = useState<LabTestOrder | null>(null);
 
   const handlePrintPrescription = (rx: Prescription) => {
     if (onOpenPrescription) {
       onOpenPrescription(rx);
     } else {
-      setViewingRx(rx);
+      globalPrintRx(rx);
     }
   };
 
@@ -71,8 +67,12 @@ export const PatientDashboardView: React.FC<Props> = ({
     if (onOpenLabReport) {
       onOpenLabReport(lab);
     } else {
-      setViewingLab(lab);
+      globalPrintLab(lab);
     }
+  };
+
+  const handlePrintReceipt = (inv: Invoice) => {
+    globalPrintReceipt(inv);
   };
 
   // Active patient (logged-in portal patient)
@@ -592,7 +592,7 @@ export const PatientDashboardView: React.FC<Props> = ({
                       </div>
 
                       <button
-                        onClick={() => setViewingReceipt(inv)}
+                        onClick={() => handlePrintReceipt(inv)}
                         className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-teal-400 rounded-lg text-slate-700 dark:text-slate-200 hover:text-teal-600 dark:hover:text-teal-400 font-semibold flex items-center gap-1.5 cursor-pointer transition shadow-2xs"
                         title={language === 'fil' ? 'I-print ang Resibo' : 'Print Receipt'}
                         type="button"
@@ -608,27 +608,6 @@ export const PatientDashboardView: React.FC<Props> = ({
           </div>
         </div>
       </div>
-
-      {viewingRx && (
-        <PrescriptionPrintModal
-          prescription={viewingRx}
-          onClose={() => setViewingRx(null)}
-        />
-      )}
-
-      {viewingLab && (
-        <LabReportModal
-          order={viewingLab}
-          onClose={() => setViewingLab(null)}
-        />
-      )}
-
-      {viewingReceipt && (
-        <ReceiptPrintModal
-          invoice={viewingReceipt}
-          onClose={() => setViewingReceipt(null)}
-        />
-      )}
     </div>
   );
 };

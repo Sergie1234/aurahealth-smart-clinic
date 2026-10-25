@@ -1,7 +1,7 @@
 /**
  * High-Fidelity Real-Time Document Printing Utility
- * Handles instant browser print dialog triggering, document titles for PDF export,
- * and DOM isolation across desktop, tablet, and mobile browsers.
+ * Handles browser print dialog triggering, document titles for PDF export,
+ * and reliable print flow across desktop, tablet, and mobile browsers.
  */
 
 export interface PrintDocumentOptions {
@@ -13,7 +13,7 @@ export interface PrintDocumentOptions {
 
 /**
  * Triggers real-time printing using the browser's native print engine.
- * Sets document title for automatic PDF export naming and activates document print isolation.
+ * Sets document title for automatic PDF export naming and triggers window.print().
  */
 export function triggerRealtimePrint(options: PrintDocumentOptions): boolean {
   const originalTitle = document.title;
@@ -21,13 +21,7 @@ export function triggerRealtimePrint(options: PrintDocumentOptions): boolean {
     document.title = options.title;
   }
 
-  // Add printing state class to documentElement for instant CSS isolation
-  document.documentElement.classList.add('is-printing-document');
-  document.body.classList.add('is-printing-document');
-
   const cleanup = () => {
-    document.documentElement.classList.remove('is-printing-document');
-    document.body.classList.remove('is-printing-document');
     document.title = originalTitle;
     window.removeEventListener('afterprint', cleanup);
   };
@@ -35,16 +29,16 @@ export function triggerRealtimePrint(options: PrintDocumentOptions): boolean {
   window.addEventListener('afterprint', cleanup, { once: true });
 
   try {
-    window.focus();
-    window.print();
+    // Focus window before triggering print (crucial for iframe environments)
+    if (typeof window !== 'undefined') {
+      window.focus();
+      window.print();
+    }
     return true;
   } catch (err) {
-    console.warn('Native window.print() error:', err);
+    console.warn('Native window.print() exception:', err);
     cleanup();
     return false;
-  } finally {
-    // Fallback timer cleanup for environments where afterprint event is delayed
-    setTimeout(cleanup, 1000);
   }
 }
 

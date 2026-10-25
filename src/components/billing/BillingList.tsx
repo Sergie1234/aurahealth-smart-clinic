@@ -13,10 +13,11 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { formatPeso } from '../../utils/currency';
-import { ReceiptPrintModal } from './ReceiptPrintModal';
+import { usePrint } from '../../context/PrintContext';
 
 export const BillingList: React.FC = () => {
   const { invoices, payInvoice, addInvoice, patients, activeRole, primaryRole } = useClinic();
+  const { printReceipt } = usePrint();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -35,8 +36,6 @@ export const BillingList: React.FC = () => {
   const [newItemDesc, setNewItemDesc] = useState('');
   const [newItemPrice, setNewItemPrice] = useState('500');
   const [newItemCategory, setNewItemCategory] = useState<InvoiceItem['category']>('Laboratory');
-
-  const [viewReceipt, setViewReceipt] = useState<Invoice | null>(null);
 
   const isPatient = activeRole === 'patient' || primaryRole === 'patient';
 
@@ -383,7 +382,7 @@ export const BillingList: React.FC = () => {
                         )}
 
                         <button
-                          onClick={() => setViewReceipt(inv)}
+                          onClick={() => printReceipt(inv)}
                           className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
                           title="Print Receipt"
                           type="button"
@@ -459,13 +458,6 @@ export const BillingList: React.FC = () => {
             </form>
           </div>
         </div>
-      )}
-
-      {viewReceipt && (
-        <ReceiptPrintModal
-          invoice={viewReceipt}
-          onClose={() => setViewReceipt(null)}
-        />
       )}
 
       {showNewInvoice && (

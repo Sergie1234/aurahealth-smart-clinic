@@ -15,10 +15,13 @@ import {
   ShieldCheck,
   Stethoscope,
   QrCode,
-  DollarSign
+  DollarSign,
+  Printer,
 } from 'lucide-react';
 import { AIDisclaimerBanner } from '../common/AIDisclaimerBanner';
 import { aiService, PatientSummaryResponse } from '../../services/aiService';
+import { usePrint } from '../../context/PrintContext';
+import { formatPeso } from '../../utils/currency';
 
 interface Props {
   patient: Patient;
@@ -42,6 +45,8 @@ export const PatientDetailModal: React.FC<Props> = ({
     activeRole,
     setActiveTab,
   } = useClinic();
+
+  const { printPrescription, printReceipt, printLabReport } = usePrint();
 
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'timeline' | 'vitals' | 'meds'>('overview');
   const [showAddVitals, setShowAddVitals] = useState(false);
@@ -502,9 +507,21 @@ export const PatientDetailModal: React.FC<Props> = ({
                   <div key={l.id} className="relative">
                     <span className="absolute -left-[31px] top-1 w-4 h-4 rounded-full bg-indigo-500 border-2 border-white" />
                     <div className="bg-indigo-50/40 p-3.5 rounded-xl border border-indigo-200 space-y-1.5">
-                      <div className="flex justify-between items-center">
+                      <div className="flex justify-between items-center gap-2">
                         <span className="font-bold text-indigo-950 text-xs">{l.testName}</span>
-                        <span className="text-[10px] text-indigo-500">{new Date(l.requestedAt).toLocaleDateString()}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-indigo-500">{new Date(l.requestedAt).toLocaleDateString()}</span>
+                          {(l.status === 'Result Available' || l.status === 'Reviewed' || l.status === 'Completed' || (l.results && l.results.length > 0)) && (
+                            <button
+                              onClick={() => printLabReport(l)}
+                              className="px-2 py-0.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 rounded text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                              title="Print Certified Lab Report"
+                            >
+                              <Printer className="w-3 h-3" />
+                              <span>Print Report</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <p className="text-xs text-slate-700">Status: <span className="font-bold">{l.status}</span></p>
                       {l.results && (
@@ -570,7 +587,17 @@ export const PatientDetailModal: React.FC<Props> = ({
                   {patientPrescriptions.map((rx) => (
                     <div key={rx.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
                       <div className="flex justify-between items-center mb-1">
-                        <span className="font-bold text-slate-900">{rx.prescriptionNumber}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900">{rx.prescriptionNumber}</span>
+                          <button
+                            onClick={() => printPrescription(rx)}
+                            className="px-2 py-0.5 bg-teal-100 hover:bg-teal-200 text-teal-800 rounded text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                            title="Print Official Prescription"
+                          >
+                            <Printer className="w-3 h-3" />
+                            <span>Print Rx</span>
+                          </button>
+                        </div>
                         <span className="text-[10px] bg-teal-100 text-teal-800 px-2 py-0.5 rounded font-semibold">
                           {rx.status}
                         </span>
@@ -595,11 +622,21 @@ export const PatientDetailModal: React.FC<Props> = ({
                   {patientInvoices.map((inv) => (
                     <div key={inv.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs flex justify-between items-center">
                       <div>
-                        <span className="font-bold text-slate-900">{inv.invoiceNumber}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900">{inv.invoiceNumber}</span>
+                          <button
+                            onClick={() => printReceipt(inv)}
+                            className="px-2 py-0.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                            title="Print Official Receipt"
+                          >
+                            <Printer className="w-3 h-3" />
+                            <span>Print Receipt</span>
+                          </button>
+                        </div>
                         <p className="text-[11px] text-slate-500">{inv.items.map((i) => i.description).join(', ')}</p>
                       </div>
                       <div className="text-right">
-                        <span className="font-bold text-slate-900 text-sm">${inv.totalAmount.toFixed(2)}</span>
+                        <span className="font-bold text-slate-900 text-sm">{formatPeso(inv.totalAmount)}</span>
                         <span className={`block text-[10px] font-bold ${inv.status === 'Paid' ? 'text-emerald-600' : 'text-amber-600'}`}>
                           {inv.status}
                         </span>

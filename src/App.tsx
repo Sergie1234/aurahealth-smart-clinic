@@ -7,6 +7,8 @@ import React, { useState, useEffect } from 'react';
 import { ClinicProvider, useClinic } from './context/ClinicContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider, ToastViewport } from './context/ToastContext';
+import { PrintProvider, usePrint } from './context/PrintContext';
+import { GlobalPrintModal } from './components/common/GlobalPrintModal';
 import { GlobalSystemControls } from './components/common/GlobalSystemControls';
 import { SessionWarningModal } from './components/common/SessionWarningModal';
 import { Header } from './components/layout/Header';
@@ -23,10 +25,8 @@ import { QueueManager } from './components/appointments/QueueManager';
 import { ConsultationWorkspace } from './components/consultations/ConsultationWorkspace';
 import { PrescriptionList } from './components/prescriptions/PrescriptionList';
 import { NewPrescriptionModal } from './components/prescriptions/NewPrescriptionModal';
-import { PrescriptionPrintModal } from './components/prescriptions/PrescriptionPrintModal';
 import { LabOrdersList } from './components/laboratory/LabOrdersList';
 import { EnterLabResultsModal } from './components/laboratory/EnterLabResultsModal';
-import { LabReportModal } from './components/laboratory/LabReportModal';
 import { InventoryList } from './components/pharmacy/InventoryList';
 import { BillingList } from './components/billing/BillingList';
 import { ReportsAnalytics } from './components/reports/ReportsAnalytics';
@@ -67,6 +67,7 @@ const ClinicAppContent: React.FC = () => {
     isBookAppointmentOpen,
     setIsBookAppointmentOpen,
   } = useClinic();
+  const { printPrescription, printLabReport, printReceipt } = usePrint();
 
   const [pendingBook, setPendingBook] = useState(false);
   const [showNewPatient, setShowNewPatient] = useState(false);
@@ -77,9 +78,7 @@ const ClinicAppContent: React.FC = () => {
   const [scanQRMode, setScanQRMode] = useState<'checkin' | 'emergency'>('checkin');
   const [detailPatient, setDetailPatient] = useState<Patient | null>(null);
   const [qrPatient, setQrPatient] = useState<Patient | null>(null);
-  const [printingRx, setPrintingRx] = useState<Prescription | null>(null);
   const [labOrderForResults, setLabOrderForResults] = useState<LabTestOrder | null>(null);
-  const [labOrderForReport, setLabOrderForReport] = useState<LabTestOrder | null>(null);
   const [consultPatientId, setConsultPatientId] = useState<string | undefined>(undefined);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -250,8 +249,8 @@ const ClinicAppContent: React.FC = () => {
                     const p = patients.find((pat) => pat.id === linkedPatientId) || patients[0];
                     setQrPatient(p);
                   }}
-                  onOpenLabReport={(o: LabTestOrder) => setLabOrderForReport(o)}
-                  onOpenPrescription={(rx: Prescription) => setPrintingRx(rx)}
+                  onOpenLabReport={printLabReport}
+                  onOpenPrescription={printPrescription}
                   onOpenProfileSettings={() => setShowProfileSettings(true)}
                 />
               )}
@@ -334,13 +333,13 @@ const ClinicAppContent: React.FC = () => {
               {activeTab === 'prescriptions' && (
                 <PrescriptionList
                   onOpenNewPrescription={() => setShowNewPrescription(true)}
-                  onPrintPrescription={(rx: Prescription) => setPrintingRx(rx)}
+                  onPrintPrescription={printPrescription}
                 />
               )}
               {activeTab === 'laboratory' && (
                 <LabOrdersList
                   onOpenEnterResults={(o: LabTestOrder) => setLabOrderForResults(o)}
-                  onOpenReport={(o: LabTestOrder) => setLabOrderForReport(o)}
+                  onOpenReport={printLabReport}
                 />
               )}
               {activeTab === 'inventory' && <InventoryList />}
@@ -371,14 +370,8 @@ const ClinicAppContent: React.FC = () => {
         <PatientDetailModal patient={detailPatient} onClose={() => setDetailPatient(null)} />
       )}
       {qrPatient && <PatientQRModal patient={qrPatient} onClose={() => setQrPatient(null)} />}
-      {printingRx && (
-        <PrescriptionPrintModal prescription={printingRx} onClose={() => setPrintingRx(null)} />
-      )}
       {labOrderForResults && (
         <EnterLabResultsModal order={labOrderForResults} onClose={() => setLabOrderForResults(null)} />
-      )}
-      {labOrderForReport && (
-        <LabReportModal order={labOrderForReport} onClose={() => setLabOrderForReport(null)} />
       )}
       {showSupabaseModal && <SupabaseModal onClose={() => setShowSupabaseModal(false)} />}
       <ScanHealthIdModal
@@ -399,8 +392,11 @@ export default function App() {
     <ThemeProvider>
       <ToastProvider>
         <ClinicProvider>
-          <ClinicAppContent />
-          <ToastViewport />
+          <PrintProvider>
+            <ClinicAppContent />
+            <GlobalPrintModal />
+            <ToastViewport />
+          </PrintProvider>
         </ClinicProvider>
       </ToastProvider>
     </ThemeProvider>

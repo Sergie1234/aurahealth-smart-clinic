@@ -17,7 +17,7 @@ import {
 import { AIDisclaimerBanner } from '../common/AIDisclaimerBanner';
 import { formatPeso } from '../../utils/currency';
 import { Invoice } from '../../types/clinic';
-import { ReceiptPrintModal } from '../billing/ReceiptPrintModal';
+import { usePrint } from '../../context/PrintContext';
 
 interface Props {
   onOpenBookAppointment: () => void;
@@ -33,8 +33,8 @@ export const PatientPortalDashboard: React.FC<Props> = ({
   onOpenPrescription,
 }) => {
   const { patients, appointments, prescriptions, labOrders, invoices, setActiveTab, linkedPatientId, currentUser, t, language } = useClinic();
+  const { printReceipt } = usePrint();
   const isFil = language === 'fil';
-  const [viewingReceipt, setViewingReceipt] = useState<Invoice | null>(null);
 
   // Active logged-in patient or fallback
   const patient =
@@ -235,7 +235,7 @@ export const PatientPortalDashboard: React.FC<Props> = ({
                       </span>
                     </div>
                     <button
-                      onClick={() => setViewingReceipt(inv)}
+                      onClick={() => printReceipt(inv)}
                       className="px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-teal-400 rounded-lg text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 font-semibold text-xs flex items-center gap-1.5 transition cursor-pointer"
                       title={isFil ? 'I-print ang Resibo' : 'Print Receipt'}
                       type="button"
@@ -250,13 +250,6 @@ export const PatientPortalDashboard: React.FC<Props> = ({
           </div>
         </div>
       </div>
-
-      {viewingReceipt && (
-        <ReceiptPrintModal
-          invoice={viewingReceipt}
-          onClose={() => setViewingReceipt(null)}
-        />
-      )}
     </div>
   );
 };
