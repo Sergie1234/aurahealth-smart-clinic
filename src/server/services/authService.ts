@@ -6,7 +6,7 @@
 import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'smart_clinic_super_secure_jwt_secret_2026_ph_health_data';
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export interface UserTokenPayload {

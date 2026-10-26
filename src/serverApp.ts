@@ -232,12 +232,7 @@ const supabaseKey =
   process.env.SUPABASE_ANON_KEY ||
   process.env.VITE_SUPABASE_ANON_KEY ||
   '';
-const isSupabaseLive = Boolean(
-  supabaseUrl &&
-    supabaseKey &&
-    !supabaseUrl.includes('your-project.supabase.co') &&
-    !supabaseKey.includes('your-anon-key')
-);
+const isSupabaseLive = Boolean(supabaseUrl && supabaseKey);
 export const supabaseServer: SupabaseClient | null = isSupabaseLive
   ? createClient(supabaseUrl, supabaseKey)
   : null;
@@ -290,7 +285,7 @@ app.get('/api/supabase/status', (_req: Request, res: Response) => {
   res.json({
     connected: isSupabaseLive,
     mode: isSupabaseLive ? 'live' : 'standby',
-    supabaseUrl: supabaseUrl || 'https://your-project.supabase.co',
+    supabaseUrl: supabaseUrl || '',
     hasKey: Boolean(supabaseKey),
   });
 });

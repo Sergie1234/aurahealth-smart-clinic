@@ -151,9 +151,9 @@ export async function generateQrCodeDataUrl(otpAuthUrl: string): Promise<string>
   });
 }
 
-// Deterministic default RFC 3548 Base32 secrets (compatible with Google Authenticator & Microsoft Authenticator)
-export const ADMIN_TOTP_SECRET = 'KNWWC4TUINWGS3TJMNAWI3LJNZFWK6JS';
-export const PATIENT_DEFAULT_TOTP_SECRET = 'KNWWC4TUINWGS3TJMNIGC5DJMVXHIS3F';
+// Dynamic RFC 3548 Base32 secrets (compatible with Google Authenticator & Microsoft Authenticator)
+export const ADMIN_TOTP_SECRET = process.env.ADMIN_TOTP_SECRET || generateTotpSecret(20);
+export const PATIENT_DEFAULT_TOTP_SECRET = process.env.PATIENT_DEFAULT_TOTP_SECRET || generateTotpSecret(20);
 
 // In-memory store for user-specific TOTP secrets
 const userTotpSecrets = new Map<string, string>();
@@ -164,9 +164,8 @@ export function getUserTotpSecret(identifier: string): string {
   if (userTotpSecrets.has(key)) {
     return userTotpSecrets.get(key)!;
   }
-  // Deterministic Base32 secret derived from server secret and email.
-  // Crucial for Vercel Serverless: ensures setup and verification instances compute identical secrets!
-  const serverSeed = process.env.JWT_SECRET || 'smart-clinic-ph-totp-seed-2026';
+  // Dynamic Base32 secret derived from server secret and email.
+  const serverSeed = process.env.JWT_SECRET || process.env.TOTP_SEED || crypto.randomBytes(32).toString('hex');
   const hmac = crypto.createHmac('sha256', serverSeed).update(key).digest();
   const derivedSecret = base32Encode(hmac).slice(0, 32);
   userTotpSecrets.set(key, derivedSecret);

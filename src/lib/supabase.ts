@@ -17,7 +17,7 @@ export const getSupabaseUrl = (): string => {
     (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) ||
     (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) ||
     (typeof process !== 'undefined' && process.env?.SUPABASE_URL) ||
-    'https://your-project.supabase.co'
+    ''
   ).trim();
 };
 
@@ -30,19 +30,14 @@ export const getSupabaseAnonKey = (): string => {
     (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) ||
     (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_ANON_KEY) ||
     (typeof process !== 'undefined' && process.env?.SUPABASE_ANON_KEY) ||
-    'your-anon-key'
+    ''
   ).trim();
 };
 
 export const isSupabaseConfigured = (): boolean => {
   const url = getSupabaseUrl();
   const key = getSupabaseAnonKey();
-  return Boolean(
-    url &&
-    key &&
-    !url.includes('your-project.supabase.co') &&
-    !key.includes('your-anon-key')
-  );
+  return Boolean(url && key);
 };
 
 export const getSupabaseClient = (): SupabaseClient | null => {
