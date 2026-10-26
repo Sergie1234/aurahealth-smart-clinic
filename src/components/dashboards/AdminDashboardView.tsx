@@ -78,56 +78,56 @@ export const AdminDashboardView: React.FC = () => {
 
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-slate-500">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span>{t.admin.revenueToday}</span>
-            <Receipt className="w-4 h-4 text-emerald-600" />
+            <Receipt className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{formatPeso(totalRevenue)}</p>
-          <span className="text-[10px] text-emerald-700 font-semibold">{isFil ? 'Nasingil na Halaga (PHP)' : 'Active Fiscal Cycle (PHP)'}</span>
+          <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">{isFil ? 'Nasingil na Halaga (PHP)' : 'Active Fiscal Cycle (PHP)'}</span>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-slate-500">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span>{isFil ? 'Natitirang Balanse' : 'Outstanding Balances'}</span>
-            <TrendingUp className="w-4 h-4 text-amber-600" />
+            <TrendingUp className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           </div>
           <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{formatPeso(outstandingRevenue)}</p>
-          <span className="text-[10px] text-amber-700 font-semibold">{isFil ? 'Nakahandang Bayarin' : 'Pending Settlement'}</span>
+          <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold">{isFil ? 'Nakahandang Bayarin' : 'Pending Settlement'}</span>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-slate-500">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span>{t.admin.totalPatients}</span>
-            <Users className="w-4 h-4 text-teal-600" />
+            <Users className="w-4 h-4 text-teal-600 dark:text-teal-400" />
           </div>
           <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{patients.length}</p>
-          <span className="text-[10px] text-teal-700 font-semibold">{isFil ? 'Aktibong Talaan ng Pasyente' : 'Active Clinical Records'}</span>
+          <span className="text-[10px] text-teal-700 dark:text-teal-400 font-semibold">{isFil ? 'Aktibong Talaan ng Pasyente' : 'Active Clinical Records'}</span>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-slate-500">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span>{t.admin.systemLogs}</span>
-            <Lock className="w-4 h-4 text-indigo-600" />
+            <Lock className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           </div>
           <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{auditLogs.length}</p>
-          <span className="text-[10px] text-indigo-700 font-semibold">{isFil ? 'Mga Tala ng Seguridad' : 'Tamper-evident Entries'}</span>
+          <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-semibold">{isFil ? 'Mga Tala ng Seguridad' : 'Tamper-evident Entries'}</span>
         </div>
       </div>
 
-      <div className="p-4 sm:p-5 rounded-2xl bg-indigo-950/30 border border-indigo-800/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="p-4 sm:p-5 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/40 text-indigo-300 flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/40 text-indigo-700 dark:text-indigo-300 flex items-center justify-center shrink-0">
             <KeyRound className="w-5 h-5" />
           </div>
           <div>
             <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <span>Admin Authentication Governance</span>
-              <span className="text-[10px] font-mono bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold">
+              <span className="text-[10px] font-mono bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded font-bold border border-emerald-200 dark:border-emerald-800">
                 Secure Admin Session
               </span>
             </h4>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-              Admin session locked to authorized email <span className="font-mono font-bold text-indigo-700">smartclinicrealacc@gmail.com</span> with password verification and AES-256 session tokens under Philippine Health Data Security Standards.
+              Admin session locked to authorized email <span className="font-mono font-bold text-indigo-700 dark:text-indigo-400">smartclinicrealacc@gmail.com</span> with password verification and AES-256 session tokens under Philippine Health Data Security Standards.
             </p>
           </div>
         </div>
@@ -141,7 +141,7 @@ export const AdminDashboardView: React.FC = () => {
         <div className="lg:col-span-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-teal-600" />
+              <Users className="w-4 h-4 text-teal-600 dark:text-teal-400" />
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{t.admin.manageStaff}</h3>
             </div>
             <div className="flex items-center gap-2">
@@ -154,7 +154,7 @@ export const AdminDashboardView: React.FC = () => {
                 <Stethoscope className="w-3.5 h-3.5" />
                 <span>{t.admin.addDoctorBtn}</span>
               </button>
-              <span className="text-xs text-slate-500">{users.length} {isFil ? 'Awtorisado' : 'Authorized'}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">{users.length} {isFil ? 'Awtorisado' : 'Authorized'}</span>
             </div>
           </div>
 
@@ -166,7 +166,7 @@ export const AdminDashboardView: React.FC = () => {
               >
                 <div>
                   <h4 className="font-bold text-slate-900 dark:text-slate-100">{u.name}</h4>
-                  <p className="text-slate-500 text-[11px] mt-0.5">
+                  <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">
                     {u.email} • {u.department || 'Outpatient Clinic'}
                   </p>
                 </div>
@@ -181,12 +181,12 @@ export const AdminDashboardView: React.FC = () => {
         <div className="lg:col-span-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-indigo-600" />
+              <ShieldAlert className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{t.admin.complianceAudit}</h3>
             </div>
             <button
               onClick={() => setActiveTab('audit-logs')}
-              className="text-xs text-indigo-600 hover:underline font-bold cursor-pointer"
+              className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold cursor-pointer"
             >
               {isFil ? 'Tingnan ang Lahat ng Tala' : 'View Full Logs'}
             </button>
@@ -199,13 +199,13 @@ export const AdminDashboardView: React.FC = () => {
                 className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex flex-col gap-1"
               >
                 <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
-                  <span className="font-bold text-indigo-700">{log.action}</span>
-                  <span className="text-[10px] text-slate-400">
+                  <span className="font-bold text-indigo-700 dark:text-indigo-400">{log.action}</span>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500">
                     {new Date(log.timestamp).toLocaleTimeString()}
                   </span>
                 </div>
                 <p className="text-slate-600 dark:text-slate-400 font-sans text-xs">{log.description}</p>
-                <div className="text-[10px] text-slate-400 flex items-center justify-between pt-1">
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center justify-between pt-1">
                   <span>Actor: {log.userName}</span>
                   <span>IP: {log.ipAddress || '—'}</span>
                 </div>

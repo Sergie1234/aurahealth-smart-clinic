@@ -91,12 +91,12 @@ export const EnterLabResultsModal: React.FC<Props> = ({ order, onClose }) => {
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
                         item.flag === 'High'
-                          ? 'bg-rose-100 text-rose-800'
+                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300'
                           : item.flag === 'Low'
-                          ? 'bg-amber-100 text-amber-800'
+                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
                           : item.flag === 'Critical'
-                          ? 'bg-red-600 text-white'
-                          : 'bg-emerald-100 text-emerald-800'
+                          ? 'bg-red-600 text-white dark:bg-red-700'
+                          : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
                       }`}
                     >
                       {item.flag}
@@ -104,7 +104,7 @@ export const EnterLabResultsModal: React.FC<Props> = ({ order, onClose }) => {
                     <button
                       type="button"
                       onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
-                      className="text-slate-400 hover:text-rose-600"
+                      className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -115,58 +115,58 @@ export const EnterLabResultsModal: React.FC<Props> = ({ order, onClose }) => {
           </div>
 
           {/* Add New Parameter */}
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-            <h3 className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">+ Add Parameter</h3>
+          <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+            <h3 className="font-bold text-slate-800 dark:text-slate-200 text-[11px] uppercase tracking-wider">+ Add Parameter</h3>
             <div className="grid grid-cols-2 gap-2">
               <input
                 type="text"
                 placeholder="Parameter Name (e.g. Glucose)"
                 value={newParameter}
                 onChange={(e) => setNewParameter(e.target.value)}
-                className="p-1.5 bg-white border border-slate-200 rounded text-xs"
+                className="p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
               <input
                 type="text"
                 placeholder="Observed Value (e.g. 104)"
                 value={newValue}
                 onChange={(e) => setNewValue(e.target.value)}
-                className="p-1.5 bg-white border border-slate-200 rounded text-xs"
+                className="p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
               <input
                 type="text"
                 placeholder="Unit (e.g. mg/dL)"
                 value={newUnit}
                 onChange={(e) => setNewUnit(e.target.value)}
-                className="p-1.5 bg-white border border-slate-200 rounded text-xs"
+                className="p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
               <input
                 type="text"
                 placeholder="Reference Range (e.g. 70 - 99)"
                 value={newRef}
                 onChange={(e) => setNewRef(e.target.value)}
-                className="p-1.5 bg-white border border-slate-200 rounded text-xs"
+                className="p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
             </div>
 
             <div className="flex items-center justify-between pt-1">
               <div className="flex items-center gap-1.5">
-                <span className="text-slate-500 font-semibold text-[10px]">Flag:</span>
+                <span className="text-slate-500 dark:text-slate-400 font-semibold text-[10px]">Flag:</span>
                 <select
                   value={newFlag}
                   onChange={(e) => setNewFlag(e.target.value as any)}
-                  className="p-1 bg-white border border-slate-200 rounded text-xs"
+                  className="p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100"
                 >
-                  <option value="Normal">Normal</option>
-                  <option value="High">High</option>
-                  <option value="Low">Low</option>
-                  <option value="Critical">Critical</option>
+                  <option value="Normal" className="dark:bg-slate-900">Normal</option>
+                  <option value="High" className="dark:bg-slate-900">High</option>
+                  <option value="Low" className="dark:bg-slate-900">Low</option>
+                  <option value="Critical" className="dark:bg-slate-900">Critical</option>
                 </select>
               </div>
 
               <button
                 type="button"
                 onClick={handleAddItem}
-                className="px-3 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded font-semibold text-xs cursor-pointer"
+                className="px-3 py-1 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded font-semibold text-xs cursor-pointer transition"
               >
                 + Add Parameter
               </button>
@@ -174,27 +174,27 @@ export const EnterLabResultsModal: React.FC<Props> = ({ order, onClose }) => {
           </div>
 
           <div>
-            <label className="font-semibold text-slate-700 block mb-1">Pathologist Interpretation / Comments</label>
+            <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Pathologist Interpretation / Comments</label>
             <textarea
               rows={2}
               placeholder="e.g. Specimen analyzed with automated photometric assay. Sample within QC limits."
               value={interpretation}
               onChange={(e) => setInterpretation(e.target.value)}
-              className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
           </div>
 
-          <div className="pt-2 border-t border-slate-200 flex justify-end gap-2">
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium cursor-pointer"
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-medium cursor-pointer transition"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
+              className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer transition"
             >
               Certify & Release Results
             </button>

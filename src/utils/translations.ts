@@ -450,7 +450,7 @@ export const translations: Record<AppLanguage, Translations> = {
       primaryDoctorLabel: 'Primary Physician',
       profileSettingsBtn: 'Profile Settings',
       healthIdBtn: 'My Health ID QR',
-      bookAppointmentBtn: 'Book New Appointment',
+      bookAppointmentBtn: 'Book Appointment',
       vitalsTitle: 'Latest Recorded Vital Signs',
       bloodPressure: 'Blood Pressure',
       heartRate: 'Heart Rate',

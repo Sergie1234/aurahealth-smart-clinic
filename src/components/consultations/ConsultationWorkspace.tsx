@@ -353,19 +353,19 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
   return (
     <div className="space-y-4">
       {/* Consultation Header */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 transition-colors">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center font-bold">
             <Stethoscope className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-slate-900">Clinical Consultation Suite</h1>
-              <span className="bg-teal-50 text-teal-700 font-bold text-xs px-2 py-0.5 rounded border border-teal-200">
+              <h1 className="text-base font-bold text-slate-900 dark:text-slate-100">Clinical Consultation Suite</h1>
+              <span className="bg-teal-50 dark:bg-teal-950/70 text-teal-700 dark:text-teal-300 font-bold text-xs px-2 py-0.5 rounded border border-teal-200 dark:border-teal-800">
                 Dr. Mode Active
               </span>
             </div>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Exam documentation, vitals assessment, AI-assisted SOAP scribe, e-prescriptions & lab ordering.
             </p>
           </div>
@@ -373,14 +373,14 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
 
         {/* Patient Switcher */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500 font-medium">Select Patient:</span>
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Select Patient:</span>
           <select
             value={selectedPatId}
             onChange={(e) => {
               setSelectedPatId(e.target.value);
               selectPatient(e.target.value);
             }}
-            className="p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800"
+            className="p-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500"
           >
             {patients.map((p) => (
               <option key={p.id} value={p.id}>
@@ -485,9 +485,9 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
         {/* Left Column (2 spans): Clinical Notes & SOAP */}
         <div className="lg:col-span-2 space-y-4">
           {/* Section 1: Chief Complaint & AI Generator Trigger */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3 transition-colors">
             <div className="flex items-center justify-between">
-              <h2 className="font-bold text-slate-800 text-xs">1. Chief Complaint & Clinical Notes</h2>
+              <h2 className="font-bold text-slate-800 dark:text-slate-100 text-xs">1. Chief Complaint & Clinical Notes</h2>
               <button
                 type="button"
                 onClick={handleGenerateAiSoap}
@@ -500,17 +500,17 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
             </div>
 
             <div>
-              <label className="font-semibold text-slate-700 block mb-1">Chief Complaint</label>
+              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Chief Complaint</label>
               <input
                 type="text"
                 value={chiefComplaint}
                 onChange={(e) => setChiefComplaint(e.target.value)}
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
               />
             </div>
 
             <div>
-              <label className="font-semibold text-slate-700 block mb-1">
+              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
                 Physician's Dictation / Raw Findings (AI will structure into SOAP format)
               </label>
               <textarea
@@ -518,95 +518,95 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
                 value={doctorRawNotes}
                 onChange={(e) => setDoctorRawNotes(e.target.value)}
                 placeholder="Enter symptoms, patient statements, exam bullet points, or dictation..."
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
               />
             </div>
           </div>
 
           {/* Section 2: Structured SOAP Documentation */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
-            <h2 className="font-bold text-slate-800 text-xs">2. Structured Clinical Record (SOAP)</h2>
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3 transition-colors">
+            <h2 className="font-bold text-slate-800 dark:text-slate-100 text-xs">2. Structured Clinical Record (SOAP)</h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Subjective (HPI)</label>
+                <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Subjective (HPI)</label>
                 <textarea
                   rows={3}
                   value={hpi}
                   onChange={(e) => setHpi(e.target.value)}
                   placeholder="History of present illness..."
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                 />
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Review of Systems (ROS)</label>
+                <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Review of Systems (ROS)</label>
                 <textarea
                   rows={3}
                   value={ros}
                   onChange={(e) => setRos(e.target.value)}
                   placeholder="Cardiovascular, Respiratory, Endocrine, GI..."
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                 />
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Objective (Physical Examination)</label>
+                <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Objective (Physical Examination)</label>
                 <textarea
                   rows={3}
                   value={exam}
                   onChange={(e) => setExam(e.target.value)}
                   placeholder="Physical exam findings, auscultation, palpation..."
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                 />
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Assessment & Differential</label>
+                <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Assessment & Differential</label>
                 <textarea
                   rows={3}
                   value={assessment}
                   onChange={(e) => setAssessment(e.target.value)}
                   placeholder="Diagnostic impression and clinical reasoning..."
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                 />
               </div>
             </div>
 
             <div>
-              <label className="font-semibold text-slate-700 block mb-1">Plan & Management Protocol</label>
+              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Plan & Management Protocol</label>
               <textarea
                 rows={3}
                 value={plan}
                 onChange={(e) => setPlan(e.target.value)}
                 placeholder="Numbered treatment plan, lifestyle education, safety net..."
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
               />
             </div>
           </div>
 
           {/* Section 3: Diagnoses (ICD) */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
-            <h2 className="font-bold text-slate-800 text-xs">3. Diagnoses (ICD-10)</h2>
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3 transition-colors">
+            <h2 className="font-bold text-slate-800 dark:text-slate-100 text-xs">3. Diagnoses (ICD-10)</h2>
 
             <div className="space-y-1.5">
               {diagnoses.map((diag, index) => (
                 <div
                   key={index}
-                  className="p-2 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between"
+                  className="p-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-between"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                    <span className="font-mono font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/70 px-2 py-0.5 rounded border border-teal-200 dark:border-teal-800">
                       {diag.code}
                     </span>
-                    <span className="font-semibold text-slate-800">{diag.description}</span>
-                    <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-medium">
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">{diag.description}</span>
+                    <span className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.2 rounded font-medium">
                       {diag.type}
                     </span>
                   </div>
                   <button
                     onClick={() => setDiagnoses((prev) => prev.filter((_, i) => i !== index))}
-                    className="text-slate-400 hover:text-rose-600"
+                    className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -620,19 +620,19 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
                 placeholder="ICD Code (e.g. E11.9)"
                 value={newDiagCode}
                 onChange={(e) => setNewDiagCode(e.target.value)}
-                className="w-28 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs uppercase font-mono"
+                className="w-28 p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs uppercase font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
               />
               <input
                 type="text"
                 placeholder="Diagnosis Description (e.g. Type 2 Diabetes Mellitus)"
                 value={newDiagDesc}
                 onChange={(e) => setNewDiagDesc(e.target.value)}
-                className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                className="flex-1 p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
               />
               <button
                 type="button"
                 onClick={handleAddDiagnosis}
-                className="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-semibold text-xs cursor-pointer"
+                className="px-3 py-2 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-lg font-semibold text-xs cursor-pointer transition"
               >
                 + Add
               </button>
@@ -643,95 +643,95 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
         {/* Right Column: Vitals, Prescriptions, Labs & Finalize */}
         <div className="space-y-4">
           {/* Consultation Vitals */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3 transition-colors">
             <div className="flex items-center justify-between">
-              <h2 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                <Activity className="w-3.5 h-3.5 text-teal-600" />
+              <h2 className="font-bold text-slate-800 dark:text-slate-100 text-xs flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
                 <span>Today's Vitals</span>
               </h2>
-              <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
+              <span className="text-[10px] font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/70 px-2 py-0.5 rounded border border-teal-200 dark:border-teal-800">
                 BMI: {computedBmi}
               </span>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[10px] text-slate-500 font-semibold block">BP Systolic</label>
+                <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block">BP Systolic</label>
                 <input
                   type="number"
                   value={bpSys}
                   onChange={(e) => setBpSys(e.target.value)}
-                  className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded text-xs"
+                  className="w-full p-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-slate-500 font-semibold block">BP Diastolic</label>
+                <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block">BP Diastolic</label>
                 <input
                   type="number"
                   value={bpDia}
                   onChange={(e) => setBpDia(e.target.value)}
-                  className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded text-xs"
+                  className="w-full p-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-slate-500 font-semibold block">Heart Rate (bpm)</label>
+                <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block">Heart Rate (bpm)</label>
                 <input
                   type="number"
                   value={hr}
                   onChange={(e) => setHr(e.target.value)}
-                  className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded text-xs"
+                  className="w-full p-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-slate-500 font-semibold block">SpO2 (%)</label>
+                <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block">SpO2 (%)</label>
                 <input
                   type="number"
                   value={spo2}
                   onChange={(e) => setSpo2(e.target.value)}
-                  className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded text-xs"
+                  className="w-full p-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-slate-500 font-semibold block">Weight (kg)</label>
+                <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block">Weight (kg)</label>
                 <input
                   type="number"
                   value={weight}
                   onChange={(e) => setWeight(e.target.value)}
-                  className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded text-xs"
+                  className="w-full p-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-slate-500 font-semibold block">Height (cm)</label>
+                <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block">Height (cm)</label>
                 <input
                   type="number"
                   value={height}
                   onChange={(e) => setHeight(e.target.value)}
-                  className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded text-xs"
+                  className="w-full p-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500"
                 />
               </div>
             </div>
           </div>
 
           {/* E-Prescriptions */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
-            <h2 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-              <Pill className="w-3.5 h-3.5 text-teal-600" />
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3 transition-colors">
+            <h2 className="font-bold text-slate-800 dark:text-slate-100 text-xs flex items-center gap-1.5">
+              <Pill className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
               <span>Digital Prescriptions</span>
             </h2>
 
             <div className="space-y-1.5">
               {prescriptionsToAdd.map((rxItem, i) => (
-                <div key={rxItem.id} className="p-2 bg-slate-50 rounded-lg border border-slate-200">
+                <div key={rxItem.id} className="p-2 bg-slate-50 dark:bg-slate-800/80 rounded-lg border border-slate-200 dark:border-slate-700">
                   <div className="flex justify-between items-start">
-                    <span className="font-bold text-slate-800">{rxItem.medicationName}</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{rxItem.medicationName}</span>
                     <button
                       onClick={() => setPrescriptionsToAdd((prev) => prev.filter((_, idx) => idx !== i))}
-                      className="text-slate-400 hover:text-rose-600"
+                      className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
-                  <p className="text-[10px] text-slate-500 mt-0.5">
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
                     {rxItem.dosage} • {rxItem.frequency} • {rxItem.duration}
                   </p>
                 </div>
@@ -745,7 +745,7 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
                 placeholder="Drug name (e.g. Amoxicillin 500mg)"
                 value={newDrugName}
                 onChange={(e) => setNewDrugName(e.target.value)}
-                className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded text-xs"
+                className="w-full p-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
               />
               <div className="flex gap-1.5">
                 <input
@@ -753,20 +753,20 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
                   placeholder="Dosage (500mg)"
                   value={newDrugDosage}
                   onChange={(e) => setNewDrugDosage(e.target.value)}
-                  className="w-1/2 p-1.5 bg-slate-50 border border-slate-200 rounded text-xs"
+                  className="w-1/2 p-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                 />
                 <input
                   type="text"
                   placeholder="Freq (TID x 7d)"
                   value={newDrugFreq}
                   onChange={(e) => setNewDrugFreq(e.target.value)}
-                  className="w-1/2 p-1.5 bg-slate-50 border border-slate-200 rounded text-xs"
+                  className="w-1/2 p-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                 />
               </div>
               <button
                 type="button"
                 onClick={handleAddMedication}
-                className="w-full py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded text-[11px] cursor-pointer"
+                className="w-full py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded text-[11px] cursor-pointer transition"
               >
                 + Add Medication
               </button>
@@ -774,19 +774,19 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
           </div>
 
           {/* Lab Orders */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
-            <h2 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-              <FlaskConical className="w-3.5 h-3.5 text-teal-600" />
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3 transition-colors">
+            <h2 className="font-bold text-slate-800 dark:text-slate-100 text-xs flex items-center gap-1.5">
+              <FlaskConical className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
               <span>Laboratory Orders</span>
             </h2>
 
             <div className="space-y-1">
               {labOrdersToAdd.map((test, i) => (
-                <div key={i} className="flex justify-between items-center p-1.5 bg-slate-50 rounded border border-slate-200 text-[11px]">
-                  <span className="font-medium text-slate-800">{test}</span>
+                <div key={i} className="flex justify-between items-center p-1.5 bg-slate-50 dark:bg-slate-800/80 rounded border border-slate-200 dark:border-slate-700 text-[11px]">
+                  <span className="font-medium text-slate-800 dark:text-slate-200">{test}</span>
                   <button
                     onClick={() => setLabOrdersToAdd((prev) => prev.filter((_, idx) => idx !== i))}
-                    className="text-slate-400 hover:text-rose-600"
+                    className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>
@@ -800,7 +800,7 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
                 placeholder="Test panel name..."
                 value={newLabTest}
                 onChange={(e) => setNewLabTest(e.target.value)}
-                className="flex-1 p-1.5 bg-slate-50 border border-slate-200 rounded text-xs"
+                className="flex-1 p-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
               />
               <button
                 type="button"
@@ -810,7 +810,7 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
                     setNewLabTest('');
                   }
                 }}
-                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded text-[11px] font-semibold cursor-pointer"
+                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded text-[11px] font-semibold cursor-pointer transition"
               >
                 Add
               </button>
@@ -818,21 +818,21 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
           </div>
 
           {/* Follow-up & Medical Sick Certificate */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-2.5">
-            <h2 className="font-bold text-slate-800 text-xs">Follow-up & Sick Certificate</h2>
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-2.5 transition-colors">
+            <h2 className="font-bold text-slate-800 dark:text-slate-100 text-xs">Follow-up & Sick Certificate</h2>
 
             <div>
-              <label className="text-[10px] text-slate-500 font-semibold block mb-0.5">Return Visit Date</label>
+              <label className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block mb-0.5">Return Visit Date</label>
               <input
                 type="date"
                 value={followUpDate}
                 onChange={(e) => setFollowUpDate(e.target.value)}
-                className="w-full p-1.5 bg-slate-50 border border-slate-200 rounded text-xs"
+                className="w-full p-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500"
               />
             </div>
 
             <div className="pt-1">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-700 font-medium">
+              <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300 font-medium">
                 <input
                   type="checkbox"
                   checked={issueMedCert}
@@ -843,23 +843,23 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
               </label>
 
               {issueMedCert && (
-                <div className="mt-2 grid grid-cols-2 gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                <div className="mt-2 grid grid-cols-2 gap-2 bg-slate-50 dark:bg-slate-800/80 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
                   <div>
-                    <label className="text-[10px] text-slate-500 block">From</label>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 block">From</label>
                     <input
                       type="date"
                       value={certStartDate}
                       onChange={(e) => setCertStartDate(e.target.value)}
-                      className="w-full p-1 bg-white border border-slate-200 rounded text-xs"
+                      className="w-full p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-500 block">To</label>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 block">To</label>
                     <input
                       type="date"
                       value={certEndDate}
                       onChange={(e) => setCertEndDate(e.target.value)}
-                      className="w-full p-1 bg-white border border-slate-200 rounded text-xs"
+                      className="w-full p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500"
                     />
                   </div>
                 </div>
@@ -882,65 +882,65 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
       {/* AI SOAP Review & Adoption Modal */}
       {showAiDraftModal && aiGeneratedSoap && (
         <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in duration-150">
-            <div className="p-4 border-b border-slate-200 bg-teal-50/80 flex items-center justify-between">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in duration-150">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-teal-50/80 dark:bg-teal-950/40 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-teal-600" />
+                <Sparkles className="w-5 h-5 text-teal-600 dark:text-teal-400" />
                 <div>
-                  <h3 className="font-bold text-slate-900 text-sm">Clinical Decision Support — SOAP Draft</h3>
-                  <p className="text-[10px] text-slate-500">Automated medical scribe & differential suggestions • Physician review required</p>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">Clinical Decision Support — SOAP Draft</h3>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">Automated medical scribe & differential suggestions • Physician review required</p>
                 </div>
               </div>
-              <button onClick={() => setShowAiDraftModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setShowAiDraftModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                 ✕
               </button>
             </div>
 
             <div className="p-5 flex-1 overflow-y-auto space-y-3.5 text-xs">
               {/* Mandatory Review Prompt Banner */}
-              <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-950 flex items-start gap-2.5">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl text-amber-950 dark:text-amber-200 flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-bold text-[11px] uppercase tracking-wide text-amber-900">
+                  <p className="font-bold text-[11px] uppercase tracking-wide text-amber-900 dark:text-amber-300">
                     Mandatory Attending Physician Review & Approval
                   </p>
-                  <p className="text-amber-800 text-[11px] leading-relaxed mt-0.5">
+                  <p className="text-amber-800 dark:text-amber-200/90 text-[11px] leading-relaxed mt-0.5">
                     The Clinical Decision Support Assistant operates strictly as analytical decision support to improve clinical efficiency. It cannot finalize a diagnosis or issue a prescription autonomously. Please review, edit as appropriate, and explicitly approve this note before committing it to the medical record.
                   </p>
                 </div>
               </div>
 
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
-                <span className="font-bold text-slate-800 text-[11px] block uppercase">Chief Complaint</span>
-                <p className="text-slate-700">{aiGeneratedSoap.chiefComplaint}</p>
+              <div className="bg-slate-50 dark:bg-slate-800/70 p-3 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">
+                <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] block uppercase">Chief Complaint</span>
+                <p className="text-slate-700 dark:text-slate-300">{aiGeneratedSoap.chiefComplaint}</p>
               </div>
 
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
-                <span className="font-bold text-slate-800 text-[11px] block uppercase">History of Present Illness</span>
-                <p className="text-slate-700 leading-relaxed">{aiGeneratedSoap.historyOfPresentIllness}</p>
+              <div className="bg-slate-50 dark:bg-slate-800/70 p-3 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">
+                <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] block uppercase">History of Present Illness</span>
+                <p className="text-slate-700 dark:text-slate-300 leading-relaxed">{aiGeneratedSoap.historyOfPresentIllness}</p>
               </div>
 
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
-                <span className="font-bold text-slate-800 text-[11px] block uppercase">Physical Examination</span>
-                <p className="text-slate-700">{aiGeneratedSoap.physicalExamination}</p>
+              <div className="bg-slate-50 dark:bg-slate-800/70 p-3 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">
+                <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] block uppercase">Physical Examination</span>
+                <p className="text-slate-700 dark:text-slate-300">{aiGeneratedSoap.physicalExamination}</p>
               </div>
 
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
-                <span className="font-bold text-slate-800 text-[11px] block uppercase">Assessment</span>
-                <p className="text-slate-700">{aiGeneratedSoap.assessment}</p>
+              <div className="bg-slate-50 dark:bg-slate-800/70 p-3 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">
+                <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] block uppercase">Assessment</span>
+                <p className="text-slate-700 dark:text-slate-300">{aiGeneratedSoap.assessment}</p>
               </div>
 
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
-                <span className="font-bold text-slate-800 text-[11px] block uppercase">Plan</span>
-                <p className="text-slate-700 whitespace-pre-line">{aiGeneratedSoap.treatmentPlan}</p>
+              <div className="bg-slate-50 dark:bg-slate-800/70 p-3 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">
+                <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] block uppercase">Plan</span>
+                <p className="text-slate-700 dark:text-slate-300 whitespace-pre-line">{aiGeneratedSoap.treatmentPlan}</p>
               </div>
 
               {aiGeneratedSoap.suggestedDiagnoses && (
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
-                  <span className="font-bold text-slate-800 text-[11px] block uppercase">Suggested Diagnoses</span>
+                <div className="bg-slate-50 dark:bg-slate-800/70 p-3 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">
+                  <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] block uppercase">Suggested Diagnoses</span>
                   <div className="flex flex-wrap gap-1.5">
                     {aiGeneratedSoap.suggestedDiagnoses.map((d, i) => (
-                      <span key={i} className="bg-teal-100 text-teal-800 px-2 py-0.5 rounded font-mono text-[10px]">
+                      <span key={i} className="bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 px-2 py-0.5 rounded font-mono text-[10px] border border-teal-200 dark:border-teal-800">
                         {d.code}: {d.description}
                       </span>
                     ))}
@@ -949,20 +949,20 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
               )}
             </div>
 
-            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-              <span className="text-[11px] text-slate-500">Physician must verify accuracy before applying</span>
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">Physician must verify accuracy before applying</span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setShowAiDraftModal(false)}
-                  className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer"
+                  className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold cursor-pointer transition"
                 >
                   Discard
                 </button>
                 <button
                   type="button"
                   onClick={handleApplyAiSoap}
-                  className="px-4 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer shadow-xs"
+                  className="px-4 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer shadow-xs transition"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   <span>Insert into Clinical Note</span>

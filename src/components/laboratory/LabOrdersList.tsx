@@ -290,7 +290,7 @@ export const LabOrdersList: React.FC<Props> = ({
                       {order.status === 'Requested' && (
                         <button
                           onClick={() => updateLabStatus(order.id, 'Sample Collected')}
-                          className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-semibold text-[11px] border border-indigo-200 cursor-pointer"
+                          className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/70 text-indigo-700 dark:text-indigo-300 rounded-lg font-semibold text-[11px] border border-indigo-200 dark:border-indigo-800 cursor-pointer transition"
                         >
                           Collect Sample
                         </button>
@@ -298,7 +298,7 @@ export const LabOrdersList: React.FC<Props> = ({
                       {order.status === 'Sample Collected' && (
                         <button
                           onClick={() => updateLabStatus(order.id, 'Processing')}
-                          className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-semibold text-[11px] border border-blue-200 cursor-pointer"
+                          className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/70 text-blue-700 dark:text-blue-300 rounded-lg font-semibold text-[11px] border border-blue-200 dark:border-blue-800 cursor-pointer transition"
                         >
                           Start Processing
                         </button>

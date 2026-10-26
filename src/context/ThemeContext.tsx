@@ -58,6 +58,23 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     applyDomTheme(theme);
   }, [theme]);
 
+  // Automatically adapt to OS / system theme changes if user has not set a preference
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleSystemChange = (e: MediaQueryListEvent) => {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) {
+        const newTheme: ThemeMode = e.matches ? 'dark' : 'light';
+        setThemeState(newTheme);
+        applyDomTheme(newTheme);
+      }
+    };
+
+    mediaQuery.addEventListener('change', handleSystemChange);
+    return () => mediaQuery.removeEventListener('change', handleSystemChange);
+  }, []);
+
   const setTheme = useCallback((mode: ThemeMode) => {
     setThemeState(mode);
     applyDomTheme(mode);
