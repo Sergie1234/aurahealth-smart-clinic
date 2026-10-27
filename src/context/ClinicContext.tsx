@@ -16,7 +16,7 @@ import {
   syncInvoiceToSupabase, syncAuditLogToSupabase, syncAllClinicDataToSupabase,
   getSupabaseConfigInfo,
 } from '../lib/supabase';
-import { formatTimeSlot, createCustomDoctorSchedule, registerDoctorSchedule } from '../utils/doctorSchedules';
+import { formatTimeSlot, createCustomDoctorSchedule, registerDoctorSchedule, getDoctorSchedule } from '../utils/doctorSchedules';
 
 import { getTranslation, type AppLanguage, type Translations } from '../utils/translations';
 
@@ -528,11 +528,19 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           try {
             localStorage.setItem('smart_clinic_users', JSON.stringify(data.users));
           } catch {}
+          data.users.forEach((u: User) => {
+            if (u.role === 'doctor') {
+              registerDoctorSchedule(u.id, getDoctorSchedule(u.id, u));
+            }
+          });
           if (activeRole === 'admin' || primaryRole === 'admin') {
             const adminUser = data.users.find((u: User) => u.role === 'admin');
             if (adminUser) setCurrentUser(adminUser);
           }
         } else if (Array.isArray(data.doctors) && data.doctors.length > 0) {
+          data.doctors.forEach((d: User) => {
+            registerDoctorSchedule(d.id, getDoctorSchedule(d.id, d));
+          });
           setUsers((prev) => {
             const map = new Map<string, User>();
             prev.forEach((u) => map.set(u.id, u));
@@ -1897,6 +1905,21 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!cleanEmail || !cleanEmail.includes('@')) return { success: false, error: 'Valid email is required.' };
 
     const doctorId = `usr-${Date.now()}`;
+    const days = doctorData.workDays.length > 0 ? doctorData.workDays : [1, 2, 3, 4, 5];
+
+    // Register their dynamic personal schedule
+    const schedule = createCustomDoctorSchedule({
+      doctorId,
+      doctorName: cleanName,
+      department: doctorData.department || 'General Medicine',
+      specialty: doctorData.specialty || 'General Practice',
+      workDays: days,
+      workDaysLabel: doctorData.workDaysLabel,
+      hoursLabel: doctorData.hoursLabel,
+      startHour: doctorData.startHour || 8,
+      endHour: doctorData.endHour || 17,
+    });
+
     const newDoctor: User = {
       id: doctorId,
       name: cleanName,
@@ -1905,20 +1928,13 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       department: doctorData.department || 'General Medicine',
       specialty: doctorData.specialty || 'Internal & Family Medicine',
       licenseNumber: doctorData.licenseNumber || `MD-${Math.floor(100000 + Math.random() * 900000)}`,
-    };
-
-    // Register their dynamic personal schedule
-    createCustomDoctorSchedule({
-      doctorId,
-      doctorName: cleanName,
-      department: newDoctor.department || 'General Medicine',
-      specialty: newDoctor.specialty || 'General Practice',
-      workDays: doctorData.workDays.length > 0 ? doctorData.workDays : [1, 2, 3, 4, 5],
-      workDaysLabel: doctorData.workDaysLabel,
-      hoursLabel: doctorData.hoursLabel,
+      workDays: days,
+      workDaysLabel: schedule.workDaysLabel,
+      hoursLabel: schedule.hoursLabel,
       startHour: doctorData.startHour || 8,
       endHour: doctorData.endHour || 17,
-    });
+      schedule,
+    };
 
     // Update state & persist in localStorage
     setUsers((prev) => {
@@ -1934,7 +1950,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       await fetch(`${API_BASE_URL}/api/doctors`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(doctorData),
+        body: JSON.stringify({ ...doctorData, doctorId }),
       });
     } catch {}
 

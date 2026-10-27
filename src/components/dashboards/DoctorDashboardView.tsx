@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import {
   Stethoscope,
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import { RoleHeroBanner } from '../common/RoleHeroBanner';
+import { getDoctorSchedule } from '../../utils/doctorSchedules';
 
 interface Props {
   onStartConsultation: (patientId: string) => void;
@@ -37,10 +38,59 @@ export const DoctorDashboardView: React.FC<Props> = ({
 
   const isFil = language === 'fil';
   const [searchPatient, setSearchPatient] = useState('');
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
-  const activeQueue = appointments.filter(
-    (a) => a.status === 'Checked In' || a.status === 'In Consultation'
-  );
+  // Doctor's unique individual working schedule
+  const mySchedule = useMemo(() => {
+    return getDoctorSchedule(currentUser?.id || '', currentUser);
+  }, [currentUser]);
+
+  // Scoped strictly to the logged-in doctor's respected schedule & appointments
+  const myAppointments = useMemo(() => {
+    return appointments.filter((a) => {
+      if (currentUser?.id && a.doctorId === currentUser.id) return true;
+      if (a.doctorName && currentUser?.name) {
+        const aDoc = a.doctorName.toLowerCase();
+        const myName = currentUser.name.toLowerCase();
+        return aDoc.includes(myName) || myName.includes(aDoc);
+      }
+      return false;
+    });
+  }, [appointments, currentUser]);
+
+  const todayAppointments = useMemo(() => {
+    return myAppointments.filter((a) => a.date === todayStr);
+  }, [myAppointments, todayStr]);
+
+  const activeQueue = useMemo(() => {
+    return myAppointments.filter(
+      (a) => a.status === 'Checked In' || a.status === 'In Consultation'
+    );
+  }, [myAppointments]);
+
+  const myConsultations = useMemo(() => {
+    return consultations.filter((c) => {
+      if (currentUser?.id && c.doctorId === currentUser.id) return true;
+      if (c.doctorName && currentUser?.name) {
+        const cDoc = c.doctorName.toLowerCase();
+        const myName = currentUser.name.toLowerCase();
+        return cDoc.includes(myName) || myName.includes(cDoc);
+      }
+      return false;
+    });
+  }, [consultations, currentUser]);
+
+  const myPrescriptions = useMemo(() => {
+    return prescriptions.filter((p) => {
+      if (currentUser?.id && p.doctorId === currentUser.id) return true;
+      if (p.doctorName && currentUser?.name) {
+        const pDoc = p.doctorName.toLowerCase();
+        const myName = currentUser.name.toLowerCase();
+        return pDoc.includes(myName) || myName.includes(pDoc);
+      }
+      return false;
+    });
+  }, [prescriptions, currentUser]);
 
   const filteredPatients = patients.filter(
     (p) =>
@@ -56,7 +106,7 @@ export const DoctorDashboardView: React.FC<Props> = ({
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto text-xs font-sans pb-12">
-      {/* Unified Doctor Hero Banner */}
+      {/* Unified Doctor Hero Banner with Personal Working Schedule */}
       <RoleHeroBanner
         badges={[
           {
@@ -66,6 +116,10 @@ export const DoctorDashboardView: React.FC<Props> = ({
             className: 'bg-teal-500/20 text-teal-300 border-teal-500/40',
           },
           {
+            text: `${mySchedule.workDaysLabel} • ${mySchedule.hoursLabel}`,
+            className: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-semibold',
+          },
+          {
             text: currentUser.licenseNumber || 'MD-892410',
             className: 'bg-white/10 text-slate-300 border-white/20 font-mono',
           },
@@ -73,7 +127,7 @@ export const DoctorDashboardView: React.FC<Props> = ({
         title={`${t.common.welcome}, ${currentUser.name}`}
         meta={
           <span>
-            {deptLabel}. <span className="font-bold text-white">{activeQueue.length}</span> {t.doctor.inQueueCount.toLowerCase()}.
+            {deptLabel}. <span className="font-bold text-white">{activeQueue.length}</span> {t.doctor.inQueueCount.toLowerCase()} • Assigned Schedule: <strong className="text-white">{mySchedule.workDaysLabel}</strong> ({mySchedule.hoursLabel}).
           </span>
         }
         gradientClass="bg-gradient-to-r from-teal-950 via-teal-900 to-slate-900 border-teal-800/40"
@@ -98,7 +152,7 @@ export const DoctorDashboardView: React.FC<Props> = ({
         ]}
       />
 
-      {/* Operational Metrics */}
+      {/* Operational Metrics (Doctor-Scoped) */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500">
@@ -114,8 +168,8 @@ export const DoctorDashboardView: React.FC<Props> = ({
             <span>{t.doctor.todaySchedule}</span>
             <Calendar className="w-4 h-4 text-cyan-600" />
           </div>
-          <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{appointments.length}</p>
-          <span className="text-[10px] text-cyan-700 dark:text-cyan-400 font-semibold">{t.nav.appointments}</span>
+          <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{todayAppointments.length || myAppointments.length}</p>
+          <span className="text-[10px] text-cyan-700 dark:text-cyan-400 font-semibold">{t.doctor.todaySchedule}</span>
         </div>
 
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
@@ -123,7 +177,7 @@ export const DoctorDashboardView: React.FC<Props> = ({
             <span>{t.doctor.completedToday}</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
-          <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{consultations.length}</p>
+          <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{myConsultations.length}</p>
           <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">{t.common.status}</span>
         </div>
 
@@ -132,7 +186,7 @@ export const DoctorDashboardView: React.FC<Props> = ({
             <span>{t.doctor.writePrescription}</span>
             <Pill className="w-4 h-4 text-indigo-600" />
           </div>
-          <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{prescriptions.length}</p>
+          <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{myPrescriptions.length}</p>
           <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-semibold">{t.nav.prescriptions}</span>
         </div>
       </div>

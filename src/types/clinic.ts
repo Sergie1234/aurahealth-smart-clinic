@@ -12,11 +12,18 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  subRole?: string;
   avatar?: string;
   department?: string;
   specialty?: string;
   licenseNumber?: string;
   phone?: string;
+  workDays?: number[];
+  workDaysLabel?: string;
+  hoursLabel?: string;
+  startHour?: number;
+  endHour?: number;
+  schedule?: any;
 }
 
 export interface Vitals {

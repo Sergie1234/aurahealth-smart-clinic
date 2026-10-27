@@ -57,7 +57,7 @@ import {
 } from './data/mockData';
 import type { Notification, User, AuditLog } from './types/clinic';
 import { validatePasswordStrength } from './utils/passwordValidation';
-import { createCustomDoctorSchedule, DOCTOR_SCHEDULES } from './utils/doctorSchedules';
+import { createCustomDoctorSchedule, DOCTOR_SCHEDULES, getDoctorSchedule } from './utils/doctorSchedules';
 
 dotenv.config();
 
@@ -282,7 +282,7 @@ export async function hydrateClinicStateFromSupabase(): Promise<boolean> {
         if (!resolvedDept && resolvedSpecialty) {
           resolvedDept = resolvedSpecialty;
         }
-        return {
+        const userObj: User = {
           id: u.id,
           name: u.full_name,
           email: u.email,
@@ -294,13 +294,21 @@ export async function hydrateClinicStateFromSupabase(): Promise<boolean> {
           department: resolvedDept || undefined,
           avatar: u.avatar || '',
         };
+        if (userObj.role === 'doctor') {
+          const docSched = getDoctorSchedule(userObj.id, userObj);
+          userObj.workDays = docSched.workDays;
+          userObj.workDaysLabel = docSched.workDaysLabel;
+          userObj.hoursLabel = docSched.hoursLabel;
+          userObj.schedule = docSched;
+        }
+        return userObj;
       });
 
       // Also ensure all doctors from staff table are included in memUsers if missing
       if (Array.isArray(dbStaff)) {
         dbStaff.forEach((s: any) => {
           if (s.role === 'doctor' && !memUsers.some((u) => u.email?.toLowerCase() === s.email?.toLowerCase())) {
-            memUsers.push({
+            const docObj: User = {
               id: s.id,
               name: s.full_name,
               email: s.email,
@@ -310,7 +318,13 @@ export async function hydrateClinicStateFromSupabase(): Promise<boolean> {
               licenseNumber: s.license_number || undefined,
               phone: s.phone || undefined,
               avatar: '',
-            });
+            };
+            const docSched = getDoctorSchedule(docObj.id, docObj);
+            docObj.workDays = docSched.workDays;
+            docObj.workDaysLabel = docSched.workDaysLabel;
+            docObj.hoursLabel = docSched.hoursLabel;
+            docObj.schedule = docSched;
+            memUsers.push(docObj);
           }
         });
       }
@@ -2190,7 +2204,20 @@ app.post('/api/doctors', (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Valid clinic email address is required.' });
     }
 
-    const doctorId = `usr-${Date.now()}`;
+    const doctorId = String(req.body?.doctorId || '').trim() || `usr-${Date.now()}`;
+    const days = Array.isArray(workDays) && workDays.length > 0 ? workDays : [1, 2, 3, 4, 5];
+    const newSchedule = createCustomDoctorSchedule({
+      doctorId,
+      doctorName: cleanName,
+      department: department || 'General Medicine',
+      specialty: specialty || 'General Practice',
+      workDays: days,
+      workDaysLabel,
+      hoursLabel,
+      startHour: Number(startHour) || 8,
+      endHour: Number(endHour) || 17,
+    });
+
     const newDoctor: User = {
       id: doctorId,
       name: cleanName,
@@ -2199,23 +2226,15 @@ app.post('/api/doctors', (req: Request, res: Response) => {
       department: department || 'General Medicine',
       specialty: specialty || 'Internal & Family Medicine',
       licenseNumber: licenseNumber || `MD-${Math.floor(100000 + Math.random() * 900000)}`,
+      workDays: days,
+      workDaysLabel: newSchedule.workDaysLabel,
+      hoursLabel: newSchedule.hoursLabel,
+      startHour: Number(startHour) || 8,
+      endHour: Number(endHour) || 17,
+      schedule: newSchedule,
     };
 
     memUsers.unshift(newDoctor);
-
-    // Register dynamic schedule
-    const days = Array.isArray(workDays) && workDays.length > 0 ? workDays : [1, 2, 3, 4, 5];
-    const newSchedule = createCustomDoctorSchedule({
-      doctorId,
-      doctorName: cleanName,
-      department: newDoctor.department || 'General Medicine',
-      specialty: newDoctor.specialty || 'General Practice',
-      workDays: days,
-      workDaysLabel,
-      hoursLabel,
-      startHour: Number(startHour) || 8,
-      endHour: Number(endHour) || 17,
-    });
 
     // Record audit event
     const auditEntry: AuditLog = {

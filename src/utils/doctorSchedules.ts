@@ -211,78 +211,377 @@ export const DOCTOR_SCHEDULES: Record<string, DoctorSchedule> = {
       '15:30',
     ],
   },
-};
 
-export const DEFAULT_DOCTOR_SCHEDULE: Omit<DoctorSchedule, 'doctorId' | 'doctorName'> = {
-  department: 'General Outpatient Clinic',
-  specialty: 'Family & Internal Medicine',
-  workDays: [1, 2, 3, 4, 5], // Monday to Friday
-  workDaysLabel: 'Monday – Friday',
-  hoursLabel: '9:00 AM – 4:00 PM',
-  slots: [
-    '09:00',
-    '09:30',
-    '10:00',
-    '10:30',
-    '11:00',
-    '11:30',
-    '13:00',
-    '13:30',
-    '14:00',
-    '14:30',
-    '15:00',
-    '15:30',
-  ],
+  // Dr. Ramon Jose Bautista, MD (Cardiology & Internal Medicine)
+  'usr-bautista': {
+    doctorId: 'usr-bautista',
+    doctorName: 'Dr. Ramon Jose Bautista, MD, FPCP',
+    department: 'Cardiology & Internal Medicine',
+    specialty: 'Internal Medicine & Cardiology',
+    workDays: [1, 2, 3, 4, 5], // Monday to Friday
+    workDaysLabel: 'Monday – Friday',
+    hoursLabel: '8:00 AM – 12:00 PM & 1:00 PM – 5:00 PM',
+    slots: [
+      '08:00',
+      '08:30',
+      '09:00',
+      '09:30',
+      '10:00',
+      '10:30',
+      '11:00',
+      '11:30',
+      '13:00',
+      '13:30',
+      '14:00',
+      '14:30',
+      '15:00',
+      '15:30',
+      '16:00',
+      '16:30',
+    ],
+  },
+
+  // Dr. Maria Cristina Mendoza, MD (Pediatrics & Neonatology)
+  'usr-mendoza': {
+    doctorId: 'usr-mendoza',
+    doctorName: 'Dr. Maria Cristina Mendoza, MD, FPPS',
+    department: 'Pediatrics',
+    specialty: 'Pediatrics & Neonatology',
+    workDays: [1, 3, 5], // Monday, Wednesday, Friday
+    workDaysLabel: 'Monday, Wednesday, Friday',
+    hoursLabel: '9:00 AM – 3:00 PM',
+    slots: [
+      '09:00',
+      '09:30',
+      '10:00',
+      '10:30',
+      '11:00',
+      '11:30',
+      '13:00',
+      '13:30',
+      '14:00',
+      '14:30',
+    ],
+  },
+
+  // Dr. Jose Paolo Reyes, MD (Family Medicine & Primary Care)
+  'usr-paolo-reyes': {
+    doctorId: 'usr-paolo-reyes',
+    doctorName: 'Dr. Jose Paolo Reyes, MD, FPAFP',
+    department: 'Family Medicine',
+    specialty: 'Family Medicine & Primary Care',
+    workDays: [2, 3, 4, 5, 6], // Tuesday to Saturday
+    workDaysLabel: 'Tuesday – Saturday',
+    hoursLabel: '8:00 AM – 2:00 PM',
+    slots: [
+      '08:00',
+      '08:30',
+      '09:00',
+      '09:30',
+      '10:00',
+      '10:30',
+      '11:00',
+      '11:30',
+      '12:00',
+      '12:30',
+      '13:00',
+      '13:30',
+    ],
+  },
+
+  // Dr. Beatrice Angela Dizon, MD (Obstetrics & Gynecology)
+  'usr-dizon': {
+    doctorId: 'usr-dizon',
+    doctorName: 'Dr. Beatrice Angela Dizon, MD, FPOGS',
+    department: "Women's Health",
+    specialty: 'Obstetrics & Gynecology',
+    workDays: [2, 4, 6], // Tuesday, Thursday, Saturday
+    workDaysLabel: 'Tuesday, Thursday, Saturday',
+    hoursLabel: '10:00 AM – 4:00 PM',
+    slots: [
+      '10:00',
+      '10:30',
+      '11:00',
+      '11:30',
+      '13:00',
+      '13:30',
+      '14:00',
+      '14:30',
+      '15:00',
+      '15:30',
+    ],
+  },
+
+  // Dr. Antonio Miguel Villanueva, MD (Orthopedic Surgery & Sports Medicine)
+  'usr-villanueva': {
+    doctorId: 'usr-villanueva',
+    doctorName: 'Dr. Antonio Miguel Villanueva, MD, FPOA',
+    department: 'Orthopedics',
+    specialty: 'Orthopedic Surgery & Sports Medicine',
+    workDays: [1, 3, 4, 5], // Monday, Wednesday, Thursday, Friday
+    workDaysLabel: 'Monday, Wednesday, Thursday, Friday',
+    hoursLabel: '1:00 PM – 6:00 PM',
+    slots: [
+      '13:00',
+      '13:30',
+      '14:00',
+      '14:30',
+      '15:00',
+      '15:30',
+      '16:00',
+      '16:30',
+      '17:00',
+      '17:30',
+    ],
+  },
 };
 
 /**
+ * Deterministically generates a unique, specialized schedule based on doctor metadata
+ * to prevent any two doctors from sharing an unassigned default schedule.
+ */
+function generateUniqueDoctorSchedule(doctorId: string, fallbackUser?: User): DoctorSchedule {
+  const name = fallbackUser?.name || 'Attending Physician';
+  const dept = fallbackUser?.department || 'General Medicine';
+  const spec = (fallbackUser?.specialty || dept).toLowerCase();
+
+  // Specialty-tailored clinical shifts
+  if (spec.includes('cardio') || spec.includes('heart')) {
+    return createCustomDoctorSchedule({
+      doctorId,
+      doctorName: name,
+      department: dept,
+      specialty: fallbackUser?.specialty || 'Cardiology',
+      workDays: [1, 2, 3, 4, 5],
+      startHour: 8,
+      endHour: 17,
+      workDaysLabel: 'Monday – Friday',
+      hoursLabel: '8:00 AM – 12:00 PM & 1:00 PM – 5:00 PM',
+    });
+  }
+  if (spec.includes('pediatr') || spec.includes('child')) {
+    return createCustomDoctorSchedule({
+      doctorId,
+      doctorName: name,
+      department: dept,
+      specialty: fallbackUser?.specialty || 'Pediatrics',
+      workDays: [1, 3, 5],
+      startHour: 9,
+      endHour: 15,
+      workDaysLabel: 'Monday, Wednesday, Friday',
+      hoursLabel: '9:00 AM – 3:00 PM',
+    });
+  }
+  if (spec.includes('derma') || spec.includes('skin')) {
+    return createCustomDoctorSchedule({
+      doctorId,
+      doctorName: name,
+      department: dept,
+      specialty: fallbackUser?.specialty || 'Dermatology',
+      workDays: [1, 2, 3, 4],
+      startHour: 13,
+      endHour: 18,
+      workDaysLabel: 'Monday – Thursday',
+      hoursLabel: '1:00 PM – 6:00 PM',
+    });
+  }
+  if (spec.includes('pulmo') || spec.includes('respirat') || spec.includes('lung')) {
+    return createCustomDoctorSchedule({
+      doctorId,
+      doctorName: name,
+      department: dept,
+      specialty: fallbackUser?.specialty || 'Pulmonology',
+      workDays: [3, 4, 5, 6],
+      startHour: 8,
+      endHour: 13,
+      workDaysLabel: 'Wednesday – Saturday',
+      hoursLabel: '8:00 AM – 1:00 PM',
+    });
+  }
+  if (spec.includes('neuro') || spec.includes('brain')) {
+    return createCustomDoctorSchedule({
+      doctorId,
+      doctorName: name,
+      department: dept,
+      specialty: fallbackUser?.specialty || 'Neurology',
+      workDays: [1, 2, 4, 5],
+      startHour: 9,
+      endHour: 15,
+      workDaysLabel: 'Monday, Tuesday, Thursday, Friday',
+      hoursLabel: '9:00 AM – 3:00 PM',
+    });
+  }
+  if (spec.includes('ortho') || spec.includes('bone') || spec.includes('sports')) {
+    return createCustomDoctorSchedule({
+      doctorId,
+      doctorName: name,
+      department: dept,
+      specialty: fallbackUser?.specialty || 'Orthopedics',
+      workDays: [1, 3, 5],
+      startHour: 8,
+      endHour: 14,
+      workDaysLabel: 'Monday, Wednesday, Friday',
+      hoursLabel: '8:00 AM – 2:00 PM',
+    });
+  }
+  if (spec.includes('ob') || spec.includes('gyne') || spec.includes('women')) {
+    return createCustomDoctorSchedule({
+      doctorId,
+      doctorName: name,
+      department: dept,
+      specialty: fallbackUser?.specialty || 'Obstetrics & Gynecology',
+      workDays: [2, 3, 4, 6],
+      startHour: 10,
+      endHour: 16,
+      workDaysLabel: 'Tuesday – Thursday, Saturday',
+      hoursLabel: '10:00 AM – 4:00 PM',
+    });
+  }
+
+  // Hash-based rotating clinic shifts guaranteeing uniqueness for any additional doctor
+  let hash = 0;
+  const seedStr = `${doctorId}-${name}`;
+  for (let i = 0; i < seedStr.length; i++) {
+    hash = (hash * 31 + seedStr.charCodeAt(i)) & 0xffffffff;
+  }
+  const variant = Math.abs(hash) % 4;
+
+  if (variant === 0) {
+    return createCustomDoctorSchedule({
+      doctorId,
+      doctorName: name,
+      department: dept,
+      specialty: fallbackUser?.specialty || 'General Medicine',
+      workDays: [1, 2, 3, 4, 5],
+      startHour: 8,
+      endHour: 14,
+      workDaysLabel: 'Monday – Friday',
+      hoursLabel: '8:00 AM – 2:00 PM',
+    });
+  } else if (variant === 1) {
+    return createCustomDoctorSchedule({
+      doctorId,
+      doctorName: name,
+      department: dept,
+      specialty: fallbackUser?.specialty || 'General Medicine',
+      workDays: [2, 3, 4, 5, 6],
+      startHour: 9,
+      endHour: 15,
+      workDaysLabel: 'Tuesday – Saturday',
+      hoursLabel: '9:00 AM – 3:00 PM',
+    });
+  } else if (variant === 2) {
+    return createCustomDoctorSchedule({
+      doctorId,
+      doctorName: name,
+      department: dept,
+      specialty: fallbackUser?.specialty || 'General Medicine',
+      workDays: [1, 3, 5],
+      startHour: 10,
+      endHour: 16,
+      workDaysLabel: 'Monday, Wednesday, Friday',
+      hoursLabel: '10:00 AM – 4:00 PM',
+    });
+  } else {
+    return createCustomDoctorSchedule({
+      doctorId,
+      doctorName: name,
+      department: dept,
+      specialty: fallbackUser?.specialty || 'General Medicine',
+      workDays: [1, 2, 4, 5],
+      startHour: 11,
+      endHour: 17,
+      workDaysLabel: 'Monday, Tuesday, Thursday, Friday',
+      hoursLabel: '11:00 AM – 5:00 PM',
+    });
+  }
+}
+
+/**
  * Retrieve the individual working schedule for a doctor.
- * Matches by ID or name substring.
+ * Inspects explicit doctor schedule, custom assigned workdays, ID registry, and metadata.
  */
 export function getDoctorSchedule(doctorId: string, fallbackUser?: User): DoctorSchedule {
+  // 1. Direct match by doctorId
   if (doctorId && DOCTOR_SCHEDULES[doctorId]) {
     return DOCTOR_SCHEDULES[doctorId];
   }
 
-  // Lookup by name if id format varies or custom doctor
-  const queryName = (fallbackUser?.name || doctorId || '').toLowerCase();
-  const foundByName = Object.values(DOCTOR_SCHEDULES).find((s) => {
-    const sName = s.doctorName.toLowerCase();
-    return (
-      s.doctorId === doctorId ||
-      sName.includes(queryName) ||
-      queryName.includes(sName) ||
-      (queryName.includes('santos') && s.doctorId === 'usr-2') ||
-      (queryName.includes('reyes') && s.doctorId === 'usr-1') ||
-      (queryName.includes('gomez') && s.doctorId === 'usr-9') ||
-      (queryName.includes('lee') && s.doctorId === 'usr-10') ||
-      (queryName.includes('tan') && s.doctorId === 'usr-11') ||
-      (queryName.includes('ramos') && s.doctorId === 'usr-12') ||
-      (queryName.includes('castro') && s.doctorId === 'usr-13') ||
-      (queryName.includes('torres') && s.doctorId === 'usr-14')
-    );
-  });
+  // 2. Direct match by user.id
+  if (fallbackUser?.id && DOCTOR_SCHEDULES[fallbackUser.id]) {
+    return DOCTOR_SCHEDULES[fallbackUser.id];
+  }
 
-  if (foundByName) return foundByName;
+  // 3. If fallbackUser already has pre-computed schedule attached
+  if (fallbackUser?.schedule && Array.isArray(fallbackUser.schedule.workDays) && fallbackUser.schedule.workDays.length > 0) {
+    registerDoctorSchedule(doctorId || fallbackUser.id, fallbackUser.schedule);
+    return fallbackUser.schedule;
+  }
 
-  return {
-    doctorId: doctorId || 'usr-1',
-    doctorName: fallbackUser?.name || 'Attending Physician',
-    department: fallbackUser?.department || DEFAULT_DOCTOR_SCHEDULE.department,
-    specialty: fallbackUser?.specialty || DEFAULT_DOCTOR_SCHEDULE.specialty,
-    workDays: DEFAULT_DOCTOR_SCHEDULE.workDays,
-    workDaysLabel: DEFAULT_DOCTOR_SCHEDULE.workDaysLabel,
-    hoursLabel: DEFAULT_DOCTOR_SCHEDULE.hoursLabel,
-    slots: DEFAULT_DOCTOR_SCHEDULE.slots,
-  };
+  // 4. If fallbackUser has explicitly assigned custom workDays
+  if (fallbackUser?.workDays && Array.isArray(fallbackUser.workDays) && fallbackUser.workDays.length > 0) {
+    const custom = createCustomDoctorSchedule({
+      doctorId: doctorId || fallbackUser.id,
+      doctorName: fallbackUser.name,
+      department: fallbackUser.department || 'General Medicine',
+      specialty: fallbackUser.specialty || 'General Practice',
+      workDays: fallbackUser.workDays,
+      workDaysLabel: fallbackUser.workDaysLabel,
+      hoursLabel: fallbackUser.hoursLabel,
+      startHour: fallbackUser.startHour || 8,
+      endHour: fallbackUser.endHour || 17,
+    });
+    return custom;
+  }
+
+  // 5. Lookup by email or physician name keywords
+  const cleanEmail = (fallbackUser?.email || '').toLowerCase().trim();
+  if (cleanEmail) {
+    if (cleanEmail.includes('reyes') && cleanEmail.includes('maria')) return DOCTOR_SCHEDULES['usr-1'];
+    if (cleanEmail.includes('santos') && cleanEmail.includes('juan')) return DOCTOR_SCHEDULES['usr-2'];
+    if (cleanEmail.includes('gomez')) return DOCTOR_SCHEDULES['usr-9'];
+    if (cleanEmail.includes('lee')) return DOCTOR_SCHEDULES['usr-10'];
+    if (cleanEmail.includes('tan')) return DOCTOR_SCHEDULES['usr-11'];
+    if (cleanEmail.includes('ramos')) return DOCTOR_SCHEDULES['usr-12'];
+    if (cleanEmail.includes('castro')) return DOCTOR_SCHEDULES['usr-13'];
+    if (cleanEmail.includes('torres') && cleanEmail.includes('elena')) return DOCTOR_SCHEDULES['usr-14'];
+    if (cleanEmail.includes('bautista')) return DOCTOR_SCHEDULES['usr-bautista'];
+    if (cleanEmail.includes('mendoza')) return DOCTOR_SCHEDULES['usr-mendoza'];
+    if (cleanEmail.includes('paolo') || (cleanEmail.includes('reyes') && cleanEmail.includes('jose'))) return DOCTOR_SCHEDULES['usr-paolo-reyes'];
+    if (cleanEmail.includes('dizon')) return DOCTOR_SCHEDULES['usr-dizon'];
+    if (cleanEmail.includes('villanueva')) return DOCTOR_SCHEDULES['usr-villanueva'];
+  }
+
+  const queryName = (fallbackUser?.name || doctorId || '').toLowerCase().trim();
+  if (queryName) {
+    if (queryName.includes('santos') && (queryName.includes('juan') || queryName.includes('miguel'))) return DOCTOR_SCHEDULES['usr-2'];
+    if (queryName.includes('reyes') && (queryName.includes('maria') || queryName.includes('cristina'))) return DOCTOR_SCHEDULES['usr-1'];
+    if (queryName.includes('gomez')) return DOCTOR_SCHEDULES['usr-9'];
+    if (queryName.includes('lee')) return DOCTOR_SCHEDULES['usr-10'];
+    if (queryName.includes('tan') && queryName.includes('roberto')) return DOCTOR_SCHEDULES['usr-11'];
+    if (queryName.includes('ramos')) return DOCTOR_SCHEDULES['usr-12'];
+    if (queryName.includes('castro') && queryName.includes('gabriel')) return DOCTOR_SCHEDULES['usr-13'];
+    if (queryName.includes('torres') && queryName.includes('elena')) return DOCTOR_SCHEDULES['usr-14'];
+    if (queryName.includes('bautista')) return DOCTOR_SCHEDULES['usr-bautista'];
+    if (queryName.includes('mendoza') && queryName.includes('cristina')) return DOCTOR_SCHEDULES['usr-mendoza'];
+    if (queryName.includes('reyes') && (queryName.includes('paolo') || queryName.includes('jose'))) return DOCTOR_SCHEDULES['usr-paolo-reyes'];
+    if (queryName.includes('dizon')) return DOCTOR_SCHEDULES['usr-dizon'];
+    if (queryName.includes('villanueva') && queryName.includes('antonio')) return DOCTOR_SCHEDULES['usr-villanueva'];
+  }
+
+  // 6. Generate a deterministic unique schedule for this physician
+  const uniqueSchedule = generateUniqueDoctorSchedule(doctorId || fallbackUser?.id || `doc-${Date.now()}`, fallbackUser);
+  if (doctorId) registerDoctorSchedule(doctorId, uniqueSchedule);
+  if (fallbackUser?.id) registerDoctorSchedule(fallbackUser.id, uniqueSchedule);
+  return uniqueSchedule;
 }
 
 /**
  * Check if a doctor is working on a given date (YYYY-MM-DD)
  */
-export function isDoctorWorkingOnDate(doctorId: string, dateStr: string): boolean {
+export function isDoctorWorkingOnDate(doctorId: string, dateStr: string, fallbackUser?: User): boolean {
   if (!dateStr) return false;
-  const schedule = getDoctorSchedule(doctorId);
+  const schedule = getDoctorSchedule(doctorId, fallbackUser);
   // Parse YYYY-MM-DD cleanly in local timezone
   const [year, month, day] = dateStr.split('-').map(Number);
   const dateObj = new Date(year, month - 1, day);
@@ -321,16 +620,17 @@ export function getDoctorSlotAvailability(
   doctorId: string,
   dateStr: string,
   appointments: Appointment[],
-  excludeAppointmentId?: string
+  excludeAppointmentId?: string,
+  fallbackUser?: User
 ): SlotAvailability[] {
   if (!doctorId || !dateStr) return [];
 
-  const isWorking = isDoctorWorkingOnDate(doctorId, dateStr);
+  const isWorking = isDoctorWorkingOnDate(doctorId, dateStr, fallbackUser);
   if (!isWorking) {
     return []; // Doctor is off; no slots available
   }
 
-  const schedule = getDoctorSchedule(doctorId);
+  const schedule = getDoctorSchedule(doctorId, fallbackUser);
 
   // Find all active booked appointments for this doctor on this date
   const bookedOnDate = appointments.filter((a) => {

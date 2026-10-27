@@ -176,15 +176,15 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
       availableSlotsCount: number;
     }> = [];
 
-    const todayDateStr = '2026-10-06';
+    const todayDateStr = new Date().toISOString().split('T')[0];
 
     for (let day = 1; day <= totalDaysInMonth; day++) {
       const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const isWorkDay = isDoctorWorkingOnDate(selectedDoctor?.id || '', dateString);
+      const isWorkDay = isDoctorWorkingOnDate(selectedDoctor?.id || '', dateString, selectedDoctor);
       const isPast = dateString < todayDateStr;
 
       // Check slot availability for this doctor on this day using doctor's personal schedule
-      const daySlots = getDoctorSlotAvailability(selectedDoctor?.id || '', dateString, appointments);
+      const daySlots = getDoctorSlotAvailability(selectedDoctor?.id || '', dateString, appointments, undefined, selectedDoctor);
       const availableSlotsCount = (isWorkDay && !isPast) ? daySlots.filter((s) => s.isAvailable).length : 0;
 
       days.push({
@@ -203,7 +203,7 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
   // Slots for the currently selected date: ONLY matching doctor's personal individual schedule
   const slotAvailability = useMemo(() => {
     if (!selectedDate || !selectedDoctor) return [];
-    return getDoctorSlotAvailability(selectedDoctor.id, selectedDate, appointments);
+    return getDoctorSlotAvailability(selectedDoctor.id, selectedDate, appointments, undefined, selectedDoctor);
   }, [selectedDate, selectedDoctor, appointments]);
 
   // Available slots count for selected date

@@ -57,7 +57,6 @@ export const LoginPage: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [enablePatient2Fa, setEnablePatient2Fa] = useState(false);
-  const [justResetPassword, setJustResetPassword] = useState(false);
 
   // Patient Intake EMR Demographics
   const [dob, setDob] = useState('1995-05-15');
@@ -171,7 +170,7 @@ export const LoginPage: React.FC = () => {
 
   // Proactively check if entered email has Authenticator 2FA enabled (Admin, Doctor, Staff only — NEVER Patient)
   useEffect(() => {
-    if (primaryRole === 'patient' || justResetPassword) {
+    if (primaryRole === 'patient') {
       setEnablePatient2Fa(false);
       return;
     }
@@ -182,7 +181,7 @@ export const LoginPage: React.FC = () => {
         fetch(`${API_BASE_URL}/api/auth/2fa/status?email=${encodeURIComponent(clean)}&role=${encodeURIComponent(primaryRole)}`)
           .then((res) => res.json())
           .then((d) => {
-            if (isMounted && d?.enabled && (primaryRole as string) !== 'patient' && !justResetPassword) {
+            if (isMounted && d?.enabled && (primaryRole as string) !== 'patient') {
               setEnablePatient2Fa(true);
             }
           })
@@ -195,7 +194,7 @@ export const LoginPage: React.FC = () => {
     } else {
       setEnablePatient2Fa(false);
     }
-  }, [email, primaryRole, justResetPassword]);
+  }, [email, primaryRole]);
 
   const isPatient = primaryRole === 'patient';
   const isDoctor = primaryRole === 'doctor';
@@ -977,7 +976,7 @@ export const LoginPage: React.FC = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     onBlur={() => {
-                      if (primaryRole === 'patient' || justResetPassword) {
+                      if (primaryRole === 'patient') {
                         setEnablePatient2Fa(false);
                         return;
                       }
@@ -986,7 +985,7 @@ export const LoginPage: React.FC = () => {
                         fetch(`${API_BASE_URL}/api/auth/2fa/status?email=${encodeURIComponent(clean)}&role=${encodeURIComponent(primaryRole)}`)
                           .then((res) => res.json())
                           .then((d) => {
-                            if (d?.enabled && (primaryRole as string) !== 'patient' && !justResetPassword) {
+                            if (d?.enabled && (primaryRole as string) !== 'patient') {
                               setEnablePatient2Fa(true);
                             }
                           })
@@ -1139,7 +1138,7 @@ export const LoginPage: React.FC = () => {
                 )}
 
                 {/* 2FA Code Input & Authenticator App Integration (Strictly Admin / Staff — NEVER Patient) */}
-                {!isPatient && (isAdmin || (isStaff && enablePatient2Fa)) && !justResetPassword && (
+                {!isPatient && (isAdmin || (isStaff && enablePatient2Fa)) && (
                   <div className="p-4 rounded-2xl bg-amber-50/50 dark:bg-slate-800/60 border border-amber-200 dark:border-amber-800/80 space-y-2.5">
                     <div className="flex items-center justify-between">
                       <label className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
@@ -1255,17 +1254,28 @@ export const LoginPage: React.FC = () => {
           setTwoFactorCode('');
           setEnablePatient2Fa(false);
           setShowAuthenticatorModal(false);
-          setJustResetPassword(true);
           setMode('login');
-          // If reset account is not an admin, ensure role cleanly defaults to 'patient'
+          setError('');
+          setLoading(false);
+
           const isAdminAccount =
             resetEmail?.toLowerCase() === 'smartclinicrealacc@gmail.com' ||
             resetEmail?.toLowerCase().includes('admin');
-          if (!isAdminAccount) {
+          if (isAdminAccount) {
+            setPrimaryRole('admin');
+            toastSuccess('Password updated successfully! Enter the 6-digit Authenticator code to complete login.');
+          } else if (
+            resetEmail?.toLowerCase().includes('doctor') ||
+            resetEmail?.toLowerCase().includes('reyes') ||
+            resetEmail?.toLowerCase().includes('mendoza') ||
+            resetEmail?.toLowerCase().includes('bautista')
+          ) {
+            setPrimaryRole('doctor');
+            toastSuccess('Password updated successfully! Please sign in with your new credentials.');
+          } else {
             setPrimaryRole('patient');
+            toastSuccess('Password updated successfully! Please sign in with your new credentials.');
           }
-          setError('');
-          toastSuccess('Password updated successfully! Please sign in with your new credentials.');
         }}
       />
 

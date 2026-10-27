@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { Appointment, AppointmentStatus } from '../../types/clinic';
 import {
@@ -50,12 +50,24 @@ export const AppointmentCalendar: React.FC<Props> = ({
   const isPatient = activeRole === 'patient';
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
+  const isDoctor = activeRole === 'doctor' || currentUser?.role === 'doctor';
+  const doctors = users.filter((u) => u.role === 'doctor');
+
   // View & Filter States
   const [selectedDate, setSelectedDate] = useState<string>(''); // empty string means all dates visible
   const [timeframeFilter, setTimeframeFilter] = useState<'ALL' | 'UPCOMING' | 'PAST'>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [doctorFilter, setDoctorFilter] = useState<string>('ALL');
+  const [doctorFilter, setDoctorFilter] = useState<string>(() => {
+    return isDoctor && currentUser?.id ? currentUser.id : 'ALL';
+  });
   const [showMonthGrid, setShowMonthGrid] = useState<boolean>(true);
+
+  // Synchronize doctorFilter when logged in as doctor
+  useEffect(() => {
+    if (isDoctor && currentUser?.id) {
+      setDoctorFilter(currentUser.id);
+    }
+  }, [isDoctor, currentUser?.id]);
 
   // Calendar monthly navigation
   const [calendarMonth, setCalendarMonth] = useState<Date>(() => new Date());
@@ -65,8 +77,6 @@ export const AppointmentCalendar: React.FC<Props> = ({
   const [newReschedDate, setNewReschedDate] = useState('');
   const [newReschedTime, setNewReschedTime] = useState('10:00');
   const [rescheduleError, setRescheduleError] = useState<string | null>(null);
-
-  const doctors = users.filter((u) => u.role === 'doctor');
 
   const selectedDoctorSchedule = useMemo(() => {
     if (doctorFilter === 'ALL') return null;
@@ -111,12 +121,14 @@ export const AppointmentCalendar: React.FC<Props> = ({
       hasPast: boolean;
     }> = [];
 
+    const selectedDoctorUser = doctorFilter !== 'ALL' ? doctors.find((d) => d.id === doctorFilter) : undefined;
+
     for (let day = 1; day <= totalDaysInMonth; day++) {
       const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const isToday = dateString === todayStr;
       const isPastDate = dateString < todayStr;
       const isDoctorOff =
-        doctorFilter !== 'ALL' && !isDoctorWorkingOnDate(doctorFilter, dateString);
+        doctorFilter !== 'ALL' && !isDoctorWorkingOnDate(doctorFilter, dateString, selectedDoctorUser);
 
       // Filter appointments on this day
       const dayAppointments = appointments.filter((a) => {
@@ -140,7 +152,7 @@ export const AppointmentCalendar: React.FC<Props> = ({
     }
 
     return { firstDayIndex, days };
-  }, [calendarMonth, appointments, doctorFilter]);
+  }, [calendarMonth, appointments, doctorFilter, doctors]);
 
   // Overall counts for summary
   const upcomingCount = useMemo(
@@ -840,10 +852,11 @@ export const AppointmentCalendar: React.FC<Props> = ({
 
       {/* Reschedule Modal with Individual Doctor Schedule & Availability */}
       {reschedulingApt && (() => {
-        const docSchedule = getDoctorSchedule(reschedulingApt.doctorId);
-        const isDocWorking = newReschedDate ? isDoctorWorkingOnDate(reschedulingApt.doctorId, newReschedDate) : false;
+        const reschedDoc = users.find((u) => u.id === reschedulingApt.doctorId);
+        const docSchedule = getDoctorSchedule(reschedulingApt.doctorId, reschedDoc);
+        const isDocWorking = newReschedDate ? isDoctorWorkingOnDate(reschedulingApt.doctorId, newReschedDate, reschedDoc) : false;
         const availableSlots = newReschedDate
-          ? getDoctorSlotAvailability(reschedulingApt.doctorId, newReschedDate, appointments, reschedulingApt.id)
+          ? getDoctorSlotAvailability(reschedulingApt.doctorId, newReschedDate, appointments, reschedulingApt.id, reschedDoc)
           : [];
 
         return (
