@@ -307,12 +307,31 @@ export const DirectPrintMount: React.FC<Props> = ({ activeDocument }) => {
               </div>
             ) : null}
 
-            {invoice.insuranceClaimStatus === 'Approved' ? (
+            {invoice.hmoClaim ? (
+              <div className="flex justify-between text-teal-800 font-semibold">
+                <span>HMO ({invoice.hmoClaim.partnerName}):</span>
+                <span className="font-mono">- {formatPeso(invoice.hmoClaim.coverageAmount)}</span>
+              </div>
+            ) : invoice.insuranceClaimStatus === 'Approved' ? (
               <div className="flex justify-between text-teal-800 font-semibold">
                 <span>HMO / PhilHealth Coverage:</span>
                 <span className="font-mono">- {formatPeso(invoice.totalAmount * 0.4)}</span>
               </div>
             ) : null}
+
+            {invoice.paymentDetails && (
+              <div className="text-[10px] text-slate-600 border-t border-slate-200 pt-1">
+                <span>Method: <strong>{invoice.paymentDetails.method}</strong></span>
+                {invoice.paymentDetails.referenceNumber && (
+                  <span className="block font-mono text-[9px]">Ref: {invoice.paymentDetails.referenceNumber}</span>
+                )}
+                {invoice.paymentDetails.tenderedAmount !== undefined && (
+                  <span className="block font-mono text-[9px]">
+                    Tendered: {formatPeso(invoice.paymentDetails.tenderedAmount)} | Change: {formatPeso(invoice.paymentDetails.changeAmount || 0)}
+                  </span>
+                )}
+              </div>
+            )}
 
             <div className="border-t border-slate-200 pt-1.5 flex justify-between font-bold text-sm text-slate-950">
               <span>Total Paid Amount:</span>

@@ -2,13 +2,14 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import { API_BASE_URL } from '../lib/config';
 import {
   Patient, User, UserRole, UserPermissions, DEFAULT_ROLE_PERMISSIONS, Appointment, AppointmentStatus, Consultation,
-  Prescription, LabTestOrder, LabResultItem, InventoryItem, Invoice,
+  Prescription, LabTestOrder, LabResultItem, InventoryItem, Invoice, InvoiceItem,
   Notification, AuditLog, Vitals, TriageRecord, UrgencyBand,
+  PaymentMethod, HMOClaimStatus, HMOPartner, HMOClaim, PaymentDetails
 } from '../types/clinic';
 import {
   INITIAL_PATIENTS, INITIAL_USERS, INITIAL_APPOINTMENTS, INITIAL_CONSULTATIONS,
   INITIAL_PRESCRIPTIONS, INITIAL_LAB_ORDERS, INITIAL_INVENTORY, INITIAL_INVOICES,
-  INITIAL_NOTIFICATIONS, INITIAL_AUDIT_LOGS,
+  INITIAL_NOTIFICATIONS, INITIAL_AUDIT_LOGS, PHILIPPINE_HMO_PARTNERS
 } from '../data/mockData';
 import {
   syncPatientToSupabase, syncAppointmentToSupabase, syncConsultationToSupabase,
@@ -179,6 +180,9 @@ interface ClinicContextType {
   appointments: Appointment[];
   addAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt'>) => Appointment;
   updateAppointmentStatus: (id: string, status: AppointmentStatus) => void;
+  updateAppointmentRoom: (id: string, room: string) => void;
+  checkInPatient: (appointmentId: string, room?: string) => void;
+  advanceQueueStatus: (appointmentId: string, nextStatus: AppointmentStatus, room?: string) => void;
   rescheduleAppointment: (id: string, newDate: string, newTime: string) => void;
   consultations: Consultation[];
   addConsultation: (consultation: Omit<Consultation, 'id'>) => Consultation;
@@ -192,8 +196,23 @@ interface ClinicContextType {
   inventory: InventoryItem[];
   adjustStock: (itemId: string, quantityChange: number, reason: string) => void;
   invoices: Invoice[];
+  hmoPartners: HMOPartner[];
   addInvoice: (invoice: Omit<Invoice, 'id' | 'invoiceNumber'>) => Invoice;
   payInvoice: (invoiceId: string, amount: number, method: Invoice['paymentMethod']) => void;
+  payInvoiceWithDetails: (invoiceId: string, amount: number, details: PaymentDetails) => void;
+  updateHMOClaim: (invoiceId: string, claimData: Partial<HMOClaim>) => void;
+  processHMOApproval: (invoiceId: string, loaNumber: string, approvedAmount: number, remarks?: string) => void;
+  syncClinicalOrdersToInvoice: (params: {
+    patientId: string;
+    patientName: string;
+    patientMrn: string;
+    consultationFee?: number;
+    doctorName?: string;
+    labItems?: { name: string; price: number }[];
+    rxItems?: { name: string; price: number; quantity: number }[];
+    procedureItems?: { name: string; price: number }[];
+    hmoPartner?: string;
+  }) => Invoice;
   notifications: Notification[];
   allNotifications: Notification[];
   unreadNotificationCount: number;
@@ -516,6 +535,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return saved ? JSON.parse(saved) : INITIAL_INVOICES;
   });
 
+  const [hmoPartners, setHmoPartners] = useState<HMOPartner[]>(() => {
+    const saved = localStorage.getItem('smart_clinic_hmo_partners');
+    return saved ? JSON.parse(saved) : PHILIPPINE_HMO_PARTNERS;
+  });
+
   const [notifications, setNotifications] = useState<Notification[]>(() => {
     const saved = localStorage.getItem('smart_clinic_notifications');
     return saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
@@ -537,6 +561,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => { localStorage.setItem('smart_clinic_lab_orders', JSON.stringify(labOrders)); }, [labOrders]);
   useEffect(() => { localStorage.setItem('smart_clinic_inventory', JSON.stringify(inventory)); }, [inventory]);
   useEffect(() => { localStorage.setItem('smart_clinic_invoices', JSON.stringify(invoices)); }, [invoices]);
+  useEffect(() => { localStorage.setItem('smart_clinic_hmo_partners', JSON.stringify(hmoPartners)); }, [hmoPartners]);
   useEffect(() => { localStorage.setItem('smart_clinic_notifications', JSON.stringify(notifications)); }, [notifications]);
   useEffect(() => { localStorage.setItem('smart_clinic_audit_logs', JSON.stringify(auditLogs)); }, [auditLogs]);
 
@@ -1283,8 +1308,16 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         (i) => i.patientId === currentPatientRecord.id || i.patientName === currentPatientRecord.fullName
       );
     }
+    // Strict RBAC: Only Admin, Receptionist, or staff with explicit billing permission can access clinic-wide invoices
+    if (activeRole !== 'admin') {
+      const perms = currentUser?.permissions || (currentUser?.role ? DEFAULT_ROLE_PERMISSIONS[currentUser.role] : null);
+      const canAccessBilling = activeRole === 'receptionist' || Boolean(perms?.billing);
+      if (!canAccessBilling) {
+        return [];
+      }
+    }
     return invoices;
-  }, [isPatientScope, currentPatientRecord, invoices]);
+  }, [isPatientScope, currentPatientRecord, invoices, activeRole, currentUser]);
 
   const visiblePatients = isolatedPatients;
   const myAppointments = isolatedAppointments;
@@ -1484,6 +1517,69 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (typeof window !== 'undefined' && window.BroadcastChannel) {
       const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
       channel.postMessage({ type: 'UPDATE_APPOINTMENT_STATUS', id, status });
+      channel.close();
+    }
+  };
+
+  const updateAppointmentRoom = (id: string, room: string) => {
+    setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, room } : a)));
+    logAction('APPOINTMENT_ROOM_ASSIGNED', 'Appointment', id, `Assigned consultation room: ${room}`);
+    if (typeof window !== 'undefined' && window.BroadcastChannel) {
+      const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
+      channel.postMessage({ type: 'UPDATE_APPOINTMENT_ROOM', id, room });
+      channel.close();
+    }
+  };
+
+  const checkInPatient = (appointmentId: string, room?: string) => {
+    const apt = appointments.find((a) => a.id === appointmentId);
+    if (!apt) return;
+    const defaultRoom = room || apt.room || 'Waiting Room B';
+    const queueNum = apt.queueNumber || `Q-${100 + appointments.length + 1}`;
+
+    setAppointments((prev) =>
+      prev.map((a) =>
+        a.id === appointmentId
+          ? {
+              ...a,
+              status: 'Checked In',
+              room: defaultRoom,
+              queueNumber: a.queueNumber || queueNum,
+            }
+          : a
+      )
+    );
+    logAction('PATIENT_CHECKED_IN', 'Appointment', appointmentId, `Patient checked in to ${defaultRoom} (Ticket: ${queueNum})`);
+    addNotification({
+      userId: apt.patientId,
+      targetRole: 'patient',
+      title: 'Checked In to Outpatient Clinic',
+      message: `You are checked in with ticket #${queueNum}. Please wait in ${defaultRoom}.`,
+      category: 'appointment',
+      priority: 'normal',
+    });
+    if (typeof window !== 'undefined' && window.BroadcastChannel) {
+      const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
+      channel.postMessage({ type: 'UPDATE_APPOINTMENT_STATUS', id: appointmentId, status: 'Checked In', room: defaultRoom });
+      channel.close();
+    }
+  };
+
+  const advanceQueueStatus = (appointmentId: string, nextStatus: AppointmentStatus, room?: string) => {
+    const apt = appointments.find((a) => a.id === appointmentId);
+    if (!apt) return;
+    const targetRoom = room || apt.room || (nextStatus === 'In Consultation' ? 'Room 302 (Consultation Suite)' : 'Waiting Room B');
+    setAppointments((prev) =>
+      prev.map((a) =>
+        a.id === appointmentId
+          ? { ...a, status: nextStatus, room: targetRoom }
+          : a
+      )
+    );
+    logAction('QUEUE_ADVANCED', 'Appointment', appointmentId, `Queue status advanced to ${nextStatus} in ${targetRoom}`);
+    if (typeof window !== 'undefined' && window.BroadcastChannel) {
+      const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
+      channel.postMessage({ type: 'UPDATE_APPOINTMENT_STATUS', id: appointmentId, status: nextStatus, room: targetRoom });
       channel.close();
     }
   };
@@ -1717,6 +1813,221 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         status: isFullyPaid ? 'Paid' : 'Partially Paid',
       }),
     }, 'Pay invoice');
+  };
+
+  const payInvoiceWithDetails = (invoiceId: string, amount: number, details: PaymentDetails) => {
+    let updatedPaidAmount = 0;
+    let isFullyPaid = false;
+
+    setInvoices((prev) =>
+      prev.map((inv) => {
+        if (inv.id !== invoiceId) return inv;
+        const newPaid = (inv.paidAmount || 0) + amount;
+        const isPaid = newPaid >= inv.totalAmount;
+        updatedPaidAmount = newPaid;
+        isFullyPaid = isPaid;
+        return {
+          ...inv,
+          paidAmount: newPaid,
+          paymentMethod: details.method,
+          paymentDetails: details,
+          paymentDate: details.paymentDate,
+          paidAt: isPaid ? details.paymentDate : inv.paidAt,
+          status: isPaid ? 'Paid' : 'Partially Paid',
+        };
+      })
+    );
+    const refTxt = details.referenceNumber ? ` (Ref: ${details.referenceNumber})` : '';
+    const tenderTxt = details.tenderedAmount ? ` [Tendered: ₱${details.tenderedAmount}, Change: ₱${details.changeAmount || 0}]` : '';
+    logAction('PAYMENT_RECORDED', 'Billing', invoiceId, `Payment of ₱${amount} recorded via ${details.method}${refTxt}${tenderTxt}`);
+
+    syncToBackend(`/api/invoices/${invoiceId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        paidAmount: updatedPaidAmount,
+        paymentMethod: details.method,
+        paymentDetails: details,
+        paymentDate: details.paymentDate,
+        paidAt: isFullyPaid ? details.paymentDate : undefined,
+        status: isFullyPaid ? 'Paid' : 'Partially Paid',
+      }),
+    }, 'Pay invoice');
+  };
+
+  const updateHMOClaim = (invoiceId: string, claimData: Partial<HMOClaim>) => {
+    setInvoices((prev) =>
+      prev.map((inv) => {
+        if (inv.id !== invoiceId) return inv;
+        const currentClaim = inv.hmoClaim || {
+          partnerName: claimData.partnerName || 'Maxicare Healthcare Corporation',
+          memberId: claimData.memberId || 'N/A',
+          loaNumber: claimData.loaNumber || `LOA-${Date.now().toString().slice(-6)}`,
+          coverageAmount: claimData.coverageAmount ?? inv.totalAmount,
+          patientShare: claimData.patientShare ?? 0,
+          claimStatus: claimData.claimStatus || 'Pending Verification',
+        };
+        const updatedClaim: HMOClaim = { ...currentClaim, ...claimData };
+        let newStatus = inv.status;
+        if (updatedClaim.claimStatus === 'Approved') {
+          newStatus = 'HMO Approved';
+        } else if (updatedClaim.claimStatus === 'Rejected') {
+          newStatus = 'Unpaid';
+        }
+
+        return {
+          ...inv,
+          hmoClaim: updatedClaim,
+          status: newStatus,
+        };
+      })
+    );
+    logAction('HMO_CLAIM_UPDATED', 'Billing', invoiceId, `HMO claim updated for invoice ${invoiceId}: ${claimData.claimStatus || 'updated'}`);
+  };
+
+  const processHMOApproval = (invoiceId: string, loaNumber: string, approvedAmount: number, remarks?: string) => {
+    setInvoices((prev) =>
+      prev.map((inv) => {
+        if (inv.id !== invoiceId) return inv;
+        const existingClaim = inv.hmoClaim;
+        const partnerName = existingClaim?.partnerName || 'Maxicare Healthcare Corporation';
+        const memberId = existingClaim?.memberId || 'MEM-001';
+        const patientShare = Math.max(0, inv.totalAmount - approvedAmount);
+        const updatedClaim: HMOClaim = {
+          partnerName,
+          memberId,
+          loaNumber,
+          coverageAmount: approvedAmount,
+          patientShare,
+          claimStatus: 'Approved',
+          approvedDate: new Date().toISOString(),
+          verifiedBy: currentUser?.name || 'Reception Staff',
+          remarks: remarks || 'LOA verified and approved by HMO portal',
+        };
+        const newPaid = (inv.paidAmount || 0) + approvedAmount;
+        const isPaid = newPaid >= inv.totalAmount;
+        return {
+          ...inv,
+          hmoClaim: updatedClaim,
+          paidAmount: newPaid,
+          status: isPaid ? 'Paid' : 'HMO Approved',
+          paymentMethod: 'Insurance',
+          paidAt: isPaid ? new Date().toISOString() : inv.paidAt,
+        };
+      })
+    );
+    logAction('HMO_LOA_APPROVED', 'Billing', invoiceId, `LOA ${loaNumber} approved for ₱${approvedAmount}`);
+  };
+
+  const syncClinicalOrdersToInvoice = (params: {
+    patientId: string;
+    patientName: string;
+    patientMrn: string;
+    consultationFee?: number;
+    doctorName?: string;
+    labItems?: { name: string; price: number }[];
+    rxItems?: { name: string; price: number; quantity: number }[];
+    procedureItems?: { name: string; price: number }[];
+    hmoPartner?: string;
+  }) => {
+    const items: InvoiceItem[] = [];
+
+    // Consultation fee
+    const consultFee = params.consultationFee ?? 800;
+    items.push({
+      id: `ii-cons-${Date.now()}`,
+      description: `Outpatient Consultation - ${params.doctorName || 'Attending Physician'}`,
+      category: 'Consultation',
+      quantity: 1,
+      unitPrice: consultFee,
+      total: consultFee,
+    });
+
+    // Lab items
+    params.labItems?.forEach((lab, idx) => {
+      items.push({
+        id: `ii-lab-${Date.now()}-${idx}`,
+        description: lab.name,
+        category: 'Laboratory',
+        quantity: 1,
+        unitPrice: lab.price,
+        total: lab.price,
+      });
+    });
+
+    // Prescription items
+    params.rxItems?.forEach((rx, idx) => {
+      items.push({
+        id: `ii-rx-${Date.now()}-${idx}`,
+        description: `${rx.name} (qty: ${rx.quantity})`,
+        category: 'Pharmacy',
+        quantity: rx.quantity,
+        unitPrice: rx.price,
+        total: rx.price * rx.quantity,
+      });
+    });
+
+    // Procedure items
+    params.procedureItems?.forEach((proc, idx) => {
+      items.push({
+        id: `ii-proc-${Date.now()}-${idx}`,
+        description: proc.name,
+        category: 'Procedure',
+        quantity: 1,
+        unitPrice: proc.price,
+        total: proc.price,
+      });
+    });
+
+    const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+    const today = new Date().toISOString().split('T')[0];
+    const dueDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const pat = patients.find((p) => p.id === params.patientId);
+    const hmoPartnerName = params.hmoPartner || pat?.insuranceProvider;
+
+    let hmoClaimData: HMOClaim | undefined = undefined;
+    if (hmoPartnerName && hmoPartnerName.toLowerCase() !== 'none' && hmoPartnerName.toLowerCase() !== 'cash') {
+      const partner = hmoPartners.find((h) => h.name.toLowerCase().includes(hmoPartnerName.toLowerCase()) || h.code.toLowerCase() === hmoPartnerName.toLowerCase());
+      const coverageRate = (partner?.coverageRate ?? 100) / 100;
+      const coverageAmount = subtotal * coverageRate;
+      const patientShare = subtotal - coverageAmount;
+      hmoClaimData = {
+        partnerId: partner?.id,
+        partnerName: partner?.name || hmoPartnerName,
+        memberId: pat?.insurancePolicyNumber || `HMO-${Date.now().toString().slice(-6)}`,
+        loaNumber: `LOA-${Date.now().toString().slice(-6)}`,
+        coverageAmount,
+        patientShare,
+        claimStatus: 'Pending Verification',
+      };
+    }
+
+    const newInv: Invoice = {
+      id: `inv-${Date.now()}`,
+      invoiceNumber: `INV-2026-${String(5000 + invoices.length + 1)}`,
+      patientId: params.patientId,
+      patientName: params.patientName,
+      patientMrn: params.patientMrn,
+      date: today,
+      dueDate,
+      items,
+      subtotal,
+      discountPercentage: 0,
+      discountAmount: 0,
+      taxAmount: 0,
+      totalAmount: subtotal,
+      paidAmount: 0,
+      status: hmoClaimData ? 'HMO Pending' : 'Unpaid',
+      hmoClaim: hmoClaimData,
+      notes: `Automated live charge from consultation on ${today}`,
+    };
+
+    setInvoices((prev) => [newInv, ...prev]);
+    logAction('INVOICE_CREATED', 'Billing', newInv.id, `Generated live synchronized invoice ${newInv.invoiceNumber} for ${newInv.patientName}`);
+    syncInvoiceToSupabase(newInv);
+    syncToBackend('/api/invoices', { method: 'POST', body: JSON.stringify(newInv) }, 'Create live invoice');
+
+    return newInv;
   };
 
   // ==============================================================================
@@ -2561,6 +2872,9 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         appointments: isolatedAppointments,
         addAppointment,
         updateAppointmentStatus,
+        updateAppointmentRoom,
+        checkInPatient,
+        advanceQueueStatus,
         rescheduleAppointment,
         consultations: isolatedConsultations,
         addConsultation,
@@ -2574,8 +2888,13 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         inventory,
         adjustStock,
         invoices: isolatedInvoices,
+        hmoPartners,
         addInvoice,
         payInvoice,
+        payInvoiceWithDetails,
+        updateHMOClaim,
+        processHMOApproval,
+        syncClinicalOrdersToInvoice,
         notifications: roleNotifications,
         allNotifications: notifications,
         unreadNotificationCount,

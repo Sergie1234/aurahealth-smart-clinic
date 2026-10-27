@@ -175,7 +175,7 @@ const ClinicAppContent: React.FC = () => {
       admin: ['home', 'dashboard', 'patients', 'doctors', 'clinical-staff', 'staff-management', 'audit-logs', 'reports', 'predictive-analytics', 'billing', 'inventory', 'ai-assistant', 'notifications'],
       doctor: ['home', 'dashboard', 'patients', 'appointments', 'queue', 'consultations', 'prescriptions', 'laboratory', 'inventory', 'ai-assistant', 'notifications'],
       nurse: ['home', 'dashboard', 'patients', 'scan-qr', 'appointments', 'queue', 'consultations', 'laboratory', 'ai-assistant', 'notifications'],
-      receptionist: ['home', 'dashboard', 'patients', 'scan-qr', 'appointments', 'queue', 'ai-assistant', 'notifications'],
+      receptionist: ['home', 'dashboard', 'patients', 'scan-qr', 'appointments', 'queue', 'billing', 'ai-assistant', 'notifications'],
       pharmacist: ['home', 'dashboard', 'prescriptions', 'inventory', 'ai-assistant', 'notifications'],
       lab_technician: ['home', 'dashboard', 'laboratory', 'ai-assistant', 'notifications'],
     };

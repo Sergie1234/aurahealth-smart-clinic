@@ -33,6 +33,10 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
     patients,
     currentUser,
     activeRole,
+    appointments,
+    updateAppointmentStatus,
+    syncClinicalOrdersToInvoice,
+    addNotification,
     addConsultation,
     addPrescription,
     addLabOrder,
@@ -344,6 +348,53 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
             recommendation: 'Patient advised complete rest from work/school duties.',
           }
         : undefined,
+    });
+
+    // 4. Global Queue Progression: Advance appointment status to Completed
+    const activeAppt = appointments.find(
+      (a) =>
+        a.patientId === patient.id &&
+        (a.status === 'In Consultation' || a.status === 'Checked In' || a.status === 'Confirmed')
+    );
+    if (activeAppt) {
+      updateAppointmentStatus(activeAppt.id, 'Completed');
+    }
+
+    // 5. Make Billing Live: Automatically itemize consultation fee, labs, and medications
+    const labItemsForBilling = labOrdersToAdd.map((lab: string) => {
+      let price = 450;
+      if (lab.includes('Lipid') || lab.includes('Metabolic')) price = 750;
+      else if (lab.includes('CBC')) price = 350;
+      else if (lab.includes('HbA1c')) price = 650;
+      else if (lab.includes('ECG')) price = 450;
+      return { name: `Diagnostic Lab: ${lab}`, price };
+    });
+
+    const rxItemsForBilling = prescriptionsToAdd.map((rx: any) => ({
+      name: `Prescribed: ${rx.medicationName} (${rx.dosage})`,
+      price: 25,
+      quantity: rx.quantity || 14,
+    }));
+
+    const isSpecialist = Boolean(currentUser?.specialty && currentUser.specialty !== 'General Practice');
+    syncClinicalOrdersToInvoice({
+      patientId: patient.id,
+      patientName: patient.fullName,
+      patientMrn: patient.mrn,
+      doctorName: currentUser?.name || 'Attending Physician',
+      consultationFee: isSpecialist ? 1200 : 800,
+      labItems: labItemsForBilling,
+      rxItems: rxItemsForBilling,
+      hmoPartner: patient.insuranceProvider,
+    });
+
+    addNotification({
+      recipientRole: 'receptionist',
+      targetRole: 'provider',
+      title: 'Consultation Complete — Live Billing Ready',
+      message: `Consultation completed for ${patient.fullName}. Live itemized invoice generated for checkout/collection.`,
+      category: 'billing',
+      priority: 'normal',
     });
 
     if (onFinish) onFinish();

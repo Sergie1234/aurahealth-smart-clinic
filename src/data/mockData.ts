@@ -9,7 +9,8 @@ import {
   Invoice,
   Notification,
   AuditLog,
-  DEFAULT_ROLE_PERMISSIONS
+  DEFAULT_ROLE_PERMISSIONS,
+  HMOPartner
 } from '../types/clinic';
 
 export const INITIAL_USERS: User[] = [
@@ -420,3 +421,87 @@ export const INITIAL_CONSULTATIONS: Consultation[] = [
     followUpInstructions: 'Return in 4 weeks for laboratory result review and blood pressure assessment.'
   }
 ];
+
+export const PHILIPPINE_HMO_PARTNERS: HMOPartner[] = [
+  {
+    id: 'hmo-1',
+    name: 'Maxicare Healthcare Corporation',
+    code: 'MAXICARE',
+    accreditationNumber: 'DOH-HMO-2026-001',
+    coverageRate: 100,
+    contactHotline: '(02) 8582-1900 / 0917-882-6294',
+    portalUrl: 'https://maxicare.com.ph',
+    status: 'Active Partner',
+  },
+  {
+    id: 'hmo-2',
+    name: 'Intellicare (Asalus Corporation)',
+    code: 'INTELLICARE',
+    accreditationNumber: 'DOH-HMO-2026-002',
+    coverageRate: 100,
+    contactHotline: '(02) 8789-4000',
+    portalUrl: 'https://intellicare.com.ph',
+    status: 'Active Partner',
+  },
+  {
+    id: 'hmo-3',
+    name: 'Medicard Philippines, Inc.',
+    code: 'MEDICARD',
+    accreditationNumber: 'DOH-HMO-2026-003',
+    coverageRate: 90,
+    contactHotline: '(02) 8841-8080',
+    portalUrl: 'https://medicardphils.com',
+    status: 'Active Partner',
+  },
+  {
+    id: 'hmo-4',
+    name: 'PhilCare (PhilhealthCare, Inc.)',
+    code: 'PHILCARE',
+    accreditationNumber: 'DOH-HMO-2026-004',
+    coverageRate: 90,
+    contactHotline: '(02) 8462-1800',
+    portalUrl: 'https://philcare.com.ph',
+    status: 'Active Partner',
+  },
+  {
+    id: 'hmo-5',
+    name: 'PhilHealth (Konsulta Accredited)',
+    code: 'PHILHEALTH',
+    accreditationNumber: 'GOV-PH-1995-001',
+    coverageRate: 100,
+    contactHotline: '(02) 8441-7442',
+    portalUrl: 'https://philhealth.gov.ph',
+    status: 'Active Partner',
+  },
+  {
+    id: 'hmo-6',
+    name: 'Cocolife Healthcare',
+    code: 'COCOLIFE',
+    accreditationNumber: 'DOH-HMO-2026-005',
+    coverageRate: 85,
+    contactHotline: '(02) 8810-7888',
+    portalUrl: 'https://cocolife.com',
+    status: 'Active Partner',
+  },
+  {
+    id: 'hmo-7',
+    name: 'Pacific Cross Insurance',
+    code: 'PACIFIC_CROSS',
+    accreditationNumber: 'DOH-HMO-2026-006',
+    coverageRate: 85,
+    contactHotline: '(02) 8230-8511',
+    portalUrl: 'https://pacificcross.com.ph',
+    status: 'Active Partner',
+  },
+  {
+    id: 'hmo-8',
+    name: 'Etiqa Life and General Insurance',
+    code: 'ETIQA',
+    accreditationNumber: 'DOH-HMO-2026-007',
+    coverageRate: 85,
+    contactHotline: '(02) 8890-1758',
+    portalUrl: 'https://etiqa.com.ph',
+    status: 'Active Partner',
+  },
+];
+

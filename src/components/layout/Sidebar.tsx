@@ -141,7 +141,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
       id: 'billing',
       label: t.nav.billing,
       icon: Receipt,
-      roles: ['patient', 'admin'],
+      roles: ['patient', 'receptionist', 'admin'],
       permissionKey: 'billing',
     },
     {

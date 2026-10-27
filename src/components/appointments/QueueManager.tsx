@@ -93,6 +93,10 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
   const {
     appointments,
     updateAppointmentStatus,
+    updateAppointmentRoom,
+    checkInPatient,
+    advanceQueueStatus,
+    syncClinicalOrdersToInvoice,
     addAppointment,
     activeRole,
     primaryRole,
@@ -557,7 +561,7 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
             <span className="text-[11px] text-slate-400 font-medium">Order of Triage Arrival</span>
           </div>
 
-          <div className="space-y-2.5 max-h-[580px] overflow-y-auto pr-1">
+          <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
             {checkedInList.map((apt, idx) => (
               <div
                 key={apt.id}
@@ -579,10 +583,29 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                       {apt.department} • Dr. {apt.doctorName}
                     </p>
-                    <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
-                      <span className="font-mono">Arrived: {apt.time}</span>
+                    <div className="text-[10px] text-slate-400 flex flex-wrap items-center gap-2 mt-1">
+                      <span className="font-mono">Time: {apt.time}</span>
                       <span>•</span>
-                      <span>Location: {apt.room || 'Waiting Room B'}</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-slate-500">Room:</span>
+                        {isStaffOrDoctor ? (
+                          <select
+                            value={apt.room || 'Waiting Room B'}
+                            onChange={(e) => updateAppointmentRoom(apt.id, e.target.value)}
+                            className="text-[10px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-slate-800 dark:text-slate-200 cursor-pointer"
+                          >
+                            <option value="Waiting Room B">Waiting Room B</option>
+                            <option value="Triage Station 1">Triage Station 1</option>
+                            <option value="Triage Station 2">Triage Station 2</option>
+                            <option value="Room 301 (Pediatrics)">Room 301 (Pediatrics)</option>
+                            <option value="Room 302 (Consultation Suite)">Room 302 (Consultation Suite)</option>
+                            <option value="Room 303 (Internal Medicine)">Room 303 (Internal Medicine)</option>
+                            <option value="Room 304 (Cardiology)">Room 304 (Cardiology)</option>
+                          </select>
+                        ) : (
+                          <span className="font-semibold text-slate-700 dark:text-slate-300">{apt.room || 'Waiting Room B'}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -608,15 +631,56 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
             ))}
 
             {checkedInList.length === 0 && (
-              <div className="p-12 text-center text-slate-400 space-y-2">
+              <div className="p-8 text-center text-slate-400 space-y-2">
                 <Clock className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-700 stroke-1" />
                 <p className="text-xs font-medium">Outpatient lobby is currently clear.</p>
                 <p className="text-[11px] text-slate-400">
-                  Click "Get Queue Ticket / Check-In" above to check in a patient.
+                  Select a scheduled patient below to check them in, or click "Get Queue Ticket / Check-In".
                 </p>
               </div>
             )}
           </div>
+
+          {/* Upcoming Scheduled Arrivals (Check-in Actionable) */}
+          {scheduledUpcoming.length > 0 && isStaffOrDoctor && (
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-700 dark:text-slate-300">
+                  Upcoming Scheduled Today ({scheduledUpcoming.length})
+                </span>
+                <span className="text-[10px] text-teal-600 font-semibold">Ready for Check-In</span>
+              </div>
+              <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+                {scheduledUpcoming.map((apt) => (
+                  <div
+                    key={apt.id}
+                    className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs">
+                          {apt.patientName}
+                        </span>
+                        <span className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-1.5 py-0.2 rounded font-mono">
+                          {apt.time}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                        {apt.department} • Dr. {apt.doctorName}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => checkInPatient(apt.id, 'Waiting Room B')}
+                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs shrink-0"
+                    >
+                      Check In
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Column: Currently In Consultation Rooms (5 cols) */}
@@ -687,10 +751,21 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
                       )}
                       <button
                         type="button"
-                        onClick={() => updateAppointmentStatus(apt.id, 'Completed')}
+                        onClick={() => {
+                          updateAppointmentStatus(apt.id, 'Completed');
+                          const pat = patients.find((p) => p.id === apt.patientId);
+                          syncClinicalOrdersToInvoice({
+                            patientId: apt.patientId,
+                            patientName: apt.patientName,
+                            patientMrn: apt.patientMrn,
+                            doctorName: apt.doctorName,
+                            consultationFee: 800,
+                            hmoPartner: pat?.insuranceProvider,
+                          });
+                        }}
                         className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer transition shadow-xs"
                       >
-                        Complete Consult
+                        Complete Consult & Bill
                       </button>
                     </div>
                   )}

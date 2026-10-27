@@ -84,7 +84,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, UserPermissions> = {
     prescriptions: false,
     pharmacy: false,
     laboratory: false,
-    billing: false,
+    billing: true,
     reports: false,
     auditLogs: false,
     aiAssistant: true,
@@ -400,6 +400,56 @@ export interface InvoiceItem {
   total: number;
 }
 
+export type PaymentMethod =
+  | 'Cash'
+  | 'GCash'
+  | 'Credit Card'
+  | 'Debit Card'
+  | 'Insurance'
+  | 'Bank Transfer'
+  | 'Maya';
+
+export type HMOClaimStatus =
+  | 'Pending Verification'
+  | 'Approved'
+  | 'Claim Submitted'
+  | 'Reimbursed'
+  | 'Rejected';
+
+export interface HMOPartner {
+  id: string;
+  name: string;
+  code: string;
+  accreditationNumber: string;
+  coverageRate: number; // percentage (e.g. 100 for 100% or 80)
+  contactHotline: string;
+  portalUrl?: string;
+  status: 'Active Partner' | 'Under Review' | 'Suspended';
+}
+
+export interface HMOClaim {
+  partnerId?: string;
+  partnerName: string; // e.g. Maxicare, Intellicare, Medicard, PhilCare, PhilHealth Konsulta
+  memberId: string;
+  loaNumber: string; // Letter of Authorization / Approval Code
+  coverageAmount: number; // Amount covered by HMO
+  patientShare: number; // Out-of-pocket / co-pay
+  claimStatus: HMOClaimStatus;
+  approvedDate?: string;
+  verifiedBy?: string;
+  remarks?: string;
+}
+
+export interface PaymentDetails {
+  method: PaymentMethod;
+  amountPaid: number;
+  tenderedAmount?: number;
+  changeAmount?: number;
+  referenceNumber?: string; // For GCash / Maya / Bank Transfer / Card Auth Code
+  paymentDate: string;
+  cashierName?: string;
+}
+
 export interface Invoice {
   id: string;
   invoiceNumber: string;
@@ -415,11 +465,13 @@ export interface Invoice {
   taxAmount: number;
   totalAmount: number;
   paidAmount: number;
-  status: 'Unpaid' | 'Partially Paid' | 'Paid' | 'Cancelled';
-  paymentMethod?: 'Cash' | 'Credit Card' | 'Debit Card' | 'Insurance' | 'Bank Transfer' | 'GCash';
+  status: 'Unpaid' | 'Partially Paid' | 'Paid' | 'Cancelled' | 'HMO Pending' | 'HMO Approved';
+  paymentMethod?: PaymentMethod;
+  paymentDetails?: PaymentDetails;
   paymentDate?: string;
   paidAt?: string;
   insuranceClaimStatus?: 'Not Filed' | 'Pending' | 'Approved' | 'Rejected';
+  hmoClaim?: HMOClaim;
   notes?: string;
 }
 
