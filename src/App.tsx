@@ -40,6 +40,8 @@ import { PatientDashboardView } from './components/dashboards/PatientDashboardVi
 import { StaffDashboardView } from './components/dashboards/StaffDashboardView';
 import { DoctorDashboardView } from './components/dashboards/DoctorDashboardView';
 import { AdminDashboardView } from './components/dashboards/AdminDashboardView';
+import { PhysiciansManagementView } from './components/dashboards/PhysiciansManagementView';
+import { ClinicalStaffManagementView } from './components/dashboards/ClinicalStaffManagementView';
 import { NotificationsPage } from './components/notifications/NotificationsPage';
 import { ScanHealthIdModal } from './components/patients/ScanHealthIdModal';
 import { ScanHealthIdPage } from './components/patients/ScanHealthIdPage';
@@ -126,12 +128,32 @@ const ClinicAppContent: React.FC = () => {
     }
   }, [activeTab, isAuthenticated, setPendingAction, setActiveTab]);
 
+  // Protected Route Guard: Ensure protected pages only become accessible when a valid session exists
+  useEffect(() => {
+    if (authReady && !isAuthenticated && activeTab !== 'home' && activeTab !== 'login') {
+      setActiveTab('login');
+    }
+  }, [authReady, isAuthenticated, activeTab, setActiveTab]);
+
+  // Modal & Navigation Cleanup on Session Termination
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setShowNewPatient(false);
+      setShowBookAppointment(false);
+      setIsBookAppointmentOpen(false);
+      setShowNewPrescription(false);
+      setShowScanQRModal(false);
+      setShowProfileSettings(false);
+      setIsMobileNavOpen(false);
+    }
+  }, [isAuthenticated, setIsBookAppointmentOpen]);
+
   // Strict Role Route & Tab Isolation Guard (Enforce RA 10173 and strip unauthorized modules)
   useEffect(() => {
     if (!isAuthenticated) return;
     const roleTabMap: Record<string, string[]> = {
       patient: ['home', 'dashboard', 'appointments', 'queue', 'emr', 'prescriptions', 'laboratory', 'billing', 'ai-assistant', 'notifications'],
-      admin: ['home', 'dashboard', 'patients', 'audit-logs', 'reports', 'predictive-analytics', 'billing', 'inventory', 'ai-assistant', 'notifications'],
+      admin: ['home', 'dashboard', 'patients', 'doctors', 'clinical-staff', 'staff-management', 'audit-logs', 'reports', 'predictive-analytics', 'billing', 'inventory', 'ai-assistant', 'notifications'],
       doctor: ['home', 'dashboard', 'patients', 'appointments', 'queue', 'consultations', 'prescriptions', 'laboratory', 'inventory', 'ai-assistant', 'notifications'],
       nurse: ['home', 'dashboard', 'patients', 'scan-qr', 'appointments', 'queue', 'consultations', 'laboratory', 'ai-assistant', 'notifications'],
       receptionist: ['home', 'dashboard', 'patients', 'scan-qr', 'appointments', 'queue', 'ai-assistant', 'notifications'],
@@ -227,7 +249,15 @@ const ClinicAppContent: React.FC = () => {
                 />
               )}
               {activeTab === 'dashboard' && activeRole === 'admin' && (
-                <AdminDashboardView />
+                <AdminDashboardView
+                  onOpenNewPatient={() => setShowNewPatient(true)}
+                />
+              )}
+              {activeTab === 'doctors' && activeRole === 'admin' && (
+                <PhysiciansManagementView />
+              )}
+              {(activeTab === 'clinical-staff' || activeTab === 'staff-management') && activeRole === 'admin' && (
+                <ClinicalStaffManagementView />
               )}
               {activeTab === 'patients' && activeRole !== 'patient' && (
                 <PatientList

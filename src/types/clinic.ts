@@ -24,6 +24,13 @@ export interface User {
   startHour?: number;
   endHour?: number;
   schedule?: any;
+  status?: 'Active' | 'On Leave' | 'Inactive';
+  notes?: string;
+  credentials?: string;
+  temporaryPassword?: string;
+  accessCode?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Vitals {

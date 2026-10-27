@@ -253,6 +253,7 @@ export interface Translations {
     lowStockAlerts: string;
     complianceAudit: string;
     addDoctorBtn: string;
+    addStaffBtn: string;
     systemLogs: string;
     manageStaff: string;
     dataSecurityStatus: string;
@@ -519,8 +520,9 @@ export const translations: Record<AppLanguage, Translations> = {
       lowStockAlerts: 'Low Formulary Stock Items',
       complianceAudit: 'Data Security & Audit Trail (RA 10173)',
       addDoctorBtn: 'Register New Physician',
+      addStaffBtn: 'Register New Clinical Staff',
       systemLogs: 'System Security Audit Logs',
-      manageStaff: 'Manage Clinical Staff Accounts',
+      manageStaff: 'Register and Managing Doctor and Clinical Staff',
       dataSecurityStatus: 'RA 10173 Compliance Status: Active & Encrypted',
     },
     session: {
@@ -781,9 +783,10 @@ export const translations: Record<AppLanguage, Translations> = {
       revenueToday: 'Kita ng Klinika Ngayon',
       lowStockAlerts: 'Gamot na Mauubos Na',
       complianceAudit: 'Seguridad ng Datos at Audit (RA 10173)',
-      addDoctorBtn: 'Magdagdag ng Bagong Doktor',
+      addDoctorBtn: 'Magrehistro ng Bagong Doktor',
+      addStaffBtn: 'Magrehistro ng Bagong Kawani',
       systemLogs: 'Talaan ng Seguridad ng Sistema',
-      manageStaff: 'Pamahalaan ang mga Kawani',
+      manageStaff: 'Magrehistro at Pamahalaan ang Doktor at mga Kawani',
       dataSecurityStatus: 'Katayuan sa RA 10173: Aktibo at Naka-encrypt',
     },
     session: {

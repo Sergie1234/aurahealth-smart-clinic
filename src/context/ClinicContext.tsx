@@ -92,12 +92,56 @@ interface ClinicContextType {
     department: string;
     specialty: string;
     licenseNumber: string;
+    phone?: string;
     workDays: number[];
     startHour?: number;
     endHour?: number;
     workDaysLabel?: string;
     hoursLabel?: string;
+    status?: 'Active' | 'On Leave' | 'Inactive';
+    notes?: string;
   }) => Promise<{ success: boolean; doctor?: User; error?: string }>;
+  updateDoctor: (doctorId: string, updates: {
+    name: string;
+    email: string;
+    department: string;
+    specialty: string;
+    licenseNumber: string;
+    phone?: string;
+    workDays?: number[];
+    startHour?: number;
+    endHour?: number;
+    workDaysLabel?: string;
+    hoursLabel?: string;
+    status?: 'Active' | 'On Leave' | 'Inactive';
+    notes?: string;
+  }) => Promise<{ success: boolean; doctor?: User; error?: string }>;
+  addClinicalStaff: (staffData: {
+    name: string;
+    role: 'nurse' | 'receptionist' | 'lab_technician' | 'pharmacist';
+    department: string;
+    email: string;
+    phone?: string;
+    licenseNumber?: string;
+    credentials?: string;
+    temporaryPassword?: string;
+    status?: 'Active' | 'On Leave' | 'Inactive';
+    notes?: string;
+  }) => Promise<{ success: boolean; staff?: User; error?: string }>;
+  updateClinicalStaff: (staffId: string, updates: {
+    name: string;
+    role: 'nurse' | 'receptionist' | 'lab_technician' | 'pharmacist';
+    department: string;
+    email: string;
+    phone?: string;
+    licenseNumber?: string;
+    credentials?: string;
+    temporaryPassword?: string;
+    status?: 'Active' | 'On Leave' | 'Inactive';
+    notes?: string;
+  }) => Promise<{ success: boolean; staff?: User; error?: string }>;
+  deleteUser: (userId: string) => Promise<{ success: boolean; error?: string }>;
+  toggleUserStatus: (userId: string, newStatus: 'Active' | 'On Leave' | 'Inactive') => Promise<{ success: boolean; error?: string }>;
   checkTwoFactorStatus: (email: string) => Promise<{ enabled: boolean }>;
   enableTwoFactor: (email: string, code: string) => Promise<{ success: boolean; error?: string }>;
   disableTwoFactor: (email: string, code: string) => Promise<{ success: boolean; error?: string }>;
@@ -171,6 +215,15 @@ interface ClinicContextType {
 
 const ClinicContext = createContext<ClinicContextType | undefined>(undefined);
 
+export const GUEST_USER: User = {
+  id: 'guest',
+  name: 'Guest User',
+  email: '',
+  role: 'patient',
+  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+  department: 'Outpatient Services',
+};
+
 const CLINIC_CACHE_VERSION = 'v4.1.0-director-santos';
 
 try {
@@ -218,8 +271,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       })
       .catch(() => {});
   }, []);
-  const [activeRole, setActiveRole] = useState<UserRole>('doctor');
-  const [currentUser, setCurrentUser] = useState<User>(INITIAL_USERS[0]);
+  const [activeRole, setActiveRole] = useState<UserRole>('patient');
+  const [currentUser, setCurrentUser] = useState<User>(GUEST_USER);
   const [primaryRole, setPrimaryRole] = useState<PrimaryAuthRole | null>(null);
   const [staffSubRole, setStaffSubRole] = useState<StaffSubRole | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -1093,20 +1146,25 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  const logout = (redirectTab: string = 'home') => {
+  const logout = (redirectTab: string = 'login') => {
     setIsAuthenticated(false);
     setPrimaryRole(null);
     setStaffSubRole(null);
     setLinkedPatientId(null);
     setPendingAction(null);
     setActiveRole('patient');
+    setCurrentUser(GUEST_USER);
     setAuthToken(null);
     setShowSessionWarning(false);
+    setSessionSecondsRemaining(10 * 60);
     try {
       localStorage.removeItem('smart_clinic_auth_session');
       localStorage.removeItem('smart_clinic_token');
       localStorage.removeItem('smart_clinic_notifications');
-    } catch { /* */ }
+      localStorage.removeItem('smart_clinic_active_role');
+      localStorage.removeItem('smart_clinic_user_email');
+      sessionStorage.clear();
+    } catch { /* ignore */ }
     setNotifications([]);
     setActiveTab(redirectTab);
   };
@@ -1892,22 +1950,37 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     department: string;
     specialty: string;
     licenseNumber: string;
+    phone?: string;
     workDays: number[];
     startHour?: number;
     endHour?: number;
     workDaysLabel?: string;
     hoursLabel?: string;
+    status?: 'Active' | 'On Leave' | 'Inactive';
+    notes?: string;
   }) => {
     const cleanName = doctorData.name.trim();
     const cleanEmail = doctorData.email.trim().toLowerCase();
 
-    if (!cleanName) return { success: false, error: 'Doctor name is required.' };
-    if (!cleanEmail || !cleanEmail.includes('@')) return { success: false, error: 'Valid email is required.' };
+    if (!cleanName) return { success: false, error: 'Physician name is required.' };
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      return { success: false, error: 'Valid professional email is required (e.g. doctor@smartclinic.ph).' };
+    }
+
+    if (users.some((u) => u.email.toLowerCase() === cleanEmail)) {
+      return { success: false, error: `An account with email "${cleanEmail}" is already registered in the system.` };
+    }
+
+    const cleanLicense = doctorData.licenseNumber?.trim() || `PRC-${Math.floor(1000000 + Math.random() * 9000000)}`;
+    if (cleanLicense.length < 3) {
+      return { success: false, error: 'A valid PRC License or MD Credential number is required.' };
+    }
 
     const doctorId = `usr-${Date.now()}`;
-    const days = doctorData.workDays.length > 0 ? doctorData.workDays : [1, 2, 3, 4, 5];
+    const days = doctorData.workDays && doctorData.workDays.length > 0 ? doctorData.workDays : [1, 2, 3, 4, 5];
 
-    // Register their dynamic personal schedule
+    // Register dynamic personal schedule
     const schedule = createCustomDoctorSchedule({
       doctorId,
       doctorName: cleanName,
@@ -1927,16 +2000,21 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       role: 'doctor',
       department: doctorData.department || 'General Medicine',
       specialty: doctorData.specialty || 'Internal & Family Medicine',
-      licenseNumber: doctorData.licenseNumber || `MD-${Math.floor(100000 + Math.random() * 900000)}`,
+      licenseNumber: cleanLicense,
+      phone: doctorData.phone?.trim() || undefined,
       workDays: days,
       workDaysLabel: schedule.workDaysLabel,
       hoursLabel: schedule.hoursLabel,
       startHour: doctorData.startHour || 8,
       endHour: doctorData.endHour || 17,
+      status: doctorData.status || 'Active',
+      notes: doctorData.notes?.trim() || undefined,
       schedule,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
-    // Update state & persist in localStorage
+    // Update state & persist in localStorage immediately
     setUsers((prev) => {
       const updated = [newDoctor, ...prev.filter((u) => u.id !== doctorId)];
       try {
@@ -1945,25 +2023,311 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return updated;
     });
 
-    // Persist to server database
+    // Persist to server database if available
     try {
       await fetch(`${API_BASE_URL}/api/doctors`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...doctorData, doctorId }),
+        body: JSON.stringify({ ...doctorData, doctorId, licenseNumber: cleanLicense }),
       });
     } catch {}
 
     // Add audit log and notification
-    logAction('DOCTOR_CREDENTIALED', 'Security', doctorId, `New physician credentialed: ${cleanName} (${newDoctor.specialty})`);
+    logAction('DOCTOR_CREDENTIALED', 'Security', doctorId, `New physician registered: ${cleanName} (${newDoctor.specialty}) • PRC ID: ${cleanLicense}`);
     addNotification({
-      title: 'New Physician Credentialed',
-      message: `${cleanName} (${newDoctor.specialty}) has joined the clinic medical team and is open for appointment booking.`,
+      title: 'New Physician Registered',
+      message: `${cleanName} (${newDoctor.specialty}) has been credentialed and added to the medical staff.`,
       targetRole: 'all',
       type: 'system',
     });
 
     return { success: true, doctor: newDoctor };
+  };
+
+  const updateDoctor = async (
+    doctorId: string,
+    updates: {
+      name: string;
+      email: string;
+      department: string;
+      specialty: string;
+      licenseNumber: string;
+      phone?: string;
+      workDays?: number[];
+      startHour?: number;
+      endHour?: number;
+      workDaysLabel?: string;
+      hoursLabel?: string;
+      status?: 'Active' | 'On Leave' | 'Inactive';
+      notes?: string;
+    }
+  ) => {
+    const cleanName = updates.name.trim();
+    const cleanEmail = updates.email.trim().toLowerCase();
+
+    if (!cleanName) return { success: false, error: 'Physician name cannot be empty.' };
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      return { success: false, error: 'Valid professional email format is required.' };
+    }
+
+    if (users.some((u) => u.id !== doctorId && u.email.toLowerCase() === cleanEmail)) {
+      return { success: false, error: `Email address "${cleanEmail}" is already used by another clinician or staff.` };
+    }
+
+    const cleanLicense = updates.licenseNumber?.trim();
+    if (!cleanLicense) {
+      return { success: false, error: 'Doctor license number / PRC ID cannot be empty.' };
+    }
+
+    const existingDoctor = users.find((u) => u.id === doctorId);
+    if (!existingDoctor) {
+      return { success: false, error: 'Physician profile not found in active records.' };
+    }
+
+    const days = updates.workDays && updates.workDays.length > 0 ? updates.workDays : existingDoctor.workDays || [1, 2, 3, 4, 5];
+    const startH = updates.startHour ?? existingDoctor.startHour ?? 8;
+    const endH = updates.endHour ?? existingDoctor.endHour ?? 17;
+
+    const schedule = createCustomDoctorSchedule({
+      doctorId,
+      doctorName: cleanName,
+      department: updates.department || existingDoctor.department || 'General Medicine',
+      specialty: updates.specialty || existingDoctor.specialty || 'General Practice',
+      workDays: days,
+      workDaysLabel: updates.workDaysLabel,
+      hoursLabel: updates.hoursLabel,
+      startHour: startH,
+      endHour: endH,
+    });
+
+    const updatedDoctor: User = {
+      ...existingDoctor,
+      name: cleanName,
+      email: cleanEmail,
+      department: updates.department || existingDoctor.department,
+      specialty: updates.specialty || existingDoctor.specialty,
+      licenseNumber: cleanLicense,
+      phone: updates.phone?.trim() ?? existingDoctor.phone,
+      workDays: days,
+      workDaysLabel: schedule.workDaysLabel,
+      hoursLabel: schedule.hoursLabel,
+      startHour: startH,
+      endHour: endH,
+      status: updates.status || existingDoctor.status || 'Active',
+      notes: updates.notes?.trim() ?? existingDoctor.notes,
+      schedule,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setUsers((prev) => {
+      const updated = prev.map((u) => (u.id === doctorId ? updatedDoctor : u));
+      try {
+        localStorage.setItem('smart_clinic_users', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    logAction('DOCTOR_CREDENTIALS_UPDATED', 'Security', doctorId, `Physician record updated: ${cleanName} (${updatedDoctor.specialty})`);
+    addNotification({
+      title: 'Physician Credentials Updated',
+      message: `Profile and clinical credentials updated for ${cleanName}.`,
+      targetRole: 'admin',
+      type: 'system',
+    });
+
+    return { success: true, doctor: updatedDoctor };
+  };
+
+  const addClinicalStaff = async (staffData: {
+    name: string;
+    role: 'nurse' | 'receptionist' | 'lab_technician' | 'pharmacist';
+    department: string;
+    email: string;
+    phone?: string;
+    licenseNumber?: string;
+    credentials?: string;
+    temporaryPassword?: string;
+    status?: 'Active' | 'On Leave' | 'Inactive';
+    notes?: string;
+  }) => {
+    const cleanName = staffData.name.trim();
+    const cleanEmail = staffData.email.trim().toLowerCase();
+
+    if (!cleanName) return { success: false, error: 'Staff member full name is required.' };
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      return { success: false, error: 'Valid clinic email address is required.' };
+    }
+
+    if (users.some((u) => u.email.toLowerCase() === cleanEmail)) {
+      return { success: false, error: `An account with email "${cleanEmail}" is already registered.` };
+    }
+
+    const validRoles = ['nurse', 'receptionist', 'lab_technician', 'pharmacist'];
+    if (!validRoles.includes(staffData.role)) {
+      return { success: false, error: 'Please select a valid clinical staff role (Nurse, Receptionist, Lab Technician, or Pharmacist).' };
+    }
+
+    const staffId = `usr-staff-${Date.now()}`;
+    const newStaff: User = {
+      id: staffId,
+      name: cleanName,
+      email: cleanEmail,
+      role: staffData.role,
+      subRole: staffData.role,
+      department: staffData.department.trim() || 'Clinical Operations',
+      phone: staffData.phone?.trim() || undefined,
+      licenseNumber: staffData.licenseNumber?.trim() || undefined,
+      credentials: staffData.credentials?.trim() || undefined,
+      temporaryPassword: staffData.temporaryPassword?.trim() || undefined,
+      status: staffData.status || 'Active',
+      notes: staffData.notes?.trim() || undefined,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setUsers((prev) => {
+      const updated = [newStaff, ...prev.filter((u) => u.id !== staffId)];
+      try {
+        localStorage.setItem('smart_clinic_users', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    logAction('STAFF_ACCOUNT_REGISTERED', 'Security', staffId, `New clinical staff credentialed: ${cleanName} (${staffData.role.toUpperCase()})`);
+    addNotification({
+      title: 'New Clinical Staff Registered',
+      message: `${cleanName} registered as ${staffData.role.replace('_', ' ').toUpperCase()} in ${newStaff.department}.`,
+      targetRole: 'admin',
+      type: 'system',
+    });
+
+    return { success: true, staff: newStaff };
+  };
+
+  const updateClinicalStaff = async (
+    staffId: string,
+    updates: {
+      name: string;
+      role: 'nurse' | 'receptionist' | 'lab_technician' | 'pharmacist';
+      department: string;
+      email: string;
+      phone?: string;
+      licenseNumber?: string;
+      credentials?: string;
+      temporaryPassword?: string;
+      status?: 'Active' | 'On Leave' | 'Inactive';
+      notes?: string;
+    }
+  ) => {
+    const cleanName = updates.name.trim();
+    const cleanEmail = updates.email.trim().toLowerCase();
+
+    if (!cleanName) return { success: false, error: 'Staff member full name cannot be empty.' };
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      return { success: false, error: 'Valid clinic email format is required.' };
+    }
+
+    if (users.some((u) => u.id !== staffId && u.email.toLowerCase() === cleanEmail)) {
+      return { success: false, error: `Email address "${cleanEmail}" is already used by another account.` };
+    }
+
+    const validRoles = ['nurse', 'receptionist', 'lab_technician', 'pharmacist'];
+    if (!validRoles.includes(updates.role)) {
+      return { success: false, error: 'Invalid clinical staff role selected.' };
+    }
+
+    const existing = users.find((u) => u.id === staffId);
+    if (!existing) {
+      return { success: false, error: 'Staff member account not found.' };
+    }
+
+    const updatedStaff: User = {
+      ...existing,
+      name: cleanName,
+      email: cleanEmail,
+      role: updates.role,
+      subRole: updates.role,
+      department: updates.department.trim() || existing.department,
+      phone: updates.phone?.trim() ?? existing.phone,
+      licenseNumber: updates.licenseNumber?.trim() ?? existing.licenseNumber,
+      credentials: updates.credentials?.trim() ?? existing.credentials,
+      temporaryPassword: updates.temporaryPassword?.trim() ?? existing.temporaryPassword,
+      status: updates.status || existing.status || 'Active',
+      notes: updates.notes?.trim() ?? existing.notes,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setUsers((prev) => {
+      const updated = prev.map((u) => (u.id === staffId ? updatedStaff : u));
+      try {
+        localStorage.setItem('smart_clinic_users', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    logAction('STAFF_ACCOUNT_UPDATED', 'Security', staffId, `Clinical staff updated: ${cleanName} (${updates.role})`);
+    addNotification({
+      title: 'Staff Profile Updated',
+      message: `Account details updated for ${cleanName}.`,
+      targetRole: 'admin',
+      type: 'system',
+    });
+
+    return { success: true, staff: updatedStaff };
+  };
+
+  const deleteUser = async (userId: string) => {
+    const target = users.find((u) => u.id === userId);
+    if (!target) return { success: false, error: 'User account not found.' };
+    if (target.role === 'admin' || target.email === 'smartclinicrealacc@gmail.com') {
+      return { success: false, error: 'The Executive Admin account cannot be deleted.' };
+    }
+    if (target.id === currentUser.id) {
+      return { success: false, error: 'You cannot delete your own currently active session account.' };
+    }
+
+    setUsers((prev) => {
+      const updated = prev.filter((u) => u.id !== userId);
+      try {
+        localStorage.setItem('smart_clinic_users', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    logAction('USER_ACCOUNT_REMOVED', 'Security', userId, `Account removed from clinic roster: ${target.name} (${target.role})`);
+    addNotification({
+      title: 'Account Removed',
+      message: `${target.name} has been removed from active staff roster.`,
+      targetRole: 'admin',
+      type: 'system',
+    });
+
+    return { success: true };
+  };
+
+  const toggleUserStatus = async (userId: string, newStatus: 'Active' | 'On Leave' | 'Inactive') => {
+    const target = users.find((u) => u.id === userId);
+    if (!target) return { success: false, error: 'User account not found.' };
+
+    const updatedUser: User = {
+      ...target,
+      status: newStatus,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setUsers((prev) => {
+      const updated = prev.map((u) => (u.id === userId ? updatedUser : u));
+      try {
+        localStorage.setItem('smart_clinic_users', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    logAction('USER_STATUS_CHANGED', 'Security', userId, `Status of ${target.name} changed to ${newStatus}`);
+    return { success: true };
   };
 
   const checkTwoFactorStatus = async (email: string) => {
@@ -2025,6 +2389,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         login,
         logout,
         addDoctor,
+        updateDoctor,
+        addClinicalStaff,
+        updateClinicalStaff,
+        deleteUser,
+        toggleUserStatus,
         checkTwoFactorStatus,
         enableTwoFactor,
         disableTwoFactor,
