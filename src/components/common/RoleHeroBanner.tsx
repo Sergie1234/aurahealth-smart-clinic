@@ -48,12 +48,12 @@ export const RoleHeroBanner: React.FC<RoleHeroBannerProps> = ({
       aria-label="Dashboard Hero Overview"
     >
       {/* Left: Brand Identity, Badges, Title, & Meta Details */}
-      <div className="flex items-center sm:items-start md:items-center gap-4 min-w-0">
+      <div className="flex items-center sm:items-start md:items-center gap-4 min-w-0 flex-1">
         <div className="shrink-0">
           <SmartClinicLogo className="w-13 h-13 sm:w-14 sm:h-14" glow={logoGlow} />
         </div>
 
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0 space-y-1.5 flex-1">
           {/* Badge Row */}
           <div className="flex items-center gap-2 flex-wrap">
             {badges.map((badge, idx) => (
@@ -70,7 +70,7 @@ export const RoleHeroBanner: React.FC<RoleHeroBannerProps> = ({
                   />
                 )}
                 {badge.icon && <span className="shrink-0 flex items-center">{badge.icon}</span>}
-                <span className="truncate">{badge.text}</span>
+                <span className="whitespace-nowrap sm:truncate max-w-[320px]">{badge.text}</span>
               </span>
             ))}
           </div>
@@ -78,7 +78,7 @@ export const RoleHeroBanner: React.FC<RoleHeroBannerProps> = ({
           {/* Title */}
           <h1
             onClick={onTitleClick}
-            className={`text-xl sm:text-2xl font-black text-white tracking-tight ${
+            className={`text-xl sm:text-2xl lg:text-[26px] font-black text-white tracking-tight leading-snug break-words ${
               onTitleClick
                 ? 'cursor-pointer hover:text-teal-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 rounded-md transition-colors'
                 : ''

@@ -159,19 +159,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
             setActiveTab(item.id);
             if (isMobile && onClose) onClose();
           }}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer ${
+          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
             isActive
               ? 'bg-teal-600 text-white shadow-sm shadow-teal-900/40'
               : 'text-slate-300 hover:bg-slate-800/90 hover:text-white'
           }`}
+          title={item.label}
         >
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-            <span className="truncate">{item.label}</span>
+            <span className="leading-tight text-left break-words min-w-0 flex-1">{item.label}</span>
           </div>
           {item.badge !== undefined && (
             <span
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+              className={`ml-2 shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                 isActive ? 'bg-white text-teal-700' : 'bg-slate-800 text-teal-300 border border-slate-700'
               }`}
             >
@@ -208,7 +209,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
   return (
     <>
       {/* Desktop Persistent Sidebar (>= 1024px) */}
-      <aside className="hidden lg:flex w-64 bg-slate-900 border-r border-slate-800 flex-col shrink-0 min-h-screen text-slate-300 select-none">
+      <aside className="hidden lg:flex w-72 bg-slate-900 border-r border-slate-800 flex-col shrink-0 min-h-screen text-slate-300 select-none">
         <div className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
           {renderNavButtons(false)}
         </div>

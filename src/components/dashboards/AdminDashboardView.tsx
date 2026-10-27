@@ -43,8 +43,8 @@ export const AdminDashboardView: React.FC = () => {
         badges={[
           {
             text: isFil ? 'Tagapamahala ng Klinika' : 'Executive Clinic Director',
-            icon: <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />,
-            className: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
+            icon: <ShieldAlert className="w-3.5 h-3.5 text-teal-400" />,
+            className: 'bg-teal-500/20 text-teal-300 border-teal-500/40',
           },
           {
             text: `${isFil ? 'Ligtas na Sesyon' : 'Secure Session'} • ${adminEmail}`,
@@ -54,24 +54,40 @@ export const AdminDashboardView: React.FC = () => {
             className: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-mono',
           },
         ]}
-        title={`${t.common.welcome}, ${currentUser.name}`}
+        title={isFil ? 'Pamamahala at Administrasyon ng Klinika' : 'Executive Administration & Governance'}
         meta={
           <span className="max-w-2xl block">
+            <span className="text-white font-semibold">
+              {t.common.welcome}, {currentUser.name}.
+            </span>{' '}
             {isFil
               ? 'Operasyon ng Klinika, Pananalapi, at Audit Trail alinsunod sa Philippine Data Privacy Act (RA 10173).'
               : 'Clinic Operations, Financial Oversight & Cryptographic Audit Trails. Adheres to Philippine National Privacy Commission (RA 10173).'}
           </span>
         }
-        gradientClass="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-indigo-800/40"
+        gradientClass="bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 border-teal-800/40"
         actions={[
           {
             label: t.admin.complianceAudit,
             onClick: () => setActiveTab('audit-logs'),
-            icon: <ShieldAlert className="w-4 h-4 text-white" />,
+            icon: <ShieldAlert className="w-4 h-4 text-slate-950" />,
             variant: 'primary',
-            primaryColor: 'bg-indigo-500 hover:bg-indigo-400 text-white shadow-md shadow-indigo-500/25 focus-visible:ring-indigo-300',
+            primaryColor:
+              'bg-teal-400 hover:bg-teal-300 text-slate-950 shadow-md shadow-teal-500/20 focus-visible:ring-teal-300',
             ariaLabel: t.admin.complianceAudit,
-            title: isFil ? 'Buksan ang Talaan ng Pagsunod at Seguridad' : 'Open Tamper-Evident Regulatory Compliance Audit Logs',
+            title: isFil
+              ? 'Buksan ang Talaan ng Pagsunod at Seguridad'
+              : 'Open Tamper-Evident Regulatory Compliance Audit Logs',
+          },
+          {
+            label: t.admin.addDoctorBtn,
+            onClick: () => setShowAddDoctorModal(true),
+            icon: <Plus className="w-4 h-4 text-teal-300" />,
+            variant: 'secondary',
+            ariaLabel: t.admin.addDoctorBtn,
+            title: isFil
+              ? 'Magrehistro ng bagong doktor sa klinika'
+              : 'Add and credential a new doctor',
           },
         ]}
       />
@@ -107,16 +123,16 @@ export const AdminDashboardView: React.FC = () => {
         <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span>{t.admin.systemLogs}</span>
-            <Lock className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            <Lock className="w-4 h-4 text-teal-600 dark:text-teal-400" />
           </div>
           <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono">{auditLogs.length}</p>
-          <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-semibold">{isFil ? 'Mga Tala ng Seguridad' : 'Tamper-evident Entries'}</span>
+          <span className="text-[10px] text-teal-700 dark:text-teal-400 font-semibold">{isFil ? 'Mga Tala ng Seguridad' : 'Tamper-evident Entries'}</span>
         </div>
       </div>
 
-      <div className="p-4 sm:p-5 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="p-4 sm:p-5 rounded-2xl bg-teal-50/70 dark:bg-teal-950/30 border border-teal-200/80 dark:border-teal-800/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/40 text-indigo-700 dark:text-indigo-300 flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-400/40 text-teal-700 dark:text-teal-300 flex items-center justify-center shrink-0">
             <KeyRound className="w-5 h-5" />
           </div>
           <div>
@@ -127,7 +143,7 @@ export const AdminDashboardView: React.FC = () => {
               </span>
             </h4>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-              Admin session locked to authorized email <span className="font-mono font-bold text-indigo-700 dark:text-indigo-400">smartclinicrealacc@gmail.com</span> with password verification and AES-256 session tokens under Philippine Health Data Security Standards.
+              Admin session locked to authorized email <span className="font-mono font-bold text-teal-700 dark:text-teal-400">smartclinicrealacc@gmail.com</span> with password verification and AES-256 session tokens under Philippine Health Data Security Standards.
             </p>
           </div>
         </div>
@@ -181,12 +197,12 @@ export const AdminDashboardView: React.FC = () => {
         <div className="lg:col-span-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <ShieldAlert className="w-4 h-4 text-teal-600 dark:text-teal-400" />
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{t.admin.complianceAudit}</h3>
             </div>
             <button
               onClick={() => setActiveTab('audit-logs')}
-              className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold cursor-pointer"
+              className="text-xs text-teal-600 dark:text-teal-400 hover:underline font-bold cursor-pointer"
             >
               {isFil ? 'Tingnan ang Lahat ng Tala' : 'View Full Logs'}
             </button>
@@ -199,7 +215,7 @@ export const AdminDashboardView: React.FC = () => {
                 className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex flex-col gap-1"
               >
                 <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
-                  <span className="font-bold text-indigo-700 dark:text-indigo-400">{log.action}</span>
+                  <span className="font-bold text-teal-700 dark:text-teal-400">{log.action}</span>
                   <span className="text-[10px] text-slate-400 dark:text-slate-500">
                     {new Date(log.timestamp).toLocaleTimeString()}
                   </span>
