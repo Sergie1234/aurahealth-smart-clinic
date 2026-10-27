@@ -7,6 +7,138 @@ export type UserRole =
   | 'lab_technician'
   | 'patient';
 
+export interface UserPermissions {
+  dashboard: boolean;
+  patients: boolean;
+  appointments: boolean;
+  queue: boolean;
+  triage: boolean;
+  consultations: boolean;
+  emr: boolean;
+  prescriptions: boolean;
+  pharmacy: boolean; // Medication inventory, stock, dispensing
+  laboratory: boolean;
+  billing: boolean;
+  reports: boolean;
+  auditLogs: boolean;
+  aiAssistant: boolean;
+}
+
+export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, UserPermissions> = {
+  admin: {
+    dashboard: true,
+    patients: true,
+    appointments: true,
+    queue: true,
+    triage: true,
+    consultations: true,
+    emr: true,
+    prescriptions: true,
+    pharmacy: true,
+    laboratory: true,
+    billing: true,
+    reports: true,
+    auditLogs: true,
+    aiAssistant: true,
+  },
+  doctor: {
+    dashboard: true,
+    patients: true,
+    appointments: true,
+    queue: true,
+    triage: false,
+    consultations: true,
+    emr: true,
+    prescriptions: true,
+    pharmacy: false,
+    laboratory: true,
+    billing: false,
+    reports: false,
+    auditLogs: false,
+    aiAssistant: true,
+  },
+  nurse: {
+    dashboard: true,
+    patients: true,
+    appointments: true,
+    queue: true,
+    triage: true,
+    consultations: true,
+    emr: false,
+    prescriptions: false,
+    pharmacy: false,
+    laboratory: true,
+    billing: false,
+    reports: false,
+    auditLogs: false,
+    aiAssistant: true,
+  },
+  receptionist: {
+    dashboard: true,
+    patients: true,
+    appointments: true,
+    queue: true,
+    triage: true,
+    consultations: false,
+    emr: false,
+    prescriptions: false,
+    pharmacy: false,
+    laboratory: false,
+    billing: false,
+    reports: false,
+    auditLogs: false,
+    aiAssistant: true,
+  },
+  pharmacist: {
+    dashboard: true,
+    patients: false,
+    appointments: false,
+    queue: false,
+    triage: false,
+    consultations: false,
+    emr: false,
+    prescriptions: true,
+    pharmacy: true,
+    laboratory: false,
+    billing: false,
+    reports: false,
+    auditLogs: false,
+    aiAssistant: true,
+  },
+  lab_technician: {
+    dashboard: true,
+    patients: false,
+    appointments: false,
+    queue: false,
+    triage: false,
+    consultations: false,
+    emr: false,
+    prescriptions: false,
+    pharmacy: false,
+    laboratory: true,
+    billing: false,
+    reports: false,
+    auditLogs: false,
+    aiAssistant: true,
+  },
+  patient: {
+    dashboard: true,
+    patients: false,
+    appointments: true,
+    queue: true,
+    triage: false,
+    consultations: false,
+    emr: true,
+    prescriptions: true,
+    pharmacy: false,
+    laboratory: true,
+    billing: true,
+    reports: false,
+    auditLogs: false,
+    aiAssistant: true,
+  },
+};
+
 export interface User {
   id: string;
   name: string;
@@ -29,6 +161,7 @@ export interface User {
   credentials?: string;
   temporaryPassword?: string;
   accessCode?: string;
+  permissions?: UserPermissions;
   createdAt?: string;
   updatedAt?: string;
 }

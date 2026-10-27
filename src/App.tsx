@@ -68,6 +68,7 @@ const ClinicAppContent: React.FC = () => {
     setPendingAction,
     isBookAppointmentOpen,
     setIsBookAppointmentOpen,
+    hasPermission,
   } = useClinic();
   const { printPrescription, printLabReport, printReceipt } = usePrint();
 
@@ -148,9 +149,27 @@ const ClinicAppContent: React.FC = () => {
     }
   }, [isAuthenticated, setIsBookAppointmentOpen]);
 
-  // Strict Role Route & Tab Isolation Guard (Enforce RA 10173 and strip unauthorized modules)
+  // Strict Role & Permission Tab Isolation Guard (Enforce RA 10173 and strip unauthorized modules)
   useEffect(() => {
     if (!isAuthenticated) return;
+    const tabPermissionMap: Record<string, any> = {
+      dashboard: 'dashboard',
+      patients: 'patients',
+      appointments: 'appointments',
+      queue: 'queue',
+      'scan-qr': 'triage',
+      consultations: 'consultations',
+      emr: 'emr',
+      prescriptions: 'prescriptions',
+      laboratory: 'laboratory',
+      inventory: 'pharmacy',
+      billing: 'billing',
+      reports: 'reports',
+      'predictive-analytics': 'reports',
+      'audit-logs': 'auditLogs',
+      'ai-assistant': 'aiAssistant',
+    };
+
     const roleTabMap: Record<string, string[]> = {
       patient: ['home', 'dashboard', 'appointments', 'queue', 'emr', 'prescriptions', 'laboratory', 'billing', 'ai-assistant', 'notifications'],
       admin: ['home', 'dashboard', 'patients', 'doctors', 'clinical-staff', 'staff-management', 'audit-logs', 'reports', 'predictive-analytics', 'billing', 'inventory', 'ai-assistant', 'notifications'],
@@ -164,8 +183,17 @@ const ClinicAppContent: React.FC = () => {
     const allowedTabs = roleTabMap[activeRole] || ['home', 'dashboard'];
     if (!allowedTabs.includes(activeTab)) {
       setActiveTab('dashboard');
+      return;
     }
-  }, [isAuthenticated, activeRole, activeTab, setActiveTab]);
+
+    // Gated check: If user lacks permission for this specific module tab, redirect to authorized dashboard
+    if (activeRole !== 'admin' && activeTab !== 'home' && activeTab !== 'notifications') {
+      const requiredPerm = tabPermissionMap[activeTab];
+      if (requiredPerm && !hasPermission(requiredPerm)) {
+        setActiveTab('dashboard');
+      }
+    }
+  }, [isAuthenticated, activeRole, activeTab, setActiveTab, hasPermission]);
 
   const handleStartConsultation = (patientId: string) => {
     setConsultPatientId(patientId);

@@ -34,6 +34,7 @@ import { RoleHeroBanner } from '../common/RoleHeroBanner';
 import { formatPeso } from '../../utils/currency';
 import { AddDoctorModal } from './AddDoctorModal';
 import { AddStaffModal } from './AddStaffModal';
+import { StaffPermissionsModal } from './StaffPermissionsModal';
 import type { User, Patient } from '../../types/clinic';
 
 interface AdminDashboardViewProps {
@@ -67,6 +68,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
   const [doctorToEdit, setDoctorToEdit] = useState<User | null>(null);
   const [staffToEdit, setStaffToEdit] = useState<User | null>(null);
+  const [permissionTarget, setPermissionTarget] = useState<User | null>(null);
 
   // Filter & Search States
   const [searchTerm, setSearchTerm] = useState('');
@@ -656,6 +658,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       {/* Edit & Status Actions */}
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button
+                          onClick={() => setPermissionTarget(doc)}
+                          className="p-1.5 rounded-xl border border-teal-700/60 bg-teal-950/40 hover:bg-teal-900/60 text-teal-300 hover:border-teal-400 transition cursor-pointer"
+                          title="Manage Module & Feature Permissions"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                        </button>
+                        <button
                           onClick={() => handleEditDoctor(doc)}
                           className="p-1.5 rounded-xl border border-slate-700 bg-[#11192c] hover:bg-[#192745] text-slate-300 hover:text-cyan-300 hover:border-cyan-500 transition cursor-pointer"
                           title="Edit Physician Details"
@@ -810,6 +819,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         {/* Edit & Actions */}
                         <div className="flex items-center gap-1.5 shrink-0">
                           <button
+                            onClick={() => setPermissionTarget(staff)}
+                            className="p-1.5 rounded-xl border border-teal-700/60 bg-teal-950/40 hover:bg-teal-900/60 text-teal-300 hover:border-teal-400 transition cursor-pointer"
+                            title="Manage Module & Feature Permissions"
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                          </button>
+                          <button
                             onClick={() => handleEditStaff(staff)}
                             className="p-1.5 rounded-xl border border-slate-700 bg-[#11192c] hover:bg-[#192745] text-slate-300 hover:text-cyan-300 hover:border-cyan-500 transition cursor-pointer"
                             title="Edit Staff Member Details"
@@ -933,6 +949,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           setStaffToEdit(null);
         }}
         staffToEdit={staffToEdit}
+      />
+
+      {/* Modal 3: Role & Module Permission Configuration */}
+      <StaffPermissionsModal
+        isOpen={Boolean(permissionTarget)}
+        onClose={() => setPermissionTarget(null)}
+        targetUser={permissionTarget}
       />
     </div>
   );

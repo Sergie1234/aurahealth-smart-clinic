@@ -20,7 +20,7 @@ import {
   UserCheck,
   X,
 } from 'lucide-react';
-import { UserRole, Appointment, LabTestOrder, InventoryItem } from '../../types/clinic';
+import { UserRole, UserPermissions, Appointment, LabTestOrder, InventoryItem } from '../../types/clinic';
 import { useClinic } from '../../context/ClinicContext';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
 
@@ -30,6 +30,7 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
   badge?: string | number;
   roles: UserRole[];
+  permissionKey?: keyof UserPermissions;
 }
 
 export interface SidebarProps {
@@ -38,7 +39,7 @@ export interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => {
-  const { activeTab, setActiveTab, activeRole, appointments, labOrders, inventory, t } = useClinic();
+  const { activeTab, setActiveTab, activeRole, appointments, labOrders, inventory, t, hasPermission } = useClinic();
 
   const waitingCount = appointments.filter((a: Appointment) => a.status === 'Checked In' || a.status === 'In Consultation').length;
   const pendingLabs = labOrders.filter((l: LabTestOrder) => l.status === 'Requested' || l.status === 'Processing').length;
@@ -49,19 +50,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
   const isAdmin = activeRole === 'admin';
   const isProvider = !isPatient && !isAdmin; // doctor, nurse, receptionist, pharmacist, lab_technician
 
-  // Exact navigation item registry with strict role-based access control (RBAC)
+  // Exact navigation item registry with strict role-based access control (RBAC) and granular permission gates
   const navItems: NavItem[] = [
     {
       id: 'dashboard',
       label: isPatient ? t.nav.patientPortal : isAdmin ? t.admin.dashboardTitle : t.nav.dashboard,
       icon: LayoutDashboard,
       roles: ['patient', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician', 'admin'],
+      permissionKey: 'dashboard',
     },
     {
       id: 'patients',
       label: isAdmin ? t.admin.totalPatients : t.nav.patients,
       icon: Users,
       roles: ['doctor', 'nurse', 'receptionist', 'admin'],
+      permissionKey: 'patients',
     },
     {
       id: 'doctors',
@@ -80,12 +83,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
       label: t.nav.scanHealthId,
       icon: QrCode,
       roles: ['nurse', 'receptionist'],
+      permissionKey: 'triage',
     },
     {
       id: 'appointments',
       label: t.nav.appointments,
       icon: Calendar,
       roles: ['patient', 'doctor', 'nurse', 'receptionist'],
+      permissionKey: 'appointments',
     },
     {
       id: 'queue',
@@ -93,24 +98,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
       icon: Layers,
       badge: waitingCount > 0 ? waitingCount : undefined,
       roles: ['patient', 'doctor', 'nurse', 'receptionist'],
+      permissionKey: 'queue',
     },
     {
       id: 'consultations',
       label: t.nav.consultations,
       icon: Stethoscope,
       roles: ['doctor', 'nurse'],
+      permissionKey: 'consultations',
     },
     {
       id: 'emr',
       label: t.nav.emr,
       icon: FileText,
       roles: ['patient'],
+      permissionKey: 'emr',
     },
     {
       id: 'prescriptions',
       label: t.nav.prescriptions,
       icon: Pill,
       roles: ['patient', 'doctor', 'pharmacist'],
+      permissionKey: 'prescriptions',
     },
     {
       id: 'laboratory',
@@ -118,6 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
       icon: FlaskConical,
       badge: pendingLabs > 0 ? pendingLabs : undefined,
       roles: ['patient', 'doctor', 'lab_technician', 'nurse'],
+      permissionKey: 'laboratory',
     },
     {
       id: 'inventory',
@@ -125,41 +135,54 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
       icon: PackageCheck,
       badge: lowStockCount > 0 ? lowStockCount : undefined,
       roles: ['pharmacist', 'doctor', 'admin'],
+      permissionKey: 'pharmacy',
     },
     {
       id: 'billing',
       label: t.nav.billing,
       icon: Receipt,
       roles: ['patient', 'admin'],
+      permissionKey: 'billing',
     },
     {
       id: 'reports',
       label: t.nav.reports,
       icon: BarChart3,
       roles: ['admin'],
+      permissionKey: 'reports',
     },
     {
       id: 'predictive-analytics',
       label: t.nav.predictiveAnalytics,
       icon: TrendingUp,
       roles: ['admin'],
+      permissionKey: 'reports',
     },
     {
       id: 'audit-logs',
       label: t.nav.auditLogs,
       icon: ShieldAlert,
       roles: ['admin'],
+      permissionKey: 'auditLogs',
     },
     {
       id: 'ai-assistant',
       label: t.nav.aiAssistant,
       icon: Sparkles,
       roles: ['patient', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician', 'admin'],
+      permissionKey: 'aiAssistant',
     },
   ];
 
-  // Apply strict role filter: a user ONLY sees items mapped to their active role
-  const visibleItems = navItems.filter((item) => item.roles.includes(activeRole));
+  // Apply strict role AND assigned permission filter: a user ONLY sees items they are authorized to access
+  const visibleItems = navItems.filter((item) => {
+    if (!item.roles.includes(activeRole)) return false;
+    if (activeRole === 'admin') return true;
+    if (item.permissionKey && !hasPermission(item.permissionKey)) {
+      return false;
+    }
+    return true;
+  });
 
   const renderNavButtons = (isMobile = false) =>
     visibleItems.map((item) => {

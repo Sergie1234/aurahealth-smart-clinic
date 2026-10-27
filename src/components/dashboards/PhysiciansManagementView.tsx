@@ -8,7 +8,6 @@ import {
   Stethoscope,
   Plus,
   Search,
-  Filter,
   CheckCircle2,
   Clock,
   Mail,
@@ -18,30 +17,29 @@ import {
   Building2,
   Edit2,
   Trash2,
-  Activity,
-  ArrowLeft,
-  Calendar,
-  AlertCircle,
-  Award,
-  Sparkles,
+  KeyRound,
+  Lock,
+  ArrowUpDown,
+  Filter,
 } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
-import type { User } from '../../types/clinic';
+import type { User, UserPermissions } from '../../types/clinic';
 import { AddDoctorModal } from './AddDoctorModal';
+import { StaffPermissionsModal } from './StaffPermissionsModal';
 
 export const PhysiciansManagementView: React.FC = () => {
-  const { users, currentUser, deleteUser, toggleUserStatus, setActiveTab, t, language } = useClinic();
-  const isFil = language === 'fil';
+  const { users, deleteUser, toggleUserStatus, getUserPermissions, t } = useClinic();
 
   // Modals & Edit State
   const [showAddDoctorModal, setShowAddDoctorModal] = useState(false);
   const [doctorToEdit, setDoctorToEdit] = useState<User | null>(null);
+  const [permissionTarget, setPermissionTarget] = useState<User | null>(null);
 
   // Search & Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [specialtyFilter, setSpecialtyFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [sortBy, setSortBy] = useState<'name' | 'specialty' | 'status'>('name');
+  const [permissionFilter, setPermissionFilter] = useState<string>('ALL');
 
   // Filter all doctors
   const allDoctors = useMemo(() => {
@@ -57,39 +55,37 @@ export const PhysiciansManagementView: React.FC = () => {
     return Array.from(set).sort();
   }, [allDoctors]);
 
-  // Filtered & Sorted Doctors
+  // Filtered Doctors
   const filteredDoctors = useMemo(() => {
-    return allDoctors
-      .filter((doc) => {
-        const matchesSearch =
-          doc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          doc.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (doc.specialty && doc.specialty.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (doc.department && doc.department.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (doc.licenseNumber && doc.licenseNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (doc.phone && doc.phone.toLowerCase().includes(searchTerm.toLowerCase()));
+    return allDoctors.filter((doc) => {
+      const matchesSearch =
+        doc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        doc.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (doc.specialty && doc.specialty.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (doc.department && doc.department.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (doc.licenseNumber && doc.licenseNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (doc.phone && doc.phone.toLowerCase().includes(searchTerm.toLowerCase()));
 
-        const matchesSpecialty = specialtyFilter === 'ALL' || doc.specialty === specialtyFilter;
-        const matchesStatus = statusFilter === 'ALL' || (doc.status || 'Active') === statusFilter;
+      const matchesSpecialty = specialtyFilter === 'ALL' || doc.specialty === specialtyFilter;
+      const matchesStatus = statusFilter === 'ALL' || (doc.status || 'Active') === statusFilter;
 
-        return matchesSearch && matchesSpecialty && matchesStatus;
-      })
-      .sort((a, b) => {
-        if (sortBy === 'name') return a.name.localeCompare(b.name);
-        if (sortBy === 'specialty') return (a.specialty || '').localeCompare(b.specialty || '');
-        if (sortBy === 'status') return (a.status || 'Active').localeCompare(b.status || 'Active');
-        return 0;
-      });
-  }, [allDoctors, searchTerm, specialtyFilter, statusFilter, sortBy]);
+      let matchesPermission = true;
+      if (permissionFilter !== 'ALL') {
+        const perms = getUserPermissions(doc);
+        matchesPermission = Boolean(perms[permissionFilter as keyof UserPermissions]);
+      }
 
-  // Metric Computations
-  const activeDoctorsCount = allDoctors.filter((d) => (d.status || 'Active') === 'Active').length;
-  const onLeaveDoctorsCount = allDoctors.filter((d) => d.status === 'On Leave').length;
-  const inactiveDoctorsCount = allDoctors.filter((d) => d.status === 'Inactive').length;
+      return matchesSearch && matchesSpecialty && matchesStatus && matchesPermission;
+    });
+  }, [allDoctors, searchTerm, specialtyFilter, statusFilter, permissionFilter, getUserPermissions]);
 
   const handleEditDoctor = (doc: User) => {
     setDoctorToEdit(doc);
     setShowAddDoctorModal(true);
+  };
+
+  const handleOpenPermissions = (doc: User) => {
+    setPermissionTarget(doc);
   };
 
   const handleDeleteDoctor = async (doctorId: string, name: string) => {
@@ -109,464 +105,295 @@ export const PhysiciansManagementView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12 animate-fade-in text-slate-100">
+    <div className="space-y-4 max-w-7xl mx-auto text-xs font-sans pb-12">
       {/* ====================================================================
-          STANDALONE MODULE HERO BANNER (PHYSICIANS & DOCTORS)
+          HEADER: PHYSICIAN & DOCTOR MANAGEMENT
+          Matches Pharmacy & Stock Inventory layout
           ==================================================================== */}
-      <div className="rounded-3xl p-6 sm:p-7 bg-gradient-to-r from-[#172554] via-[#1e1b4b] to-[#0b1120] border border-cyan-500/30 shadow-2xl shadow-cyan-950/30 flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden">
-        {/* Ambient background glow */}
-        <div className="absolute -right-20 -top-20 w-80 h-80 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
-
-        <div className="space-y-2.5 min-w-0 flex-1 relative z-10">
-          {/* Badge Row */}
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-xs">
-              <Stethoscope className="w-3.5 h-3.5 text-cyan-300" />
-              <span>Medical Staff Governance</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-purple-950/80 text-purple-200 border border-purple-500/40">
-              <ShieldCheck className="w-3.5 h-3.5 text-purple-300" />
-              <span>PRC Board of Medicine Verified</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/40">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span>PhilHealth Konsulta Credentialed</span>
+            <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+              Physician & Doctor Management
+            </h1>
+            <span className="text-xs bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 font-semibold px-2.5 py-0.5 rounded-full border border-teal-200 dark:border-teal-800">
+              {allDoctors.length} Physicians Registered
             </span>
           </div>
-
-          {/* Module Title */}
-          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-3">
-            <span>Physician & Doctor Management</span>
-          </h1>
-
-          {/* Subtitle */}
-          <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-            Independent clinical directory for credentialed attending physicians, specialists, and outpatient consultants. Manage PRC licenses, clinic schedule hours, departmental privileges, and consultation status.
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Specific Task: Credentialed attending physicians, outpatient schedules, licensure verification, and granular system module permissions.
           </p>
         </div>
 
-        {/* Dedicated Actions */}
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 relative z-10 shrink-0">
-          <button
-            onClick={() => {
-              setDoctorToEdit(null);
-              setShowAddDoctorModal(true);
-            }}
-            className="px-4 py-2.5 bg-gradient-to-r from-teal-400 to-cyan-400 hover:from-teal-300 hover:to-cyan-300 text-slate-950 rounded-xl font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-cyan-500/30 transition cursor-pointer active:scale-95"
-            title="Register New Physician"
-          >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <Stethoscope className="w-4 h-4" />
-            <span>Register New Physician</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className="px-3.5 py-2.5 bg-[#0f172a]/80 hover:bg-[#1e293b] text-slate-300 hover:text-white rounded-xl font-bold text-xs flex items-center gap-2 border border-slate-700/80 transition cursor-pointer active:scale-95"
-            title="Return to Admin Dashboard"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Dashboard</span>
-          </button>
-        </div>
+        <button
+          onClick={() => {
+            setDoctorToEdit(null);
+            setShowAddDoctorModal(true);
+          }}
+          className="px-3.5 py-2 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-black rounded-lg text-xs flex items-center gap-2 shadow-xs transition cursor-pointer self-start sm:self-auto shrink-0 active:scale-95"
+        >
+          <Plus className="w-4 h-4 stroke-[3]" />
+          <span>Add New Physician</span>
+        </button>
       </div>
 
-      {/* ====================================================================
-          DEDICATED PHYSICIAN METRIC CARDS
-          ==================================================================== */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1: Total Physicians */}
-        <div className="bg-[#0e1628]/90 backdrop-blur-md p-5 rounded-3xl border border-slate-800/90 shadow-xl shadow-black/25 space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold">Total Physicians</span>
-            <div className="w-9 h-9 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 flex items-center justify-center shadow-xs">
-              <Stethoscope className="w-4 h-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-black text-white font-mono">{allDoctors.length}</p>
-          <div className="flex items-center gap-1.5 text-[11px] text-cyan-400 font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-            <span>Accredited Attending MDs</span>
-          </div>
-        </div>
-
-        {/* KPI 2: Active / On Duty */}
-        <div className="bg-[#0e1628]/90 backdrop-blur-md p-5 rounded-3xl border border-slate-800/90 shadow-xl shadow-black/25 space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold">Active & In Clinic</span>
-            <div className="w-9 h-9 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shadow-xs">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-black text-white font-mono">{activeDoctorsCount}</p>
-          <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            <span>Available for Patient Consults</span>
-          </div>
-        </div>
-
-        {/* KPI 3: On Leave */}
-        <div className="bg-[#0e1628]/90 backdrop-blur-md p-5 rounded-3xl border border-slate-800/90 shadow-xl shadow-black/25 space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold">On Leave / Away</span>
-            <div className="w-9 h-9 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center shadow-xs">
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-black text-white font-mono">{onLeaveDoctorsCount}</p>
-          <div className="flex items-center gap-1.5 text-[11px] text-amber-400 font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-            <span>Schedule Suspended</span>
-          </div>
-        </div>
-
-        {/* KPI 4: Medical Specialties */}
-        <div className="bg-[#0e1628]/90 backdrop-blur-md p-5 rounded-3xl border border-slate-800/90 shadow-xl shadow-black/25 space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold">Clinical Specialties</span>
-            <div className="w-9 h-9 rounded-2xl bg-purple-500/15 border border-purple-500/30 text-purple-400 flex items-center justify-center shadow-xs">
-              <Award className="w-4 h-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-black text-white font-mono">{uniqueSpecialties.length}</p>
-          <div className="flex items-center gap-1.5 text-[11px] text-purple-400 font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
-            <span>Distinct Departments Covered</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ====================================================================
-          SEARCH, SPECIALTY & STATUS FILTERS
-          ==================================================================== */}
-      <div className="bg-[#0e1628]/90 backdrop-blur-md rounded-3xl border border-slate-800/90 p-5 shadow-xl shadow-black/25 space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          {/* Search Box */}
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search physician by name, specialty, department, PRC license, email, or phone…"
-              className="w-full pl-10 pr-4 py-2 bg-[#11192c] border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition"
-            />
-          </div>
-
-          {/* Filter Controls */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Specialty Dropdown */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-slate-400 font-semibold hidden sm:inline">Specialty:</span>
-              <select
-                value={specialtyFilter}
-                onChange={(e) => setSpecialtyFilter(e.target.value)}
-                className="py-2 px-3 bg-[#11192c] border border-slate-700/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500 transition cursor-pointer"
-              >
-                <option value="ALL">All Specialties ({uniqueSpecialties.length})</option>
-                {uniqueSpecialties.map((spec) => (
-                  <option key={spec} value={spec}>
-                    {spec}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Status Dropdown */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-slate-400 font-semibold hidden sm:inline">Status:</span>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="py-2 px-3 bg-[#11192c] border border-slate-700/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500 transition cursor-pointer"
-              >
-                <option value="ALL">All Status</option>
-                <option value="Active">Active ({activeDoctorsCount})</option>
-                <option value="On Leave">On Leave ({onLeaveDoctorsCount})</option>
-                <option value="Inactive">Inactive ({inactiveDoctorsCount})</option>
-              </select>
-            </div>
-
-            {/* Sort Dropdown */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-slate-400 font-semibold hidden sm:inline">Sort:</span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="py-2 px-3 bg-[#11192c] border border-slate-700/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500 transition cursor-pointer"
-              >
-                <option value="name">Name (A-Z)</option>
-                <option value="specialty">Specialty</option>
-                <option value="status">Status</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Active Filters Pill Bar */}
-        {(searchTerm || specialtyFilter !== 'ALL' || statusFilter !== 'ALL') && (
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80 text-xs text-slate-400 flex-wrap">
-            <span>Active Filters:</span>
-            {searchTerm && (
-              <span className="px-2.5 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-500/40 text-[11px]">
-                Search: "{searchTerm}"
-              </span>
-            )}
-            {specialtyFilter !== 'ALL' && (
-              <span className="px-2.5 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-500/40 text-[11px]">
-                Specialty: {specialtyFilter}
-              </span>
-            )}
-            {statusFilter !== 'ALL' && (
-              <span className="px-2.5 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-500/40 text-[11px]">
-                Status: {statusFilter}
-              </span>
-            )}
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                setSpecialtyFilter('ALL');
-                setStatusFilter('ALL');
-              }}
-              className="text-cyan-400 hover:text-cyan-300 font-semibold text-[11px] underline ml-1 cursor-pointer"
-            >
-              Reset all filters
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ====================================================================
-          PHYSICIANS DIRECTORY CARDS
-          ==================================================================== */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="font-bold text-base text-white">Credentialed Physicians Directory</h3>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-cyan-950/60 text-cyan-300 border border-cyan-500/40">
-              {filteredDoctors.length} {filteredDoctors.length === 1 ? 'Doctor' : 'Doctors'} Listed
-            </span>
-          </div>
-
-          <button
-            onClick={() => {
-              setDoctorToEdit(null);
-              setShowAddDoctorModal(true);
-            }}
-            className="text-xs text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 cursor-pointer transition"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add New Physician</span>
-          </button>
-        </div>
-
-        {filteredDoctors.length === 0 ? (
-          <div className="p-12 text-center rounded-3xl border border-dashed border-slate-800 bg-[#0e1628]/60 text-slate-400 space-y-3">
-            <Stethoscope className="w-12 h-12 mx-auto text-slate-600" />
-            <p className="font-bold text-white text-sm">No physicians match your filter criteria.</p>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">
-              Try adjusting your search terms or clearing specialty and status filters.
-            </p>
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                setSpecialtyFilter('ALL');
-                setStatusFilter('ALL');
-              }}
-              className="px-4 py-2 bg-[#121c33] hover:bg-[#182645] text-cyan-300 rounded-xl text-xs font-bold transition border border-cyan-500/40 cursor-pointer"
-            >
-              Clear Filters
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-            {filteredDoctors.map((doc) => {
-              const status = doc.status || 'Active';
-              const isStatusActive = status === 'Active';
-              const isStatusLeave = status === 'On Leave';
-
-              return (
-                <div
-                  key={doc.id}
-                  className="p-5 rounded-3xl border border-slate-800/90 bg-[#0e1628]/90 backdrop-blur-md hover:border-cyan-500/50 hover:bg-[#111a30] transition flex flex-col justify-between space-y-4 shadow-xl shadow-black/20 group"
-                >
-                  {/* Top: Avatar, Name, Credentials & Status Badge */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3.5">
-                      <div className="relative">
-                        <img
-                          src={
-                            doc.avatar ||
-                            'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=200'
-                          }
-                          alt={doc.name}
-                          className="w-13 h-13 rounded-2xl object-cover border-2 border-slate-700/80 shadow-md group-hover:border-cyan-500/60 transition"
-                        />
-                        <span
-                          className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-[#0e1628] ${
-                            isStatusActive
-                              ? 'bg-emerald-400'
-                              : isStatusLeave
-                              ? 'bg-amber-400'
-                              : 'bg-slate-500'
-                          }`}
-                          title={`Status: ${status}`}
-                        />
-                      </div>
-
-                      <div>
-                        <h4 className="font-extrabold text-white text-base group-hover:text-cyan-300 transition flex items-center gap-1.5 flex-wrap">
-                          <span>{doc.name}</span>
-                          <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/70 px-2 py-0.5 rounded-full border border-cyan-800/50 font-semibold">
-                            MD
-                          </span>
-                        </h4>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <span className="text-xs text-cyan-300 font-semibold flex items-center gap-1">
-                            <Sparkles className="w-3 h-3 text-cyan-400" />
-                            <span>{doc.specialty || 'General Medicine'}</span>
-                          </span>
-                          <span className="text-slate-600">•</span>
-                          <span className="text-xs text-slate-300 flex items-center gap-1">
-                            <Building2 className="w-3 h-3 text-slate-400" />
-                            <span>{doc.department || 'Outpatient Clinic'}</span>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Status Pill with Toggle */}
-                    <button
-                      onClick={() => handleToggleStatus(doc.id, status)}
-                      className={`px-3 py-1 rounded-xl text-[11px] font-bold border transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                        isStatusActive
-                          ? 'bg-emerald-950/70 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900/60'
-                          : isStatusLeave
-                          ? 'bg-amber-950/70 text-amber-300 border-amber-500/40 hover:bg-amber-900/60'
-                          : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-slate-200'
-                      }`}
-                      title="Click to cycle status: Active -> On Leave -> Inactive"
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          isStatusActive
-                            ? 'bg-emerald-400 animate-pulse'
-                            : isStatusLeave
-                            ? 'bg-amber-400'
-                            : 'bg-slate-500'
-                        }`}
-                      />
-                      <span>{status}</span>
-                    </button>
-                  </div>
-
-                  {/* PRC License & Schedule Badges */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-300 bg-[#090e1a]/80 p-3 rounded-2xl border border-slate-800/80">
-                    <div className="flex items-center gap-2">
-                      <FileBadge className="w-4 h-4 text-cyan-400 shrink-0" />
-                      <span className="font-mono text-[11px]">
-                        PRC:{' '}
-                        <strong className="text-white font-bold">
-                          {doc.licenseNumber || 'PRC-VERIFIED'}
-                        </strong>
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-teal-400 shrink-0" />
-                      <span className="text-[11px] truncate">
-                        {doc.hoursLabel || '8:00 AM – 5:00 PM'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-4 h-4 text-slate-400 shrink-0" />
-                      <span className="text-[11px] truncate text-slate-300 font-mono">
-                        {doc.email}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-slate-400 shrink-0" />
-                      <span className="text-[11px] text-slate-300">
-                        {doc.phone || '+63 917 000 0000'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Notes / Clinical Privileges if present */}
-                  {doc.notes && (
-                    <p className="text-[11px] text-slate-400 bg-[#121c33]/40 p-2.5 rounded-xl border border-slate-800/60 leading-relaxed italic">
-                      "{doc.notes}"
-                    </p>
-                  )}
-
-                  {/* Card Footer: Action Buttons */}
-                  <div className="flex items-center justify-between pt-3 border-t border-slate-800/80">
-                    <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-mono">
-                      <span>Schedule:</span>
-                      <span className="text-cyan-300 font-semibold">
-                        {doc.workDaysLabel || 'Mon - Fri'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {/* Edit Physician */}
-                      <button
-                        onClick={() => handleEditDoctor(doc)}
-                        className="px-3 py-1.5 bg-[#121c33] hover:bg-cyan-950/60 text-cyan-300 hover:text-cyan-200 border border-slate-700/80 hover:border-cyan-500/50 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer active:scale-95"
-                        title="Edit Doctor Details"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                        <span>Edit</span>
-                      </button>
-
-                      {/* Delete Physician */}
-                      <button
-                        onClick={() => handleDeleteDoctor(doc.id, doc.name)}
-                        className="p-1.5 bg-[#121c33] hover:bg-rose-950/50 text-slate-400 hover:text-rose-300 border border-slate-700/80 hover:border-rose-500/50 rounded-xl transition cursor-pointer active:scale-95"
-                        title="Remove Physician"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ====================================================================
-          REGULATORY & PHILIPPINE HEALTH COMPLIANCE CARD
-          ==================================================================== */}
-      <div className="p-6 rounded-3xl bg-gradient-to-r from-[#0d1424] via-[#10192e] to-[#0d1424] border border-cyan-500/30 shadow-xl shadow-black/25 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 flex items-center justify-center shrink-0 shadow-md shadow-cyan-500/20">
-            <ShieldCheck className="w-6 h-6" />
-          </div>
-          <div>
-            <h4 className="text-sm font-bold text-white flex items-center gap-2">
-              <span>Philippine Medical Act & E-Prescription Compliance</span>
-              <span className="text-[10px] font-mono bg-cyan-950/80 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-500/40 font-bold">
-                PRC RA 2382
-              </span>
-            </h4>
-            <p className="text-xs text-slate-300 mt-1 max-w-3xl leading-relaxed">
-              All physician profiles require verified Professional Regulation Commission (PRC) licenses and Philippine Medical Association (PMA) Standing. Prescriptions generated by registered doctors are cryptographically signed under DOH & FDA Joint Administrative Order on Telemedicine & Electronic Prescribing.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[11px] font-mono text-cyan-400 bg-[#090e1a] px-3 py-1.5 rounded-xl border border-slate-800 font-semibold">
-            Konsulta Outpatient Certified
+      {/* Security & Audit Compliance Banner */}
+      <div className="p-3 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+          <ShieldCheck className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+          <span>
+            Controlled Medical Staff Governance: PRC licensure verification, clinic shift hours, and consultation module privileges are recorded in immutable logs.
           </span>
         </div>
+        <span className="font-mono text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded font-bold shrink-0">
+          PRC & RA 10173 COMPLIANT
+        </span>
       </div>
 
-      {/* Modal for Registering / Editing Physician */}
+      {/* Filter and Search Bar */}
+      <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex-1 min-w-[220px] relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search physician by name, specialty, department, PRC license, email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-teal-500 transition"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Specialty Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-400 font-medium">Specialty:</span>
+            <select
+              value={specialtyFilter}
+              onChange={(e) => setSpecialtyFilter(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-200 focus:outline-none"
+            >
+              <option value="ALL">All Specialties ({uniqueSpecialties.length})</option>
+              {uniqueSpecialties.map((spec) => (
+                <option key={spec} value={spec}>
+                  {spec}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-400 font-medium">Status:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-200 focus:outline-none"
+            >
+              <option value="ALL">All Status</option>
+              <option value="Active">Active</option>
+              <option value="On Leave">On Leave</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+
+          {/* Permission Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-400 font-medium">Permission:</span>
+            <select
+              value={permissionFilter}
+              onChange={(e) => setPermissionFilter(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-200 focus:outline-none"
+            >
+              <option value="ALL">All Privileges</option>
+              <option value="consultations">Can Consult</option>
+              <option value="prescriptions">Can Prescribe</option>
+              <option value="emr">Full EMR Access</option>
+              <option value="laboratory">Can Order Labs</option>
+              <option value="pharmacy">Can Access Pharmacy</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* ====================================================================
+          TABLE CARD (Pure Tabular Layout Matching Inventory & Billing)
+          NO profile pictures: Clean professional initials badge used
+          ==================================================================== */}
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-semibold uppercase text-[10px] tracking-wider">
+                <th className="py-3 px-4">Physician & Contact</th>
+                <th className="py-3 px-3">Specialty & Department</th>
+                <th className="py-3 px-3">PRC Licensure</th>
+                <th className="py-3 px-3">Consultation Hours</th>
+                <th className="py-3 px-3">Status</th>
+                <th className="py-3 px-3">Module Permissions</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {filteredDoctors.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                    No physicians match your filter criteria.
+                  </td>
+                </tr>
+              ) : (
+                filteredDoctors.map((doc) => {
+                  const status = doc.status || 'Active';
+                  const isActive = status === 'Active';
+                  const isLeave = status === 'On Leave';
+                  const perms = getUserPermissions(doc);
+                  const allowedCount = Object.values(perms).filter(Boolean).length;
+
+                  // Initials circle badge (NO profile picture)
+                  const initials = doc.name
+                    .split(' ')
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((w) => w[0])
+                    .join('')
+                    .toUpperCase();
+
+                  return (
+                    <tr
+                      key={doc.id}
+                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition"
+                    >
+                      {/* Physician Name & Email */}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-teal-50 dark:bg-teal-950/80 border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 flex items-center justify-center font-bold text-xs shrink-0 font-mono">
+                            {initials || <Stethoscope className="w-4 h-4" />}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-bold text-slate-900 dark:text-slate-100 block truncate">
+                              {doc.name}
+                            </span>
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate block font-mono">
+                              {doc.email}
+                            </span>
+                            {doc.phone && (
+                              <span className="text-[10px] text-slate-400 block">{doc.phone}</span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Specialty & Department */}
+                      <td className="py-3 px-3">
+                        <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-semibold text-[11px] block w-fit">
+                          {doc.specialty || 'General Medicine'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 mt-0.5 block">
+                          {doc.department || 'Outpatient Clinic'}
+                        </span>
+                      </td>
+
+                      {/* PRC Licensure */}
+                      <td className="py-3 px-3">
+                        <span className="font-mono text-[11px] text-slate-900 dark:text-slate-100 font-bold bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 w-fit block">
+                          {doc.licenseNumber || 'PRC-0084521'}
+                        </span>
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium block mt-0.5">
+                          Board Verified
+                        </span>
+                      </td>
+
+                      {/* Schedule / Hours */}
+                      <td className="py-3 px-3">
+                        <span className="font-medium text-slate-800 dark:text-slate-200 text-[11px] block">
+                          {doc.workDaysLabel || 'Mon – Fri'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5 font-mono">
+                          <Clock className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+                          <span>{doc.hoursLabel || '8:00 AM – 5:00 PM'}</span>
+                        </span>
+                      </td>
+
+                      {/* Status */}
+                      <td className="py-3 px-3">
+                        <button
+                          onClick={() => handleToggleStatus(doc.id, doc.status)}
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition cursor-pointer flex items-center gap-1.5 ${
+                            isActive
+                              ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                              : isLeave
+                              ? 'bg-amber-50 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                          }`}
+                          title="Click to toggle status"
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              isActive
+                                ? 'bg-emerald-500 animate-pulse'
+                                : isLeave
+                                ? 'bg-amber-500'
+                                : 'bg-slate-400'
+                            }`}
+                          />
+                          <span>{status}</span>
+                        </button>
+                      </td>
+
+                      {/* Module Permissions Summary */}
+                      <td className="py-3 px-3">
+                        <button
+                          onClick={() => handleOpenPermissions(doc)}
+                          className="px-2 py-1 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/80 font-bold text-[10px] flex items-center gap-1.5 hover:bg-teal-100 dark:hover:bg-teal-900/50 transition cursor-pointer"
+                          title="View and configure module privileges"
+                        >
+                          <KeyRound className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+                          <span>{allowedCount}/14 Modules</span>
+                        </button>
+                        <div className="flex items-center gap-1 mt-1 text-[9px] text-slate-400">
+                          {perms.consultations && <span className="text-teal-600 dark:text-teal-400 font-semibold">Consult</span>}
+                          {perms.prescriptions && <span>• Rx</span>}
+                          {perms.laboratory && <span>• Lab</span>}
+                          {perms.emr && <span>• EMR</span>}
+                        </div>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleOpenPermissions(doc)}
+                            className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1"
+                            title="Manage System Permissions"
+                          >
+                            <KeyRound className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+                            <span>Permissions</span>
+                          </button>
+                          <button
+                            onClick={() => handleEditDoctor(doc)}
+                            className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition cursor-pointer"
+                            title="Edit Doctor Details"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteDoctor(doc.id, doc.name)}
+                            className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-rose-950/60 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition cursor-pointer"
+                            title="Remove Doctor"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Add / Edit Doctor Modal */}
       {showAddDoctorModal && (
         <AddDoctorModal
           isOpen={showAddDoctorModal}
@@ -575,6 +402,15 @@ export const PhysiciansManagementView: React.FC = () => {
             setDoctorToEdit(null);
           }}
           doctorToEdit={doctorToEdit}
+        />
+      )}
+
+      {/* Permissions Management Modal */}
+      {permissionTarget && (
+        <StaffPermissionsModal
+          isOpen={Boolean(permissionTarget)}
+          onClose={() => setPermissionTarget(null)}
+          targetUser={permissionTarget}
         />
       )}
     </div>

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { API_BASE_URL } from '../lib/config';
 import {
-  Patient, User, UserRole, Appointment, AppointmentStatus, Consultation,
+  Patient, User, UserRole, UserPermissions, DEFAULT_ROLE_PERMISSIONS, Appointment, AppointmentStatus, Consultation,
   Prescription, LabTestOrder, LabResultItem, InventoryItem, Invoice,
   Notification, AuditLog, Vitals, TriageRecord, UrgencyBand,
 } from '../types/clinic';
@@ -142,6 +142,10 @@ interface ClinicContextType {
   }) => Promise<{ success: boolean; staff?: User; error?: string }>;
   deleteUser: (userId: string) => Promise<{ success: boolean; error?: string }>;
   toggleUserStatus: (userId: string, newStatus: 'Active' | 'On Leave' | 'Inactive') => Promise<{ success: boolean; error?: string }>;
+  hasPermission: (permission: keyof UserPermissions) => boolean;
+  getUserPermissions: (user?: User | null) => UserPermissions;
+  updateUserPermissions: (userId: string, permissions: Partial<UserPermissions>) => void;
+  resetUserPermissionsToRole: (userId: string, role?: UserRole) => void;
   checkTwoFactorStatus: (email: string) => Promise<{ enabled: boolean }>;
   enableTwoFactor: (email: string, code: string) => Promise<{ success: boolean; error?: string }>;
   disableTwoFactor: (email: string, code: string) => Promise<{ success: boolean; error?: string }>;
@@ -244,8 +248,13 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (saved) {
         const parsed: User[] = JSON.parse(saved);
         const map = new Map<string, User>();
-        INITIAL_USERS.forEach((u) => map.set(u.id, u));
-        parsed.forEach((u) => map.set(u.id, u));
+        INITIAL_USERS.forEach((u) => map.set(u.id, { ...u, permissions: u.permissions || { ...DEFAULT_ROLE_PERMISSIONS[u.role] } }));
+        parsed.forEach((u) => {
+          const base = map.get(u.id);
+          const role = u.role || base?.role || 'patient';
+          const perms = u.permissions || base?.permissions || { ...DEFAULT_ROLE_PERMISSIONS[role] };
+          map.set(u.id, { ...(base || {}), ...u, permissions: perms });
+        });
         return Array.from(map.values());
       }
     } catch {}
@@ -634,12 +643,15 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setPrimaryRole(s.primaryRole);
           setStaffSubRole(s.staffSubRole || null);
           setLinkedPatientId(s.linkedPatientId || null);
-          setActiveRole(s.activeRole || (s.primaryRole === 'staff' ? (s.staffSubRole || 'nurse') : s.primaryRole));
+          const userRole = (s.activeRole || (s.primaryRole === 'staff' ? (s.staffSubRole || 'nurse') : s.primaryRole)) as UserRole;
+          setActiveRole(userRole);
+          const perms = s.permissions || { ...DEFAULT_ROLE_PERMISSIONS[userRole] };
           setCurrentUser({
             id: s.userId || 'session-user',
             name: s.userName || 'User',
             email: s.userEmail || '',
-            role: (s.activeRole || s.primaryRole) as UserRole,
+            role: userRole,
+            permissions: perms,
           });
           if (s.linkedPatientId) setSelectedPatientId(s.linkedPatientId);
         }
@@ -670,6 +682,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         userName: currentUser.name,
         userEmail: currentUser.email,
         activeRole,
+        permissions: currentUser.permissions,
       }));
       if (authToken) {
         localStorage.setItem('smart_clinic_token', authToken);
@@ -1001,22 +1014,33 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
 
       if (role === 'doctor') {
-        const doctorUser = users.find((u) => u.id === user.id) || user;
-        setCurrentUser(doctorUser);
+        const doctorUser = users.find((u) => u.id === user.id || u.email?.toLowerCase() === user.email?.toLowerCase()) || user;
+        const resolvedDoctor: User = {
+          ...doctorUser,
+          role: 'doctor',
+          permissions: doctorUser.permissions || { ...DEFAULT_ROLE_PERMISSIONS.doctor },
+        };
+        setCurrentUser(resolvedDoctor);
         setActiveRole('doctor');
         setPrimaryRole('doctor');
         setStaffSubRole(null);
         setIsAuthenticated(true);
         // Provider routes directly to Live Queue if requested, else Consultation Suite
         setActiveTab(pendingAction === 'queue' ? 'queue' : 'consultations');
-        logAction('AUTH_LOGIN', 'Security', doctorUser.id, `Doctor provider logged in: ${doctorUser.name}`);
+        logAction('AUTH_LOGIN', 'Security', resolvedDoctor.id, `Doctor provider logged in: ${resolvedDoctor.name}`);
         return { success: true };
       }
 
       if (role === 'staff') {
-        const staffUser = users.find((u) => u.role === subRole) || user;
-        setCurrentUser(staffUser);
-        setActiveRole(subRole as UserRole);
+        const targetSubRole = (subRole || 'nurse') as UserRole;
+        const staffUser = users.find((u) => u.role === subRole || u.id === user.id || u.email?.toLowerCase() === user.email?.toLowerCase()) || user;
+        const resolvedStaff: User = {
+          ...staffUser,
+          role: targetSubRole,
+          permissions: staffUser.permissions || { ...DEFAULT_ROLE_PERMISSIONS[targetSubRole] },
+        };
+        setCurrentUser(resolvedStaff);
+        setActiveRole(targetSubRole);
         setPrimaryRole('staff');
         setStaffSubRole(subRole || 'nurse');
         setIsAuthenticated(true);
@@ -1029,19 +1053,24 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         else if (subRole === 'lab_technician') setActiveTab('laboratory');
         else setActiveTab('dashboard');
 
-        logAction('AUTH_LOGIN', 'Security', staffUser.id, `Staff logged in: ${subRole}`);
+        logAction('AUTH_LOGIN', 'Security', resolvedStaff.id, `Staff logged in: ${subRole}`);
         return { success: true };
       }
 
       if (role === 'admin') {
-        const adminUser = users.find((u) => u.role === 'admin') || user;
-        setCurrentUser(adminUser);
+        const adminUser = users.find((u) => u.role === 'admin' || u.id === user.id || u.email?.toLowerCase() === user.email?.toLowerCase()) || user;
+        const resolvedAdmin: User = {
+          ...adminUser,
+          role: 'admin',
+          permissions: { ...DEFAULT_ROLE_PERMISSIONS.admin },
+        };
+        setCurrentUser(resolvedAdmin);
         setActiveRole('admin');
         setPrimaryRole('admin');
         setStaffSubRole(null);
         setIsAuthenticated(true);
         setActiveTab(pendingAction === 'queue' ? 'queue' : 'dashboard');
-        logAction('AUTH_LOGIN', 'Security', adminUser.id, 'Administrator 2FA verified and logged in.');
+        logAction('AUTH_LOGIN', 'Security', resolvedAdmin.id, 'Administrator 2FA verified and logged in.');
         return { success: true };
       }
 
@@ -2010,6 +2039,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       status: doctorData.status || 'Active',
       notes: doctorData.notes?.trim() || undefined,
       schedule,
+      permissions: { ...DEFAULT_ROLE_PERMISSIONS.doctor },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -2183,6 +2213,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       temporaryPassword: staffData.temporaryPassword?.trim() || undefined,
       status: staffData.status || 'Active',
       notes: staffData.notes?.trim() || undefined,
+      permissions: { ...DEFAULT_ROLE_PERMISSIONS[staffData.role] },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -2374,6 +2405,105 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  const getUserPermissions = useCallback((user?: User | null): UserPermissions => {
+    if (!user) return DEFAULT_ROLE_PERMISSIONS.patient;
+    if (user.role === 'admin' || user.email === 'smartclinicrealacc@gmail.com') {
+      return { ...DEFAULT_ROLE_PERMISSIONS.admin };
+    }
+    const defaultForRole = DEFAULT_ROLE_PERMISSIONS[user.role] || DEFAULT_ROLE_PERMISSIONS.nurse;
+    if (user.permissions && typeof user.permissions === 'object') {
+      return {
+        ...defaultForRole,
+        ...user.permissions,
+      };
+    }
+    return { ...defaultForRole };
+  }, []);
+
+  const hasPermission = useCallback(
+    (permission: keyof UserPermissions): boolean => {
+      // Admin retains full access across all modules
+      if (activeRole === 'admin' || primaryRole === 'admin') {
+        return true;
+      }
+      const perms = getUserPermissions(currentUser);
+      return Boolean(perms[permission]);
+    },
+    [activeRole, primaryRole, currentUser, getUserPermissions]
+  );
+
+  const updateUserPermissions = useCallback(
+    (userId: string, newPermissions: Partial<UserPermissions>) => {
+      setUsers((prev) => {
+        const updated = prev.map((u) => {
+          if (u.id === userId) {
+            // Safety validation: Admin cannot remove their own full access
+            if (u.role === 'admin' || u.email === 'smartclinicrealacc@gmail.com') {
+              return {
+                ...u,
+                permissions: { ...DEFAULT_ROLE_PERMISSIONS.admin },
+              };
+            }
+            const currentPerms = u.permissions || DEFAULT_ROLE_PERMISSIONS[u.role] || DEFAULT_ROLE_PERMISSIONS.nurse;
+            const merged: UserPermissions = {
+              ...currentPerms,
+              ...newPermissions,
+            };
+            return {
+              ...u,
+              permissions: merged,
+              updatedAt: new Date().toISOString(),
+            };
+          }
+          return u;
+        });
+
+        try {
+          localStorage.setItem('smart_clinic_users', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+
+      // If modifying current logged-in user, update currentUser as well
+      if (currentUser.id === userId) {
+        setCurrentUser((prev) => {
+          const currentPerms = prev.permissions || DEFAULT_ROLE_PERMISSIONS[prev.role] || DEFAULT_ROLE_PERMISSIONS.nurse;
+          const merged = { ...currentPerms, ...newPermissions };
+          const updatedUser: User = { ...prev, permissions: merged };
+          try {
+            const raw = localStorage.getItem('smart_clinic_auth_session');
+            if (raw) {
+              const s = JSON.parse(raw);
+              s.permissions = merged;
+              localStorage.setItem('smart_clinic_auth_session', JSON.stringify(s));
+            }
+          } catch {}
+          return updatedUser;
+        });
+      }
+
+      const target = users.find((u) => u.id === userId);
+      const targetName = target?.name || userId;
+      logAction(
+        'PERMISSIONS_UPDATED',
+        'Security',
+        userId,
+        `Admin modified module privileges for ${targetName} (${target?.role || 'staff'}). Changes saved to persistent state.`
+      );
+    },
+    [currentUser.id, users, logAction]
+  );
+
+  const resetUserPermissionsToRole = useCallback(
+    (userId: string, roleTemplate?: UserRole) => {
+      const target = users.find((u) => u.id === userId);
+      const role = roleTemplate || target?.role || 'nurse';
+      const templatePerms = DEFAULT_ROLE_PERMISSIONS[role] || DEFAULT_ROLE_PERMISSIONS.nurse;
+      updateUserPermissions(userId, templatePerms);
+    },
+    [users, updateUserPermissions]
+  );
+
   return (
     <ClinicContext.Provider
       value={{
@@ -2394,6 +2524,10 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         updateClinicalStaff,
         deleteUser,
         toggleUserStatus,
+        hasPermission,
+        getUserPermissions,
+        updateUserPermissions,
+        resetUserPermissionsToRole,
         checkTwoFactorStatus,
         enableTwoFactor,
         disableTwoFactor,
