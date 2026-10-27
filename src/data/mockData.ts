@@ -21,7 +21,7 @@ export const INITIAL_USERS: User[] = [
   { id: 'usr-4', name: 'Claire Mendoza', email: 'claire.mendoza@smartclinic.ph', role: 'receptionist', avatar: '', department: 'Front Desk & Patient Access' },
   { id: 'usr-5', name: 'Julian Dela Cruz, RPh', email: 'julian.delacruz@smartclinic.ph', role: 'pharmacist', avatar: '', department: 'Clinic Pharmacy & Dispensary', licenseNumber: 'RPh-102948' },
   { id: 'usr-6', name: 'Amina Bautista, RMT', email: 'amina.bautista@smartclinic.ph', role: 'lab_technician', avatar: '', department: 'Diagnostic Pathology & Laboratory', licenseNumber: 'RMT-559102' },
-  { id: 'usr-admin', name: 'Admin Smart Clinic', email: 'smartclinicrealacc@gmail.com', role: 'admin', avatar: '', department: 'Clinical Operations Administration' },
+  { id: 'usr-admin', name: 'Director Maria Lourdes Santos, MD', email: 'smartclinicrealacc@gmail.com', role: 'admin', avatar: '', department: 'Executive Management', specialty: 'Healthcare Administration', licenseNumber: 'PRC-0081294', phone: '+63 917 800 1101' },
   { id: 'usr-8', name: 'Elena Vargas', email: 'elena.vargas@smartclinic.ph', role: 'patient', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80', department: 'Patient Portal' }
 ];
 
@@ -351,7 +351,7 @@ export const INITIAL_AUDIT_LOGS: AuditLog[] = [
   { id: 'aud-2', timestamp: '2026-10-06T09:25:40Z', userId: 'usr-1', userName: 'Dr. Maria Cristina Reyes, MD', userRole: 'doctor', action: 'PRESCRIPTION_CREATE', resourceType: 'Prescription', resourceId: 'rx-901', description: 'Created electronic prescription RX-2026-0901 with AI drug safety verification.' },
   { id: 'aud-3', timestamp: '2026-10-06T09:15:22Z', userId: 'usr-6', userName: 'Amina Bautista, RMT', userRole: 'lab_technician', action: 'LAB_RESULT_ENTERED', resourceType: 'Laboratory', resourceId: 'lab-401', description: 'Entered and certified lab panel results for LAB-2026-1041.' },
   { id: 'aud-4', timestamp: '2026-10-06T08:50:00Z', userId: 'usr-4', userName: 'Claire Mendoza', userRole: 'receptionist', action: 'APPOINTMENT_CHECKIN', resourceType: 'Appointment', resourceId: 'apt-101', description: 'Checked in Elena Vargas for appointment apt-101 and assigned queue A-101.' },
-  { id: 'aud-5', timestamp: '2026-10-06T07:45:00Z', userId: 'usr-7', userName: 'Admin Smart Clinic', userRole: 'admin', action: 'SECURITY_LOGIN', resourceType: 'Security', resourceId: 'auth-session-882', description: 'Administrator authenticated successfully via secure session token.' }
+  { id: 'aud-5', timestamp: '2026-10-06T07:45:00Z', userId: 'usr-admin', userName: 'Director Maria Lourdes Santos, MD', userRole: 'admin', action: 'SECURITY_LOGIN', resourceType: 'Security', resourceId: 'auth-session-882', description: 'Director Maria Lourdes Santos, MD authenticated successfully via secure session token.' }
 ];
 
 export const INITIAL_CONSULTATIONS: Consultation[] = [

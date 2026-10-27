@@ -171,6 +171,19 @@ interface ClinicContextType {
 
 const ClinicContext = createContext<ClinicContextType | undefined>(undefined);
 
+const CLINIC_CACHE_VERSION = 'v4.1.0-director-santos';
+
+try {
+  if (typeof window !== 'undefined') {
+    const currentVersion = localStorage.getItem('smart_clinic_cache_version');
+    if (currentVersion !== CLINIC_CACHE_VERSION) {
+      localStorage.removeItem('smart_clinic_users');
+      localStorage.removeItem('smart_clinic_audit_logs');
+      localStorage.setItem('smart_clinic_cache_version', CLINIC_CACHE_VERSION);
+    }
+  }
+} catch {}
+
 export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [users, setUsers] = useState<User[]>(() => {
     try {
@@ -510,7 +523,16 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (Array.isArray(data.auditLogs) && activeRole !== 'patient') {
           setAuditLogs(data.auditLogs);
         }
-        if (Array.isArray(data.doctors) && data.doctors.length > 0) {
+        if (Array.isArray(data.users) && data.users.length > 0) {
+          setUsers(data.users);
+          try {
+            localStorage.setItem('smart_clinic_users', JSON.stringify(data.users));
+          } catch {}
+          if (activeRole === 'admin' || primaryRole === 'admin') {
+            const adminUser = data.users.find((u: User) => u.role === 'admin');
+            if (adminUser) setCurrentUser(adminUser);
+          }
+        } else if (Array.isArray(data.doctors) && data.doctors.length > 0) {
           setUsers((prev) => {
             const map = new Map<string, User>();
             prev.forEach((u) => map.set(u.id, u));
@@ -1037,11 +1059,14 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
 
       if (role === 'admin' && (credentials.password === 'SmartClinic@Admin2026' || !credentials.password)) {
-        const adm = users.find((u) => u.role === 'admin') || {
+        const adm = users.find((u) => u.role === 'admin' && u.email === 'smartclinicrealacc@gmail.com') || users.find((u) => u.role === 'admin') || {
           id: 'usr-admin',
-          name: 'Administrator',
+          name: 'Director Maria Lourdes Santos, MD',
           email: 'smartclinicrealacc@gmail.com',
           role: 'admin' as UserRole,
+          department: 'Executive Management',
+          specialty: 'Healthcare Administration & Internal Medicine',
+          licenseNumber: 'PRC-0081294',
         };
         setCurrentUser(adm);
         setActiveRole('admin');

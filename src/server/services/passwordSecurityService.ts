@@ -59,6 +59,10 @@ function initializeDefaultCredentials() {
   const defaults: [string, string, string][] = [
     ['smartclinicrealacc@gmail.com', 'SmartClinic@Admin2026', 'admin'],
     ['elena.vargas@smartclinic.ph', 'patient123', 'patient'],
+    ['liam.torres@example.com', 'patient123', 'patient'],
+    ['sofia.rd@example.com', 'patient123', 'patient'],
+    ['david.ocampo@example.com', 'patient123', 'patient'],
+    ['amara.santos@example.com', 'patient123', 'patient'],
     ['maria.reyes@smartclinic.ph', 'doctor123', 'doctor'],
     ['juan.santos@smartclinic.ph', 'doctor123', 'doctor'],
     ['ana.villanueva@smartclinic.ph', 'nurse123', 'staff'],
@@ -162,8 +166,8 @@ export async function verifyUserPassword(
 
   if (!cred || !cred.hash) {
     const isKnownFallback =
-      (rawPassword === 'SmartClinic@Admin2026' && (cleanEmail.includes('admin') || cleanEmail.includes('spartan'))) ||
-      (rawPassword === 'patient123' && cleanEmail.includes('elena')) ||
+      (rawPassword === 'SmartClinic@Admin2026' && (cleanEmail === 'smartclinicrealacc@gmail.com' || cleanEmail.includes('admin'))) ||
+      (rawPassword === 'patient123' && (cleanEmail.includes('elena') || cleanEmail.includes('torres') || cleanEmail.includes('sofia') || cleanEmail.includes('ocampo') || cleanEmail.includes('amara') || cleanEmail.includes('patient'))) ||
       (rawPassword === 'doctor123' && cleanEmail.includes('reyes')) ||
       (rawPassword === 'nurse123' && cleanEmail.includes('ana')) ||
       (rawPassword === 'pharm123' && cleanEmail.includes('pharm')) ||

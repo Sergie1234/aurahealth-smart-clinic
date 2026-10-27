@@ -1,15 +1,48 @@
 -- ==============================================================================
 -- Smart Clinic Outpatient Management System
--- Database Schema for Supabase (PostgreSQL)
--- Project Managed by: Mr. Lloyd Christopher F. Dacles, MIS, CCIP, CLYSSB, CITSMP, DBMP, CPAA, ITPO, CDSA
+-- Production Database Schema for Supabase (PostgreSQL)
+-- Aligned with Philippine Health Data Security Standards (RA 10173)
 -- ==============================================================================
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 1. Patients Table
+-- 1. Users & Staff Directory Table
+CREATE TABLE IF NOT EXISTS public.users (
+    id VARCHAR(64) PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    full_name VARCHAR(255) NOT NULL,
+    role VARCHAR(32) NOT NULL, -- admin, doctor, nurse, receptionist, pharmacist, lab_technician, staff, patient
+    sub_role VARCHAR(32),      -- nurse, receptionist, pharmacist, lab_tech
+    specialty VARCHAR(128),
+    license_number VARCHAR(64),
+    phone VARCHAR(32),
+    department VARCHAR(128),
+    avatar TEXT,
+    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Core Role Views for Unified PostgREST Querying
+CREATE OR REPLACE VIEW public.doctors AS
+    SELECT * FROM public.users WHERE role = 'doctor';
+
+CREATE OR REPLACE VIEW public.nurses AS
+    SELECT * FROM public.users WHERE role = 'nurse' OR (role = 'staff' AND sub_role = 'nurse');
+
+CREATE OR REPLACE VIEW public.receptionists AS
+    SELECT * FROM public.users WHERE role = 'receptionist' OR (role = 'staff' AND sub_role = 'receptionist');
+
+CREATE OR REPLACE VIEW public.pharmacists AS
+    SELECT * FROM public.users WHERE role = 'pharmacist' OR (role = 'staff' AND sub_role = 'pharmacist');
+
+CREATE OR REPLACE VIEW public.lab_technicians AS
+    SELECT * FROM public.users WHERE role = 'lab_technician' OR (role = 'staff' AND sub_role = 'lab_tech');
+
+-- 2. Patients Table
 CREATE TABLE IF NOT EXISTS public.patients (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id VARCHAR(64) PRIMARY KEY,
     mrn VARCHAR(32) UNIQUE NOT NULL,
     full_name VARCHAR(255) NOT NULL,
     dob DATE NOT NULL,
@@ -23,22 +56,23 @@ CREATE TABLE IF NOT EXISTS public.patients (
     allergies JSONB DEFAULT '[]'::jsonb,
     chronic_conditions JSONB DEFAULT '[]'::jsonb,
     current_medications JSONB DEFAULT '[]'::jsonb,
-    primary_doctor_id VARCHAR(64),
+    primary_doctor_id VARCHAR(64) REFERENCES public.users(id) ON DELETE SET NULL,
     insurance_provider VARCHAR(128),
     insurance_policy_number VARCHAR(64),
     vitals_history JSONB DEFAULT '[]'::jsonb,
+    triage_history JSONB DEFAULT '[]'::jsonb,
     tags JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 2. Appointments Table
+-- 3. Appointments Table
 CREATE TABLE IF NOT EXISTS public.appointments (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
+    id VARCHAR(64) PRIMARY KEY,
+    patient_id VARCHAR(64) REFERENCES public.patients(id) ON DELETE CASCADE,
     patient_name VARCHAR(255) NOT NULL,
     patient_mrn VARCHAR(32) NOT NULL,
-    doctor_id VARCHAR(64) NOT NULL,
+    doctor_id VARCHAR(64) REFERENCES public.users(id) ON DELETE SET NULL,
     doctor_name VARCHAR(255) NOT NULL,
     department VARCHAR(128) NOT NULL,
     appointment_date DATE NOT NULL,
@@ -53,13 +87,13 @@ CREATE TABLE IF NOT EXISTS public.appointments (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 3. Consultations Table
+-- 4. Consultations Table
 CREATE TABLE IF NOT EXISTS public.consultations (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    appointment_id UUID REFERENCES public.appointments(id) ON DELETE SET NULL,
-    patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
+    id VARCHAR(64) PRIMARY KEY,
+    appointment_id VARCHAR(64) REFERENCES public.appointments(id) ON DELETE SET NULL,
+    patient_id VARCHAR(64) REFERENCES public.patients(id) ON DELETE CASCADE,
     patient_name VARCHAR(255) NOT NULL,
-    doctor_id VARCHAR(64) NOT NULL,
+    doctor_id VARCHAR(64) REFERENCES public.users(id) ON DELETE SET NULL,
     doctor_name VARCHAR(255) NOT NULL,
     consultation_date DATE NOT NULL,
     chief_complaint TEXT NOT NULL,
@@ -78,16 +112,16 @@ CREATE TABLE IF NOT EXISTS public.consultations (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 4. Prescriptions Table
+-- 5. Prescriptions Table
 CREATE TABLE IF NOT EXISTS public.prescriptions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id VARCHAR(64) PRIMARY KEY,
     prescription_number VARCHAR(32) UNIQUE NOT NULL,
-    patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
+    patient_id VARCHAR(64) REFERENCES public.patients(id) ON DELETE CASCADE,
     patient_name VARCHAR(255) NOT NULL,
     patient_mrn VARCHAR(32) NOT NULL,
     patient_age INT,
     patient_gender VARCHAR(16),
-    doctor_id VARCHAR(64) NOT NULL,
+    doctor_id VARCHAR(64) REFERENCES public.users(id) ON DELETE SET NULL,
     doctor_name VARCHAR(255) NOT NULL,
     doctor_specialty VARCHAR(128),
     doctor_license VARCHAR(64),
@@ -99,14 +133,30 @@ CREATE TABLE IF NOT EXISTS public.prescriptions (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 5. Diagnostic Lab Orders Table
+-- 6. Normalized Prescription Items Table
+CREATE TABLE IF NOT EXISTS public.prescription_items (
+    id VARCHAR(64) PRIMARY KEY,
+    prescription_id VARCHAR(64) REFERENCES public.prescriptions(id) ON DELETE CASCADE,
+    prescription_number VARCHAR(32),
+    medication_name VARCHAR(255) NOT NULL,
+    generic_name VARCHAR(255),
+    dosage VARCHAR(64) NOT NULL,
+    form VARCHAR(64) DEFAULT 'Tablet',
+    frequency VARCHAR(64) NOT NULL,
+    duration VARCHAR(64) NOT NULL,
+    instructions TEXT,
+    quantity INT DEFAULT 1,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 7. Diagnostic Lab Orders Table
 CREATE TABLE IF NOT EXISTS public.lab_orders (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id VARCHAR(64) PRIMARY KEY,
     order_number VARCHAR(32) UNIQUE NOT NULL,
-    patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
+    patient_id VARCHAR(64) REFERENCES public.patients(id) ON DELETE CASCADE,
     patient_name VARCHAR(255) NOT NULL,
     patient_mrn VARCHAR(32) NOT NULL,
-    doctor_id VARCHAR(64) NOT NULL,
+    doctor_id VARCHAR(64) REFERENCES public.users(id) ON DELETE SET NULL,
     doctor_name VARCHAR(255) NOT NULL,
     test_name VARCHAR(255) NOT NULL,
     category VARCHAR(64) NOT NULL,
@@ -120,9 +170,23 @@ CREATE TABLE IF NOT EXISTS public.lab_orders (
     ai_summary TEXT
 );
 
--- 6. Pharmacy & Inventory Items Table
+-- 8. Normalized Lab Results Table
+CREATE TABLE IF NOT EXISTS public.lab_results (
+    id VARCHAR(64) PRIMARY KEY,
+    order_id VARCHAR(64) REFERENCES public.lab_orders(id) ON DELETE CASCADE,
+    order_number VARCHAR(32),
+    parameter_name VARCHAR(255) NOT NULL,
+    measured_value VARCHAR(64) NOT NULL,
+    unit VARCHAR(32),
+    reference_range VARCHAR(64),
+    status_flag VARCHAR(32) DEFAULT 'Normal', -- Normal, High, Low, Critical, Abnormal
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 9. Pharmacy & Inventory Items Table
 CREATE TABLE IF NOT EXISTS public.inventory_items (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id VARCHAR(64) PRIMARY KEY,
     sku VARCHAR(64) UNIQUE NOT NULL,
     name VARCHAR(255) NOT NULL,
     generic_name VARCHAR(255) NOT NULL,
@@ -140,11 +204,11 @@ CREATE TABLE IF NOT EXISTS public.inventory_items (
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 7. Invoices Table
+-- 10. Invoices Table
 CREATE TABLE IF NOT EXISTS public.invoices (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id VARCHAR(64) PRIMARY KEY,
     invoice_number VARCHAR(32) UNIQUE NOT NULL,
-    patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
+    patient_id VARCHAR(64) REFERENCES public.patients(id) ON DELETE CASCADE,
     patient_name VARCHAR(255) NOT NULL,
     patient_mrn VARCHAR(32) NOT NULL,
     invoice_date DATE NOT NULL,
@@ -164,9 +228,22 @@ CREATE TABLE IF NOT EXISTS public.invoices (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 8. Audit & Compliance Logs Table
+-- 11. Normalized Invoice Line Items Table
+CREATE TABLE IF NOT EXISTS public.invoice_items (
+    id VARCHAR(64) PRIMARY KEY,
+    invoice_id VARCHAR(64) REFERENCES public.invoices(id) ON DELETE CASCADE,
+    invoice_number VARCHAR(32),
+    item_description VARCHAR(255) NOT NULL,
+    category VARCHAR(64) NOT NULL, -- Consultation, Medication, Diagnostic, Procedure, Room
+    quantity INT DEFAULT 1 NOT NULL,
+    unit_price DECIMAL(10,2) DEFAULT 0.00 NOT NULL,
+    total_price DECIMAL(10,2) DEFAULT 0.00 NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 12. Audit & Compliance Logs Table
 CREATE TABLE IF NOT EXISTS public.audit_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id VARCHAR(64) PRIMARY KEY,
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     user_id VARCHAR(64) NOT NULL,
     user_name VARCHAR(255) NOT NULL,
@@ -178,36 +255,108 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
     ip_address VARCHAR(45) DEFAULT '127.0.0.1'
 );
 
+-- 13. Auth Credentials Table (PBKDF2 SHA-512 Security Store)
+CREATE TABLE IF NOT EXISTS public.auth_credentials (
+    email VARCHAR(255) PRIMARY KEY,
+    hash VARCHAR(255) NOT NULL,
+    salt VARCHAR(64) NOT NULL,
+    role VARCHAR(32) NOT NULL DEFAULT 'patient',
+    failed_attempts INT DEFAULT 0,
+    locked_until BIGINT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 14. Auth OTP Store Table
+CREATE TABLE IF NOT EXISTS public.auth_otps (
+    key VARCHAR(255) PRIMARY KEY,
+    code_hash VARCHAR(255) NOT NULL,
+    code_plain VARCHAR(16),
+    channel VARCHAR(32) NOT NULL,
+    destination VARCHAR(255) NOT NULL,
+    purpose VARCHAR(64) NOT NULL,
+    expires_at BIGINT NOT NULL,
+    attempts INT DEFAULT 0,
+    last_sent_at BIGINT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- Enable Row Level Security (RLS)
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.patients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.consultations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.prescriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.prescription_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lab_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.lab_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventory_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invoice_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.auth_credentials ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.auth_otps ENABLE ROW LEVEL SECURITY;
 
--- Anonymous/Authenticated Policies (Customizable in Supabase)
+-- Anonymous / Authenticated PostgREST Policies
+DROP POLICY IF EXISTS "Users All Access" ON public.users;
+CREATE POLICY "Users All Access" ON public.users FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Public Read Access" ON public.patients;
 CREATE POLICY "Public Read Access" ON public.patients FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Public Insert Access" ON public.patients;
 CREATE POLICY "Public Insert Access" ON public.patients FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Public Update Access" ON public.patients;
 CREATE POLICY "Public Update Access" ON public.patients FOR UPDATE USING (true);
 
+DROP POLICY IF EXISTS "Appointments All Access" ON public.appointments;
 CREATE POLICY "Appointments All Access" ON public.appointments FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Consultations All Access" ON public.consultations;
 CREATE POLICY "Consultations All Access" ON public.consultations FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Prescriptions All Access" ON public.prescriptions;
 CREATE POLICY "Prescriptions All Access" ON public.prescriptions FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Prescription Items All Access" ON public.prescription_items;
+CREATE POLICY "Prescription Items All Access" ON public.prescription_items FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Lab Orders All Access" ON public.lab_orders;
 CREATE POLICY "Lab Orders All Access" ON public.lab_orders FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Lab Results All Access" ON public.lab_results;
+CREATE POLICY "Lab Results All Access" ON public.lab_results FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Inventory All Access" ON public.inventory_items;
 CREATE POLICY "Inventory All Access" ON public.inventory_items FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Invoices All Access" ON public.invoices;
 CREATE POLICY "Invoices All Access" ON public.invoices FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Invoice Items All Access" ON public.invoice_items;
+CREATE POLICY "Invoice Items All Access" ON public.invoice_items FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Audit Logs All Access" ON public.audit_logs;
 CREATE POLICY "Audit Logs All Access" ON public.audit_logs FOR ALL USING (true);
 
--- Indexes for performance
+DROP POLICY IF EXISTS "Auth Credentials All Access" ON public.auth_credentials;
+CREATE POLICY "Auth Credentials All Access" ON public.auth_credentials FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Auth OTPs All Access" ON public.auth_otps;
+CREATE POLICY "Auth OTPs All Access" ON public.auth_otps FOR ALL USING (true);
+
+-- Indexes for Query Performance & Data Integrity
+CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
+CREATE INDEX IF NOT EXISTS idx_users_role ON public.users(role);
 CREATE INDEX IF NOT EXISTS idx_patients_mrn ON public.patients(mrn);
 CREATE INDEX IF NOT EXISTS idx_appointments_date ON public.appointments(appointment_date);
 CREATE INDEX IF NOT EXISTS idx_appointments_patient ON public.appointments(patient_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_doctor ON public.appointments(doctor_id);
+CREATE INDEX IF NOT EXISTS idx_consultations_patient ON public.consultations(patient_id);
 CREATE INDEX IF NOT EXISTS idx_prescriptions_patient ON public.prescriptions(patient_id);
+CREATE INDEX IF NOT EXISTS idx_prescription_items_rx ON public.prescription_items(prescription_id);
 CREATE INDEX IF NOT EXISTS idx_lab_orders_patient ON public.lab_orders(patient_id);
+CREATE INDEX IF NOT EXISTS idx_lab_results_order ON public.lab_results(order_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_patient ON public.invoices(patient_id);
+CREATE INDEX IF NOT EXISTS idx_invoice_items_inv ON public.invoice_items(invoice_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON public.audit_logs(timestamp);
 
 -- Grants for Supabase PostgREST API (anon, authenticated, service_role)
@@ -218,23 +367,3 @@ GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
-
--- ==============================================================================
--- SYNTHETIC DATA SEED SCRIPT (PostgreSQL)
--- ==============================================================================
-
--- Seed Patients
-INSERT INTO public.patients (id, mrn, full_name, dob, age, gender, blood_type, phone, email, address, emergency_contact, allergies, chronic_conditions, current_medications, primary_doctor_id, insurance_provider, insurance_policy_number)
-VALUES
-('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'MRN-2026-081', 'Elena Vargas', '1978-04-12', 48, 'Female', 'A+', '+63 917 234 5678', 'elena.vargas@smartclinic.ph', '742 Mabini Street, Barangay San Antonio, Quezon City, Metro Manila', '{"name": "Roberto Vargas", "phone": "+63 917 234 9988", "relationship": "Spouse"}'::jsonb, '[{"allergen": "Penicillin", "reaction": "Anaphylaxis, hives", "severity": "severe"}]'::jsonb, '["Type 2 Diabetes Mellitus", "Essential Hypertension", "Dyslipidemia"]'::jsonb, '["Metformin 500mg PO BID", "Lisinopril 10mg PO Daily"]'::jsonb, 'usr-1', 'PhilHealth', 'PH-992-1849-01'),
-('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12', 'MRN-2026-104', 'Liam Gabriel Torres', '1992-08-25', 34, 'Male', 'O+', '+63 918 871 3342', 'liam.torres@smartclinic.ph', '1204 Pine Street, Apt 3B, Makati City, Metro Manila', '{"name": "Hannah Torres", "phone": "+63 918 871 9921", "relationship": "Sister"}'::jsonb, '[{"allergen": "NSAIDs", "reaction": "Bronchospasm", "severity": "moderate"}]'::jsonb, '["Mild Asthma"]'::jsonb, '["Albuterol Inhaler 90mcg PRN"]'::jsonb, 'usr-1', 'Maxicare', 'MX-552-3011-09')
-ON CONFLICT (mrn) DO NOTHING;
-
--- Seed Inventory Items
-INSERT INTO public.inventory_items (sku, name, generic_name, brand, category, batch_number, expiration_date, supplier, stock_quantity, reorder_level, purchase_price, selling_price, unit, location)
-VALUES
-('MED-MET-500', 'Metformin Hydrochloride 500mg', 'Metformin HCl', 'Glucophage', 'Antidiabetic', 'MET-2026-B81', '2027-11-30', 'Unilab Pharma Supply', 420, 100, 2.50, 8.00, 'Tablets', 'Shelf B-2'),
-('MED-LIS-10', 'Lisinopril 10mg Tablets', 'Lisinopril', 'Prinivil', 'Cardiovascular', 'LIS-2025-C12', '2026-11-15', 'Zuellig Pharma Logistics', 45, 50, 4.20, 12.50, 'Tablets', 'Shelf A-1'),
-('MED-ALB-90', 'Albuterol Sulfate Inhaler 90mcg', 'Albuterol', 'Ventolin', 'Respiratory', 'ALB-2026-D05', '2027-06-30', 'GSK Philippines', 28, 15, 180.00, 320.00, 'Inhalers', 'Shelf C-3')
-ON CONFLICT (sku) DO NOTHING;
-

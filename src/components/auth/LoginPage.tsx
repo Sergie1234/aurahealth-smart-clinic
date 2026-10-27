@@ -502,7 +502,7 @@ export const LoginPage: React.FC = () => {
           {/* PATIENT PORTAL CONTROLS */}
           {/* ========================================================================= */}
           {isPatient && (
-            <div className="space-y-4 mb-5">
+            <div className="space-y-3 mb-5">
               <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl">
                 <button
                   type="button"
@@ -524,6 +524,29 @@ export const LoginPage: React.FC = () => {
                   {t.auth.registerTab}
                 </button>
               </div>
+
+              {mode === 'login' && (
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200/80 dark:border-teal-800/80 text-xs">
+                  <div className="flex items-center gap-2">
+                    <UserRound className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+                    <div>
+                      <span className="font-bold text-teal-900 dark:text-teal-200">Seed Patient: </span>
+                      <span className="text-teal-700 dark:text-teal-300 font-mono text-[11px]">elena.vargas@smartclinic.ph</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('elena.vargas@smartclinic.ph');
+                      setPassword('patient123');
+                      setIsCaptchaVerified(true);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-[11px] shadow-xs transition cursor-pointer"
+                  >
+                    Auto Fill
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -952,7 +975,7 @@ export const LoginPage: React.FC = () => {
                         ? 'maria.reyes@smartclinic.ph'
                         : isStaff
                         ? `${staffSubRole}@smartclinic.ph`
-                        : 'you@example.com'
+                        : 'elena.vargas@smartclinic.ph'
                     }
                     className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500 font-medium"
                   />
@@ -997,7 +1020,7 @@ export const LoginPage: React.FC = () => {
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder={isAdmin ? 'SmartClinic@Admin2026' : '••••••••'}
+                      placeholder={isAdmin ? 'SmartClinic@Admin2026' : isPatient ? 'patient123' : '••••••••'}
                       autoComplete="current-password"
                       autoCorrect="off"
                       autoCapitalize="none"
@@ -1211,8 +1234,8 @@ export const LoginPage: React.FC = () => {
           setMode('login');
           // If reset account is not an admin, ensure role cleanly defaults to 'patient'
           const isAdminAccount =
-            resetEmail?.toLowerCase().includes('admin') ||
-            resetEmail?.toLowerCase().includes('spartan');
+            resetEmail?.toLowerCase() === 'smartclinicrealacc@gmail.com' ||
+            resetEmail?.toLowerCase().includes('admin');
           if (!isAdminAccount) {
             setPrimaryRole('patient');
           }

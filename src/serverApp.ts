@@ -188,8 +188,25 @@ function hydrateClinicStateFromDisk(): void {
       if (Array.isArray(data.invoices)) memInvoices = data.invoices;
       if (Array.isArray(data.auditLogs)) memAuditLogs = data.auditLogs;
       if (Array.isArray(data.notifications)) memNotifications = data.notifications;
-      if (Array.isArray(data.users) && data.users.length > 0) memUsers = data.users;
+      if (Array.isArray(data.users) && data.users.length > 0) {
+        memUsers = data.users;
+      }
     }
+
+    // Reconcile and enforce canonical single admin account across server memory
+    const nonAdminUsers = memUsers.filter((u) => u.role !== 'admin' && u.email !== 'smartclinicrealacc@gmail.com');
+    const canonicalAdmin: User = {
+      id: 'usr-admin',
+      name: 'Director Maria Lourdes Santos, MD',
+      email: 'smartclinicrealacc@gmail.com',
+      role: 'admin',
+      avatar: '',
+      department: 'Executive Management',
+      specialty: 'Healthcare Administration',
+      licenseNumber: 'PRC-0081294',
+      phone: '+63 917 800 1101',
+    };
+    memUsers = [...nonAdminUsers, canonicalAdmin];
   } catch (e) {
     // Non-fatal fallback
   }
@@ -239,6 +256,232 @@ export const supabaseServer: SupabaseClient | null = isSupabaseLive
 
 // Connect authStore with Supabase for cross-instance state synchronization on Vercel
 authStore.setSupabaseClient(supabaseServer);
+
+export async function hydrateClinicStateFromSupabase(): Promise<boolean> {
+  if (!supabaseServer) return false;
+  try {
+    // 1. Users
+    const { data: dbUsers, error: usersErr } = await supabaseServer.from('users').select('*');
+    if (!usersErr && Array.isArray(dbUsers) && dbUsers.length > 0) {
+      memUsers = dbUsers.map((u: any) => ({
+        id: u.id,
+        name: u.full_name,
+        email: u.email,
+        role: u.role,
+        subRole: u.sub_role || undefined,
+        specialty: u.specialty || undefined,
+        licenseNumber: u.license_number || undefined,
+        phone: u.phone || undefined,
+        department: u.department || undefined,
+        avatar: u.avatar || '',
+      }));
+    }
+
+    // 2. Patients
+    const { data: dbPatients, error: patErr } = await supabaseServer.from('patients').select('*');
+    if (!patErr && Array.isArray(dbPatients) && dbPatients.length > 0) {
+      memPatients = dbPatients.map((p: any) => ({
+        id: p.id,
+        mrn: p.mrn,
+        fullName: p.full_name,
+        dob: p.dob,
+        age: p.age,
+        gender: p.gender,
+        bloodType: p.blood_type,
+        phone: p.phone,
+        email: p.email || '',
+        address: p.address || '',
+        emergencyContact: p.emergency_contact || { name: '', relationship: '', phone: '' },
+        allergies: p.allergies || [],
+        chronicConditions: p.chronic_conditions || [],
+        currentMedications: p.current_medications || [],
+        primaryDoctorId: p.primary_doctor_id || 'usr-1',
+        insuranceProvider: p.insurance_provider || '',
+        insurancePolicyNumber: p.insurance_policy_number || '',
+        vitalsHistory: p.vitals_history || [],
+        triageHistory: p.triage_history || [],
+        tags: p.tags || [],
+        createdAt: p.created_at || new Date().toISOString(),
+      }));
+    }
+
+    // 3. Appointments
+    const { data: dbAppts, error: apptErr } = await supabaseServer.from('appointments').select('*');
+    if (!apptErr && Array.isArray(dbAppts) && dbAppts.length > 0) {
+      memAppointments = dbAppts.map((a: any) => ({
+        id: a.id,
+        patientId: a.patient_id,
+        patientName: a.patient_name,
+        patientMrn: a.patient_mrn,
+        doctorId: a.doctor_id,
+        doctorName: a.doctor_name,
+        department: a.department,
+        date: a.appointment_date,
+        time: a.appointment_time,
+        durationMinutes: a.duration_minutes || 30,
+        reason: a.reason,
+        status: a.status,
+        type: a.type || 'In-Person',
+        queueNumber: a.queue_number,
+        room: a.room,
+        notes: a.notes,
+        createdAt: a.created_at || new Date().toISOString(),
+      }));
+    }
+
+    // 4. Consultations
+    const { data: dbCons, error: consErr } = await supabaseServer.from('consultations').select('*');
+    if (!consErr && Array.isArray(dbCons) && dbCons.length > 0) {
+      memConsultations = dbCons.map((c: any) => ({
+        id: c.id,
+        appointmentId: c.appointment_id || undefined,
+        patientId: c.patient_id,
+        patientName: c.patient_name,
+        doctorId: c.doctor_id,
+        doctorName: c.doctor_name,
+        date: c.consultation_date,
+        chiefComplaint: c.chief_complaint,
+        historyOfPresentIllness: c.history_of_present_illness,
+        reviewOfSystems: c.review_of_systems,
+        physicalExamination: c.physical_examination,
+        vitals: c.vitals,
+        diagnoses: c.diagnoses || [],
+        treatmentPlan: c.treatment_plan,
+        prescriptionsCreated: c.prescriptions_created || [],
+        labOrdersCreated: c.lab_orders_created || [],
+        followUpDate: c.follow_up_date || undefined,
+        followUpInstructions: c.follow_up_instructions,
+        medicalCertificateIssued: Boolean(c.medical_certificate_issued),
+        certificateDetails: c.certificate_details || undefined,
+      }));
+    }
+
+    // 5. Prescriptions
+    const { data: dbRxs, error: rxErr } = await supabaseServer.from('prescriptions').select('*');
+    if (!rxErr && Array.isArray(dbRxs) && dbRxs.length > 0) {
+      memPrescriptions = dbRxs.map((r: any) => ({
+        id: r.id,
+        prescriptionNumber: r.prescription_number,
+        patientId: r.patient_id,
+        patientName: r.patient_name,
+        patientMrn: r.patient_mrn,
+        patientAge: r.patient_age,
+        patientGender: r.patient_gender,
+        doctorId: r.doctor_id,
+        doctorName: r.doctor_name,
+        doctorSpecialty: r.doctor_specialty,
+        doctorLicense: r.doctor_license,
+        date: r.prescription_date,
+        items: r.items || [],
+        status: r.status,
+        aiSafetyAudit: r.ai_safety_audit,
+        notes: r.notes,
+      }));
+    }
+
+    // 6. Lab Orders
+    const { data: dbLabs, error: labErr } = await supabaseServer.from('lab_orders').select('*');
+    if (!labErr && Array.isArray(dbLabs) && dbLabs.length > 0) {
+      memLabOrders = dbLabs.map((l: any) => ({
+        id: l.id,
+        orderNumber: l.order_number,
+        patientId: l.patient_id,
+        patientName: l.patient_name,
+        patientMrn: l.patient_mrn,
+        doctorId: l.doctor_id,
+        doctorName: l.doctor_name,
+        testName: l.test_name,
+        category: l.category,
+        urgency: l.urgency,
+        status: l.status,
+        requestedAt: l.requested_at,
+        collectedAt: l.collected_at || undefined,
+        completedAt: l.completed_at || undefined,
+        results: l.results || [],
+        interpretation: l.interpretation || undefined,
+        aiSummary: l.ai_summary || undefined,
+      }));
+    }
+
+    // 7. Inventory Items
+    const { data: dbInv, error: invErr } = await supabaseServer.from('inventory_items').select('*');
+    if (!invErr && Array.isArray(dbInv) && dbInv.length > 0) {
+      memInventory = dbInv.map((i: any) => ({
+        id: i.id,
+        sku: i.sku,
+        name: i.name,
+        genericName: i.generic_name,
+        brand: i.brand,
+        category: i.category,
+        batchNumber: i.batch_number,
+        expirationDate: i.expiration_date,
+        supplier: i.supplier,
+        stockQuantity: i.stock_quantity,
+        reorderLevel: i.reorder_level,
+        purchasePrice: Number(i.purchase_price),
+        sellingPrice: Number(i.selling_price),
+        unit: i.unit,
+        location: i.location,
+        lastUpdated: i.last_updated,
+      }));
+    }
+
+    // 8. Invoices
+    const { data: dbInvoices, error: invoiceErr } = await supabaseServer.from('invoices').select('*');
+    if (!invoiceErr && Array.isArray(dbInvoices) && dbInvoices.length > 0) {
+      memInvoices = dbInvoices.map((inv: any) => ({
+        id: inv.id,
+        invoiceNumber: inv.invoice_number,
+        patientId: inv.patient_id,
+        patientName: inv.patient_name,
+        patientMrn: inv.patient_mrn,
+        date: inv.invoice_date,
+        dueDate: inv.due_date,
+        items: inv.items || [],
+        subtotal: Number(inv.subtotal),
+        discountPercentage: Number(inv.discount_percentage),
+        discountAmount: Number(inv.discount_amount),
+        taxAmount: Number(inv.tax_amount),
+        totalAmount: Number(inv.total_amount),
+        paidAmount: Number(inv.paid_amount),
+        status: inv.status,
+        paymentMethod: inv.payment_method || undefined,
+        paymentDate: inv.payment_date || undefined,
+        insuranceClaimStatus: inv.insurance_claim_status,
+        notes: inv.notes,
+      }));
+    }
+
+    // 9. Audit Logs
+    const { data: dbLogs, error: logErr } = await supabaseServer.from('audit_logs').select('*').order('timestamp', { ascending: false });
+    if (!logErr && Array.isArray(dbLogs) && dbLogs.length > 0) {
+      memAuditLogs = dbLogs.map((l: any) => ({
+        id: l.id,
+        timestamp: l.timestamp,
+        userId: l.user_id,
+        userName: l.user_name,
+        userRole: l.user_role,
+        action: l.action,
+        resourceType: l.resource_type,
+        resourceId: l.resource_id,
+        description: l.description,
+        ipAddress: l.ip_address,
+      }));
+    }
+
+    flushClinicStateToDisk();
+    return true;
+  } catch (err) {
+    console.warn('[Smart Clinic] Supabase hydration notice:', err);
+    return false;
+  }
+}
+
+if (supabaseServer) {
+  hydrateClinicStateFromSupabase().catch((err) => {
+    console.warn('[Smart Clinic] Initial Supabase hydration skipped:', err?.message);
+  });
+}
 
 // Gemini Clinical AI Assistant setup
 const apiKey = process.env.GEMINI_API_KEY || '';
@@ -290,6 +533,27 @@ app.get('/api/supabase/status', (_req: Request, res: Response) => {
   });
 });
 
+app.get('/api/supabase/verify', async (_req: Request, res: Response) => {
+  try {
+    const { runFullDatabaseVerification } = await import('../scripts/verify-database');
+    const result = await runFullDatabaseVerification();
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Verification failed' });
+  }
+});
+
+app.post('/api/supabase/verify', async (req: Request, res: Response) => {
+  try {
+    const { runFullDatabaseVerification } = await import('../scripts/verify-database');
+    const { supabaseUrl: targetUrl, supabaseKey: targetKey } = req.body || {};
+    const result = await runFullDatabaseVerification(targetUrl, targetKey);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Verification failed' });
+  }
+});
+
 async function syncAllClinicDataToSupabase(data: {
   patients: any[];
   appointments: any[];
@@ -299,17 +563,272 @@ async function syncAllClinicDataToSupabase(data: {
   inventory: any[];
   invoices: any[];
   auditLogs: any[];
+  users?: any[];
 }) {
   if (!supabaseServer) return;
   try {
-    if (data.patients.length) await supabaseServer.from('patients').upsert(data.patients, { onConflict: 'id' });
-    if (data.appointments.length) await supabaseServer.from('appointments').upsert(data.appointments, { onConflict: 'id' });
-    if (data.consultations.length) await supabaseServer.from('consultations').upsert(data.consultations, { onConflict: 'id' });
-    if (data.prescriptions.length) await supabaseServer.from('prescriptions').upsert(data.prescriptions, { onConflict: 'id' });
-    if (data.labOrders.length) await supabaseServer.from('lab_orders').upsert(data.labOrders, { onConflict: 'id' });
-    if (data.inventory.length) await supabaseServer.from('inventory_items').upsert(data.inventory, { onConflict: 'id' });
-    if (data.invoices.length) await supabaseServer.from('invoices').upsert(data.invoices, { onConflict: 'id' });
-    if (data.auditLogs.length) await supabaseServer.from('audit_logs').upsert(data.auditLogs, { onConflict: 'id' });
+    // 1. Users
+    if (data.users?.length) {
+      const formattedUsers = data.users.map((u) => ({
+        id: u.id,
+        email: u.email,
+        full_name: u.name,
+        role: u.role,
+        sub_role: u.role === 'staff' ? u.subRole : null,
+        specialty: u.specialty || null,
+        license_number: u.licenseNumber || null,
+        phone: u.phone || '+63 900 000 0000',
+        department: u.department || null,
+        avatar: u.avatar || null,
+        is_active: true,
+      }));
+      await supabaseServer.from('users').upsert(formattedUsers, { onConflict: 'id' });
+    }
+
+    // 2. Patients
+    if (data.patients.length) {
+      const formattedPatients = data.patients.map((p) => ({
+        id: p.id,
+        mrn: p.mrn,
+        full_name: p.fullName,
+        dob: p.dob,
+        age: p.age,
+        gender: p.gender,
+        blood_type: p.bloodType,
+        phone: p.phone,
+        email: p.email,
+        address: p.address,
+        emergency_contact: p.emergencyContact,
+        allergies: p.allergies,
+        chronic_conditions: p.chronicConditions,
+        current_medications: p.currentMedications,
+        primary_doctor_id: p.primaryDoctorId || null,
+        insurance_provider: p.insuranceProvider,
+        insurance_policy_number: p.insurancePolicyNumber,
+        vitals_history: p.vitalsHistory,
+        triage_history: p.triageHistory || [],
+        tags: p.tags,
+      }));
+      await supabaseServer.from('patients').upsert(formattedPatients, { onConflict: 'id' });
+    }
+
+    // 3. Appointments
+    if (data.appointments.length) {
+      const formattedAppts = data.appointments.map((a) => ({
+        id: a.id,
+        patient_id: a.patientId,
+        patient_name: a.patientName,
+        patient_mrn: a.patientMrn,
+        doctor_id: a.doctorId,
+        doctor_name: a.doctorName,
+        department: a.department,
+        appointment_date: a.date,
+        appointment_time: a.time,
+        duration_minutes: a.durationMinutes || 30,
+        reason: a.reason,
+        status: a.status,
+        type: a.type || 'In-Person',
+        queue_number: a.queueNumber,
+        room: a.room,
+        notes: a.notes,
+      }));
+      await supabaseServer.from('appointments').upsert(formattedAppts, { onConflict: 'id' });
+    }
+
+    // 4. Consultations
+    if (data.consultations.length) {
+      const formattedCons = data.consultations.map((c) => ({
+        id: c.id,
+        appointment_id: c.appointmentId || null,
+        patient_id: c.patientId,
+        patient_name: c.patientName,
+        doctor_id: c.doctorId,
+        doctor_name: c.doctorName,
+        consultation_date: c.date,
+        chief_complaint: c.chiefComplaint,
+        history_of_present_illness: c.historyOfPresentIllness,
+        review_of_systems: c.reviewOfSystems,
+        physical_examination: c.physicalExamination,
+        vitals: c.vitals,
+        diagnoses: c.diagnoses,
+        treatment_plan: c.treatmentPlan,
+        prescriptions_created: c.prescriptionsCreated,
+        lab_orders_created: c.labOrdersCreated,
+        follow_up_date: c.followUpDate || null,
+        follow_up_instructions: c.followUpInstructions,
+        medical_certificate_issued: Boolean(c.medicalCertificateIssued),
+        certificate_details: c.certificateDetails || null,
+      }));
+      await supabaseServer.from('consultations').upsert(formattedCons, { onConflict: 'id' });
+    }
+
+    // 5. Prescriptions & Normalized Prescription Items
+    if (data.prescriptions.length) {
+      const formattedRxs = data.prescriptions.map((r) => ({
+        id: r.id,
+        prescription_number: r.prescriptionNumber,
+        patient_id: r.patientId,
+        patient_name: r.patientName,
+        patient_mrn: r.patientMrn,
+        patient_age: r.patientAge,
+        patient_gender: r.patientGender,
+        doctor_id: r.doctorId,
+        doctor_name: r.doctorName,
+        doctor_specialty: r.doctorSpecialty,
+        doctor_license: r.doctorLicense,
+        prescription_date: r.date,
+        items: r.items,
+        status: r.status,
+        ai_safety_audit: r.aiSafetyAudit,
+        notes: r.notes,
+      }));
+      await supabaseServer.from('prescriptions').upsert(formattedRxs, { onConflict: 'id' });
+
+      // Normalized prescription items
+      const rxItems = data.prescriptions.flatMap((r) =>
+        (r.items || []).map((it: any, idx: number) => ({
+          id: `${r.id}-item-${idx}`,
+          prescription_id: r.id,
+          prescription_number: r.prescriptionNumber,
+          medication_name: it.medicationName || it.name || 'Medication',
+          generic_name: it.genericName || null,
+          dosage: it.dosage || 'Standard',
+          form: it.form || 'Tablet',
+          frequency: it.frequency || 'As directed',
+          duration: it.duration || '7 days',
+          instructions: it.instructions || null,
+          quantity: it.quantity || 1,
+        }))
+      );
+      if (rxItems.length) {
+        await supabaseServer.from('prescription_items').upsert(rxItems, { onConflict: 'id' });
+      }
+    }
+
+    // 6. Lab Orders & Normalized Results
+    if (data.labOrders.length) {
+      const formattedLabs = data.labOrders.map((l) => ({
+        id: l.id,
+        order_number: l.orderNumber,
+        patient_id: l.patientId,
+        patient_name: l.patientName,
+        patient_mrn: l.patientMrn,
+        doctor_id: l.doctorId,
+        doctor_name: l.doctorName,
+        test_name: l.testName,
+        category: l.category,
+        urgency: l.urgency,
+        status: l.status,
+        requested_at: l.requestedAt,
+        collected_at: l.collectedAt || null,
+        completed_at: l.completedAt || null,
+        results: l.results,
+        interpretation: l.interpretation || null,
+        ai_summary: l.aiSummary || null,
+      }));
+      await supabaseServer.from('lab_orders').upsert(formattedLabs, { onConflict: 'id' });
+
+      // Normalized lab results
+      const labResults = data.labOrders.flatMap((l) =>
+        (l.results || []).map((res: any, idx: number) => ({
+          id: `${l.id}-res-${idx}`,
+          order_id: l.id,
+          order_number: l.orderNumber,
+          parameter_name: res.parameter || 'Parameter',
+          measured_value: String(res.value ?? 'N/A'),
+          unit: res.unit || null,
+          reference_range: res.referenceRange || null,
+          status_flag: res.flag || 'Normal',
+          notes: res.notes || null,
+        }))
+      );
+      if (labResults.length) {
+        await supabaseServer.from('lab_results').upsert(labResults, { onConflict: 'id' });
+      }
+    }
+
+    // 7. Inventory Items
+    if (data.inventory.length) {
+      const formattedInv = data.inventory.map((i) => ({
+        id: i.id,
+        sku: i.sku,
+        name: i.name,
+        generic_name: i.genericName,
+        brand: i.brand,
+        category: i.category,
+        batch_number: i.batchNumber,
+        expiration_date: i.expirationDate,
+        supplier: i.supplier,
+        stock_quantity: i.stockQuantity,
+        reorder_level: i.reorderLevel,
+        purchase_price: i.purchasePrice,
+        selling_price: i.sellingPrice,
+        unit: i.unit,
+        location: i.location,
+        last_updated: i.lastUpdated,
+      }));
+      await supabaseServer.from('inventory_items').upsert(formattedInv, { onConflict: 'id' });
+    }
+
+    // 8. Invoices & Normalized Line Items
+    if (data.invoices.length) {
+      const formattedInvoices = data.invoices.map((inv) => ({
+        id: inv.id,
+        invoice_number: inv.invoiceNumber,
+        patient_id: inv.patientId,
+        patient_name: inv.patientName,
+        patient_mrn: inv.patientMrn,
+        invoice_date: inv.date,
+        due_date: inv.dueDate,
+        items: inv.items,
+        subtotal: inv.subtotal,
+        discount_percentage: inv.discountPercentage,
+        discount_amount: inv.discountAmount,
+        tax_amount: inv.taxAmount,
+        total_amount: inv.totalAmount,
+        paid_amount: inv.paidAmount,
+        status: inv.status,
+        payment_method: inv.paymentMethod || null,
+        payment_date: inv.paymentDate || null,
+        insurance_claim_status: inv.insuranceClaimStatus || 'Not Filed',
+        notes: inv.notes,
+      }));
+      await supabaseServer.from('invoices').upsert(formattedInvoices, { onConflict: 'id' });
+
+      // Normalized invoice items
+      const invItems = data.invoices.flatMap((inv) =>
+        (inv.items || []).map((it: any, idx: number) => ({
+          id: `${inv.id}-item-${idx}`,
+          invoice_id: inv.id,
+          invoice_number: inv.invoiceNumber,
+          item_description: it.description || 'Clinical Service',
+          category: it.category || 'Consultation',
+          quantity: it.quantity || 1,
+          unit_price: it.unitPrice || it.amount || 0,
+          total_price: it.totalPrice || it.amount || 0,
+        }))
+      );
+      if (invItems.length) {
+        await supabaseServer.from('invoice_items').upsert(invItems, { onConflict: 'id' });
+      }
+    }
+
+    // 9. Audit Logs
+    if (data.auditLogs.length) {
+      const formattedLogs = data.auditLogs.map((l) => ({
+        id: l.id,
+        timestamp: l.timestamp,
+        user_id: l.userId,
+        user_name: l.userName,
+        user_role: l.userRole,
+        action: l.action,
+        resource_type: l.resourceType,
+        resource_id: l.resourceId,
+        description: l.description,
+        ip_address: l.ipAddress || '127.0.0.1',
+      }));
+      await supabaseServer.from('audit_logs').upsert(formattedLogs, { onConflict: 'id' });
+    }
   } catch (err) {
     console.error('Failed to sync data to Supabase:', err);
   }
@@ -1283,12 +1802,11 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       const authorizedAdminEmails = [
         ADMIN_EMAIL.toLowerCase(),
         'smartclinicrealacc@gmail.com',
-        'sgt.spartan19@gmail.com',
       ];
       if (!authorizedAdminEmails.includes(cleanEmail)) {
         return res.status(403).json({
           success: false,
-          error: `Administrator access is restricted to authorized clinic administrators (${ADMIN_EMAIL}).`,
+          error: `Administrator access is restricted to the authorized clinic administrator (${ADMIN_EMAIL}).`,
         });
       }
 
@@ -1324,12 +1842,17 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         });
       }
 
-      const adminUser = INITIAL_USERS.find((u) => u.role === 'admin') || {
-        id: 'usr-7',
-        name: 'System Administrator',
-        email: ADMIN_EMAIL,
-        role: 'admin' as const,
-      };
+      const adminUser = memUsers.find((u) => u.role === 'admin') ||
+        INITIAL_USERS.find((u) => u.role === 'admin') || {
+          id: 'usr-admin',
+          name: 'Director Maria Lourdes Santos, MD',
+          email: ADMIN_EMAIL,
+          role: 'admin' as const,
+          department: 'Executive Management',
+          specialty: 'Healthcare Administration',
+          licenseNumber: 'PRC-0081294',
+          phone: '+63 917 800 1101',
+        };
 
       const token = generateToken({
         userId: adminUser.id,
@@ -1873,7 +2396,13 @@ app.post('/api/audit-logs', (req: AuthenticatedRequest, res: Response) => {
 /* ==========================================================================
    FULL CLINIC STATE SYNCHRONIZATION (High-speed initial & continuous sync)
    ========================================================================== */
-app.get('/api/clinic/sync', (req: AuthenticatedRequest, res: Response) => {
+app.get('/api/clinic/sync', async (req: AuthenticatedRequest, res: Response) => {
+  if (supabaseServer) {
+    try {
+      await hydrateClinicStateFromSupabase();
+    } catch {}
+  }
+
   const isPatient = (req.userRole || req.user?.role) === 'patient';
   const linkedId = req.linkedPatientId || req.user?.linkedPatientId;
 
@@ -2353,15 +2882,27 @@ ROLE CAPABILITIES:
     const lowStockItems = memInventory.filter((i) => i.stockQuantity <= i.reorderLevel);
     const totalBilled = memInvoices.reduce((acc, curr) => acc + (curr.totalAmount || 0), 0);
     const unpaidClaims = memInvoices.filter((i) => i.status === 'Unpaid' || i.status === 'Partially Paid');
+    const adminUser = memUsers.find((u) => u.role === 'admin' && u.email === 'smartclinicrealacc@gmail.com') || {
+      name: 'Director Maria Lourdes Santos, MD',
+      email: 'smartclinicrealacc@gmail.com',
+      role: 'admin',
+      department: 'Executive Management',
+    };
 
     safeContext = {
+      authenticatedAdmin: {
+        name: adminUser.name,
+        email: adminUser.email,
+        title: 'Clinic Medical Director',
+        department: adminUser.department || 'Executive Management',
+      },
       clinicKPIs: {
         totalRegisteredPatients: memPatients.length,
         appointmentsToday: memAppointments.length,
         waitingQueueActive: memAppointments.filter((a) => a.status === 'Checked In').length,
         consultationsCompletedToday: memAppointments.filter((a) => a.status === 'Completed').length,
         activeStaffShifts: 6,
-        staffUsers: memUsers.map((u) => ({ name: u.name, role: u.role })),
+        staffUsers: memUsers.map((u) => ({ name: u.name, role: u.role, department: u.department })),
       },
       inventoryAlerts: {
         totalInventorySkus: memInventory.length,
@@ -2377,12 +2918,13 @@ ROLE CAPABILITIES:
         dataPrivacyStandard: 'RA 10173 Compliant (Philippine Health Data Security)',
         auditLogEntriesToday: memAuditLogs.length,
         systemHealth: '100% Operational, Real-Time Sync Active',
+        databaseEngine: 'Supabase PostgreSQL (17 Core Normalized Modules)',
       },
     };
 
-    systemPersonaPrompt = `You are the SmartClinic Executive Admin AI Assistant.
+    systemPersonaPrompt = `You are the SmartClinic Executive Admin AI Assistant assisting Medical Director Maria Lourdes Santos, MD (smartclinicrealacc@gmail.com).
 ROLE CAPABILITIES:
-1. Deliver comprehensive clinic operational overviews, KPIs, and department throughput.
+1. Deliver comprehensive clinic operational overviews, KPIs, and department throughput based on live database state.
 2. Monitor user management, staff roster coverage, and clinic exam room utilization.
 3. Report on appointment volumes, pharmacy inventory reorder alerts, and billing claims status.
 4. Provide security and compliance monitoring under Philippine Health Data Security Standards (RA 10173).

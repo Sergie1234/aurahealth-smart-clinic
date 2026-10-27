@@ -605,4 +605,56 @@ BEGIN
     (gen_random_uuid(), now() - INTERVAL '3 days 495 mins', v_lab2::text, 'Jonathan David Flores, RMT', 'lab_tech', 'RADIOLOGY_POSTED', 'LAB_RESULT', 'LAB-2026-0007', 'Uploaded radiologist report for Right Knee 2-View X-Ray (Danielle Joshua Pascual).', '192.168.1.61'),
     (gen_random_uuid(), now() - INTERVAL '2 days 540 mins', v_admin_id::text, 'Director Maria Lourdes Santos', 'admin', 'DATA_AUDIT_VERIFIED', 'COMPLIANCE', 'AUDIT-LOGS-WEEK-09', 'Reviewed system access logs and confirmed full RA 10173 data privacy isolation compliance.', '192.168.1.10');
 
+    -- [J] Insert Normalized Prescription Items
+    INSERT INTO public.prescription_items (id, prescription_id, prescription_number, medication_name, generic_name, dosage, form, frequency, duration, instructions, quantity)
+    SELECT 
+        gen_random_uuid()::text,
+        p.id::text,
+        p.prescription_number,
+        COALESCE(item->>'medicationName', 'Unknown Medication'),
+        item->>'genericName',
+        COALESCE(item->>'dosage', 'Standard'),
+        COALESCE(item->>'form', 'Tablet'),
+        COALESCE(item->>'frequency', 'As directed'),
+        COALESCE(item->>'duration', '7 days'),
+        item->>'instructions',
+        COALESCE((item->>'quantity')::int, 1)
+    FROM public.prescriptions p,
+    jsonb_array_elements(p.items) AS item;
+
+    -- [K] Insert Normalized Lab Results
+    INSERT INTO public.lab_results (id, order_id, order_number, parameter_name, measured_value, unit, reference_range, status_flag, notes)
+    SELECT 
+        gen_random_uuid()::text,
+        o.id::text,
+        o.order_number,
+        COALESCE(res->>'parameter', 'Parameter'),
+        COALESCE(res->>'value', 'N/A'),
+        res->>'unit',
+        res->>'referenceRange',
+        COALESCE(res->>'flag', 'Normal'),
+        res->>'notes'
+    FROM public.lab_orders o,
+    jsonb_array_elements(o.results) AS res;
+
+    -- [L] Insert Normalized Invoice Line Items
+    INSERT INTO public.invoice_items (id, invoice_id, invoice_number, item_description, category, quantity, unit_price, total_price)
+    SELECT 
+        gen_random_uuid()::text,
+        inv.id::text,
+        inv.invoice_number,
+        COALESCE(it->>'description', 'Clinical Service'),
+        COALESCE(it->>'category', 'Consultation'),
+        COALESCE((it->>'quantity')::int, 1),
+        COALESCE((it->>'amount')::decimal, (it->>'unitPrice')::decimal, 0.00),
+        COALESCE((it->>'amount')::decimal, (it->>'totalPrice')::decimal, 0.00)
+    FROM public.invoices inv,
+    jsonb_array_elements(inv.items) AS it;
+
+    -- [M] Seed PBKDF2 Password Credentials for Single Admin & Staff
+    INSERT INTO public.auth_credentials (email, hash, salt, role, failed_attempts, locked_until, updated_at) VALUES
+    ('smartclinicrealacc@gmail.com', 'a47e7feb2c6940843665417a8545d6db87ae662452e4dd247b04f601c63a8448d033dd4f71ac784037329dea67d4af9aee95226a524b9fd9a01c9ca332f3e3b6', 'b1275ab960f1e2103535ddff9d56d226', 'admin', 0, NULL, now())
+    ON CONFLICT (email) DO NOTHING;
+
 END $$;
+

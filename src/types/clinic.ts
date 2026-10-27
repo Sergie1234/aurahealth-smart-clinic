@@ -16,6 +16,7 @@ export interface User {
   department?: string;
   specialty?: string;
   licenseNumber?: string;
+  phone?: string;
 }
 
 export interface Vitals {
