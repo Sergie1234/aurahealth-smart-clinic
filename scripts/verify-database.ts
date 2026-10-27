@@ -301,7 +301,7 @@ export async function runFullDatabaseVerification(
 
   // 6. Test CRUD Operations in Remote DB
   report.crudTest.attempted = true;
-  const testLogId = `verify-${Date.now()}`;
+  const testLogId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : '00000000-0000-0000-0000-000000000001';
   try {
     // CREATE
     const { error: insertErr } = await client.from('audit_logs').insert({

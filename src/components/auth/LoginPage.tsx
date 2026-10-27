@@ -27,6 +27,7 @@ import {
   EyeOff,
   FileText,
   Scale,
+  Users,
 } from 'lucide-react';
 import { useClinic, type PrimaryAuthRole, type StaffSubRole } from '../../context/ClinicContext';
 import { useToast } from '../../context/ToastContext';
@@ -36,6 +37,7 @@ import { AuthenticatorSetupModal } from './AuthenticatorSetupModal';
 import { PrivacyPolicyModal } from './PrivacyPolicyModal';
 import { validatePasswordStrength } from '../../utils/passwordValidation';
 import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
+import { AllAccountsModal, type SystemAccount } from './AllAccountsModal';
 import { API_BASE_URL } from '../../lib/config';
 
 type AuthMode = 'login' | 'register';
@@ -80,8 +82,29 @@ export const LoginPage: React.FC = () => {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showAuthenticatorModal, setShowAuthenticatorModal] = useState(false);
+  const [showAllAccountsModal, setShowAllAccountsModal] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleSelectAccount = (acc: SystemAccount) => {
+    setPrimaryRole(acc.primaryRole);
+    if (acc.staffSubRole) {
+      setStaffSubRole(acc.staffSubRole);
+    }
+    setMode('login');
+    setEmail(acc.email);
+    setPassword(acc.password);
+    setError('');
+    if (acc.primaryRole === 'patient') {
+      setIsCaptchaVerified(true);
+    }
+    if (acc.primaryRole === 'admin') {
+      setEnablePatient2Fa(true);
+    } else {
+      setEnablePatient2Fa(false);
+    }
+    toastSuccess(`Selected ${acc.name} (${acc.roleTitle}).`);
+  };
 
   // CAPTCHA verification state for Patient login
   const [isCaptchaVerified, setIsCaptchaVerified] = useState(false);
@@ -472,6 +495,31 @@ export const LoginPage: React.FC = () => {
         )}
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-8">
+          {/* Quick System Accounts Directory Access */}
+          <div className="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-teal-50 via-emerald-50/60 to-indigo-50/60 dark:from-slate-800/90 dark:via-slate-800/70 dark:to-slate-800/90 border border-teal-200/80 dark:border-slate-700">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <KeyRound className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="font-bold text-slate-900 dark:text-slate-100 text-xs">
+                  All System Accounts & Credentials
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Quick access for Admin, Doctors, Clinical Staff & Patients
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAllAccountsModal(true)}
+              className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>View All Accounts</span>
+            </button>
+          </div>
+
           {/* 4-Role Selector Tabs */}
           <div className="grid grid-cols-4 gap-2 mb-6">
             {(
@@ -524,29 +572,6 @@ export const LoginPage: React.FC = () => {
                   {t.auth.registerTab}
                 </button>
               </div>
-
-              {mode === 'login' && (
-                <div className="flex items-center justify-between p-2.5 rounded-xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200/80 dark:border-teal-800/80 text-xs">
-                  <div className="flex items-center gap-2">
-                    <UserRound className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
-                    <div>
-                      <span className="font-bold text-teal-900 dark:text-teal-200">Seed Patient: </span>
-                      <span className="text-teal-700 dark:text-teal-300 font-mono text-[11px]">elena.vargas@smartclinic.ph</span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail('elena.vargas@smartclinic.ph');
-                      setPassword('patient123');
-                      setIsCaptchaVerified(true);
-                    }}
-                    className="px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-[11px] shadow-xs transition cursor-pointer"
-                  >
-                    Auto Fill
-                  </button>
-                </div>
-              )}
             </div>
           )}
 
@@ -975,7 +1000,7 @@ export const LoginPage: React.FC = () => {
                         ? 'maria.reyes@smartclinic.ph'
                         : isStaff
                         ? `${staffSubRole}@smartclinic.ph`
-                        : 'elena.vargas@smartclinic.ph'
+                        : 'patient@example.com'
                     }
                     className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-xs focus:ring-2 focus:ring-teal-500 font-medium"
                   />
@@ -1257,6 +1282,12 @@ export const LoginPage: React.FC = () => {
           setHasAgreedPrivacy(true);
           toastSuccess('Agreed to Philippine Medical Privacy Policy (RA 10173).');
         }}
+      />
+
+      <AllAccountsModal
+        isOpen={showAllAccountsModal}
+        onClose={() => setShowAllAccountsModal(false)}
+        onSelectAccount={handleSelectAccount}
       />
     </div>
   );

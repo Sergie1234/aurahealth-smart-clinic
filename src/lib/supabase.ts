@@ -17,7 +17,7 @@ export const getSupabaseUrl = (): string => {
     (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) ||
     (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) ||
     (typeof process !== 'undefined' && process.env?.SUPABASE_URL) ||
-    ''
+    'https://oqakutwoeixccadsgaii.supabase.co'
   ).trim();
 };
 
@@ -30,7 +30,7 @@ export const getSupabaseAnonKey = (): string => {
     (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) ||
     (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_ANON_KEY) ||
     (typeof process !== 'undefined' && process.env?.SUPABASE_ANON_KEY) ||
-    ''
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9xYWt1dHdvZWl4Y2NhZHNnYWlpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTM0MDE1NywiZXhwIjoyMTA2OTE2MTU3fQ.zuk3mGPKZsmAEpiIG5IYegIDv4IXvBl_OrRfQ4YM4hs'
   ).trim();
 };
 

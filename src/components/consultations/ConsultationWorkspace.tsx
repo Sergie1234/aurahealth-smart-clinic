@@ -347,7 +347,7 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
     });
 
     if (onFinish) onFinish();
-    else setActiveTab('emr');
+    else setActiveTab('patients');
   };
 
   return (

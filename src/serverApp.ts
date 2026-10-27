@@ -1646,7 +1646,9 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
             });
           }
         }
-        patient = memPatients.find((p) => p.email.toLowerCase() === cleanEmail) || null;
+        patient = memPatients.find((p) => p.email.toLowerCase() === cleanEmail) ||
+          (cleanEmail.includes('elena') ? memPatients.find((p) => p.fullName.toLowerCase().includes('elena') || p.email.toLowerCase().includes('elena')) : null) ||
+          null;
         if (!patient) {
           const mrn = `MRN-2026-${String(memPatients.length + 101).padStart(3, '0')}`;
           patient = {
@@ -1700,7 +1702,9 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     // 2. DOCTOR AUTHENTICATION
     if (primaryRole === 'doctor') {
       const cleanEmail = String(email || '').trim().toLowerCase();
-      const doctor = memUsers.find((u) => u.role === 'doctor' && (u.email.toLowerCase() === cleanEmail || cleanEmail.includes('doctor') || cleanEmail.includes('reyes') || cleanEmail.includes('santos'))) || memUsers.find((u) => u.role === 'doctor') || INITIAL_USERS[0];
+      const doctor = memUsers.find((u) => u.role === 'doctor' && u.email.toLowerCase() === cleanEmail) ||
+        memUsers.find((u) => u.role === 'doctor' && (cleanEmail.includes('doctor') || cleanEmail.includes('reyes') || cleanEmail.includes('santos'))) ||
+        memUsers.find((u) => u.role === 'doctor') || INITIAL_USERS[0];
 
       if (password) {
         const pwCheck = await verifyUserPassword(doctor.email, String(password));
@@ -1761,12 +1765,15 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         });
       }
 
-      const staffUser = INITIAL_USERS.find((u) => u.role === subRole) || {
-        id: `usr-${subRole}`,
-        name: `${subRole.replace('_', ' ').toUpperCase()} Practitioner`,
-        email: `${subRole}@smartclinic.ph`,
-        role: subRole as any,
-      };
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      const staffUser = (cleanEmail && memUsers.find((u) => u.email.toLowerCase() === cleanEmail)) ||
+        memUsers.find((u) => u.role === subRole || (u as any).subRole === subRole) ||
+        INITIAL_USERS.find((u) => u.role === subRole) || {
+          id: `usr-${subRole}`,
+          name: `${subRole.replace('_', ' ').toUpperCase()} Practitioner`,
+          email: `${subRole}@smartclinic.ph`,
+          role: subRole as any,
+        };
 
       if (password) {
         const pwCheck = await verifyUserPassword(staffUser.email, String(password));
@@ -1885,6 +1892,190 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
    ========================================================================== */
 app.get('/api/users', (_req: Request, res: Response) => {
   return res.json(memUsers);
+});
+
+app.get(['/api/auth/system-accounts', '/api/system-accounts'], async (_req: Request, res: Response) => {
+  if (supabaseServer) {
+    try {
+      await hydrateClinicStateFromSupabase();
+    } catch {}
+  }
+
+  // 1. Executive Director & Admin (strictly single admin)
+  const adminAccount = {
+    id: 'usr-admin',
+    name: 'Director Maria Lourdes Santos, MD',
+    email: 'smartclinicrealacc@gmail.com',
+    roleTitle: 'Executive Clinic Director & Administrator',
+    primaryRole: 'admin' as const,
+    role: 'admin' as const,
+    password: 'SmartClinic@Admin2026',
+    notes: 'Full administrative access, financial oversight, RA 10173 audit logs, Supabase integration. Requires Authenticator 2FA.',
+    badge: 'Admin',
+    badgeColor: 'bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
+    requires2Fa: true,
+    department: 'Executive Management',
+    phone: '+63 917 800 1101',
+  };
+
+  // 2. Doctors
+  const doctorAccounts = memUsers
+    .filter((u) => u.role === 'doctor')
+    .map((d) => ({
+      id: d.id,
+      name: d.name,
+      email: d.email,
+      roleTitle: d.specialty || `${d.department || 'Clinical Medicine'} Specialist`,
+      primaryRole: 'doctor' as const,
+      role: 'doctor' as const,
+      password: 'doctor123',
+      notes: `Clinical SOAP consultations, e-prescribing, lab interpretations. License: ${d.licenseNumber || 'MD-PRC-Verified'}.`,
+      badge: 'Doctor',
+      badgeColor: 'bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800',
+      department: d.department,
+      specialty: d.specialty,
+      phone: d.phone,
+      requires2Fa: false,
+    }));
+
+  // 3. Clinical Staff (Nurse, Receptionist, Pharmacist, Lab Technician)
+  const staffRoleMeta: Record<string, { title: string; notes: string; badge: string; color: string; pw: string; subRole: 'nurse' | 'receptionist' | 'pharmacist' | 'lab_technician' }> = {
+    nurse: {
+      title: 'Outpatient Triage & Vitals Nurse',
+      notes: 'Triage intake, vital signs logging, QR check-in scanner, consultation prep.',
+      badge: 'Nurse',
+      color: 'bg-cyan-100 dark:bg-cyan-950 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
+      pw: 'nurse123',
+      subRole: 'nurse',
+    },
+    receptionist: {
+      title: 'Front Desk Receptionist & Patient Access',
+      notes: 'Queue management, appointment booking, patient check-in, walk-in registration.',
+      badge: 'Receptionist',
+      color: 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+      pw: 'reception123',
+      subRole: 'receptionist',
+    },
+    pharmacist: {
+      title: 'Chief Clinical Pharmacist',
+      notes: 'Pharmacy dispensary, medication safety audits, inventory reordering, drug stock tracking.',
+      badge: 'Pharmacist',
+      color: 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+      pw: 'pharm123',
+      subRole: 'pharmacist',
+    },
+    lab_technician: {
+      title: 'Diagnostic Pathology Medical Technologist',
+      notes: 'Laboratory specimen orders, entering test results, reference ranges, critical value alerts.',
+      badge: 'Lab Tech',
+      color: 'bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+      pw: 'lab123',
+      subRole: 'lab_technician',
+    },
+  };
+
+  const staffAccounts = memUsers
+    .filter((u) => ['nurse', 'receptionist', 'pharmacist', 'lab_technician'].includes(u.role))
+    .map((s) => {
+      const meta = staffRoleMeta[s.role] || {
+        title: `${s.role.toUpperCase()} Clinical Staff`,
+        notes: 'Clinical support and health services.',
+        badge: 'Staff',
+        color: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200',
+        pw: 'staff123',
+        subRole: s.role as any,
+      };
+      return {
+        id: s.id,
+        name: s.name,
+        email: s.email,
+        roleTitle: meta.title,
+        primaryRole: 'staff' as const,
+        staffSubRole: meta.subRole,
+        role: s.role as any,
+        password: meta.pw,
+        notes: meta.notes,
+        badge: meta.badge,
+        badgeColor: meta.color,
+        department: s.department,
+        phone: s.phone,
+        requires2Fa: false,
+      };
+    });
+
+  // 4. Patients (all registered database outpatients)
+  const patientAccounts = memPatients.map((p) => {
+    const conditionsStr = Array.isArray(p.chronicConditions) && p.chronicConditions.length > 0
+      ? p.chronicConditions.join(', ')
+      : 'Routine Outpatient Surveillance';
+    return {
+      id: p.id,
+      name: p.fullName,
+      email: p.email || `${p.mrn.toLowerCase().replace(/[^a-z0-9]/g, '')}@email.com`,
+      roleTitle: `Registered Outpatient (${p.mrn})`,
+      primaryRole: 'patient' as const,
+      role: 'patient' as const,
+      password: 'patient123',
+      notes: `${conditionsStr}. Access personal health portal, e-prescriptions, lab results, live queue.`,
+      badge: 'Patient',
+      badgeColor: 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+      mrn: p.mrn,
+      phone: p.phone,
+      age: p.age,
+      gender: p.gender,
+      bloodType: p.bloodType,
+      requires2Fa: false,
+    };
+  });
+
+  // Assemble full unique accounts list
+  const seenEmails = new Set<string>();
+  const accounts: any[] = [];
+
+  // Director / Admin first
+  accounts.push(adminAccount);
+  seenEmails.add(adminAccount.email.toLowerCase());
+
+  // Doctors next
+  for (const doc of doctorAccounts) {
+    if (!seenEmails.has(doc.email.toLowerCase())) {
+      accounts.push(doc);
+      seenEmails.add(doc.email.toLowerCase());
+    }
+  }
+
+  // Clinical Staff next
+  for (const st of staffAccounts) {
+    if (!seenEmails.has(st.email.toLowerCase())) {
+      accounts.push(st);
+      seenEmails.add(st.email.toLowerCase());
+    }
+  }
+
+  // Patients next
+  for (const pat of patientAccounts) {
+    if (!seenEmails.has(pat.email.toLowerCase())) {
+      accounts.push(pat);
+      seenEmails.add(pat.email.toLowerCase());
+    }
+  }
+
+  return res.json({
+    success: true,
+    totalCount: accounts.length,
+    counts: {
+      all: accounts.length,
+      admin: 1,
+      doctor: doctorAccounts.length,
+      staff: staffAccounts.length,
+      patient: patientAccounts.length,
+      nurse: staffAccounts.filter((s) => s.staffSubRole === 'nurse').length,
+      receptionist: staffAccounts.filter((s) => s.staffSubRole === 'receptionist').length,
+      pharmacist: staffAccounts.filter((s) => s.staffSubRole === 'pharmacist').length,
+      lab_technician: staffAccounts.filter((s) => s.staffSubRole === 'lab_technician').length,
+    },
+    accounts,
+  });
 });
 
 app.get('/api/doctors', (_req: Request, res: Response) => {

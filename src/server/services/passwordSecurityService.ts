@@ -58,17 +58,50 @@ export function registerUserCredentials(email: string, rawPassword: string, role
 function initializeDefaultCredentials() {
   const defaults: [string, string, string][] = [
     ['smartclinicrealacc@gmail.com', 'SmartClinic@Admin2026', 'admin'],
-    ['elena.vargas@smartclinic.ph', 'patient123', 'patient'],
-    ['liam.torres@example.com', 'patient123', 'patient'],
-    ['sofia.rd@example.com', 'patient123', 'patient'],
-    ['david.ocampo@example.com', 'patient123', 'patient'],
-    ['amara.santos@example.com', 'patient123', 'patient'],
     ['maria.reyes@smartclinic.ph', 'doctor123', 'doctor'],
     ['juan.santos@smartclinic.ph', 'doctor123', 'doctor'],
+    ['patricia.gomez@smartclinic.ph', 'doctor123', 'doctor'],
+    ['anthony.lee@smartclinic.ph', 'doctor123', 'doctor'],
+    ['roberto.tan@smartclinic.ph', 'doctor123', 'doctor'],
     ['ana.villanueva@smartclinic.ph', 'nurse123', 'staff'],
     ['claire.mendoza@smartclinic.ph', 'reception123', 'staff'],
     ['julian.delacruz@smartclinic.ph', 'pharm123', 'staff'],
     ['amina.bautista@smartclinic.ph', 'lab123', 'staff'],
+    ['elena.vargas@smartclinic.ph', 'patient123', 'patient'],
+    ['elena.vargas@email.com', 'patient123', 'patient'],
+    ['roberto.aquino@email.com', 'patient123', 'patient'],
+    ['marielle.santos@email.com', 'patient123', 'patient'],
+    ['jose.ramirez@email.com', 'patient123', 'patient'],
+    ['catherine.lim@email.com', 'patient123', 'patient'],
+    ['andres.villanueva@email.com', 'patient123', 'patient'],
+    ['sofia.mendoza@email.com', 'patient123', 'patient'],
+    ['paolo.reyes@email.com', 'patient123', 'patient'],
+    ['isabella.cruz@email.com', 'patient123', 'patient'],
+    ['miguel.torres@email.com', 'patient123', 'patient'],
+    ['angela.bautista@email.com', 'patient123', 'patient'],
+    ['diego.fernandez@email.com', 'patient123', 'patient'],
+    ['rosa.navarro@email.com', 'patient123', 'patient'],
+    ['carlos.delacruz@email.com', 'patient123', 'patient'],
+    ['liza.garcia@email.com', 'patient123', 'patient'],
+    ['rafael.santiago@email.com', 'patient123', 'patient'],
+    ['patricia.castro@email.com', 'patient123', 'patient'],
+    ['antonio.lopez@email.com', 'patient123', 'patient'],
+    ['teresa.ramos@email.com', 'patient123', 'patient'],
+    ['francisco.villanueva@email.com', 'patient123', 'patient'],
+    ['camille.aquino@email.com', 'patient123', 'patient'],
+    ['eduardo.mendoza@email.com', 'patient123', 'patient'],
+    ['julia.reyes@email.com', 'patient123', 'patient'],
+    ['gabriel.cruz@email.com', 'patient123', 'patient'],
+    ['monique.torres@email.com', 'patient123', 'patient'],
+    ['victor.bautista@email.com', 'patient123', 'patient'],
+    ['hannah.fernandez@email.com', 'patient123', 'patient'],
+    ['samuel.navarro@email.com', 'patient123', 'patient'],
+    ['andrea.delacruz@email.com', 'patient123', 'patient'],
+    ['patrick.garcia@email.com', 'patient123', 'patient'],
+    ['liam.torres@example.com', 'patient123', 'patient'],
+    ['sofia.rd@example.com', 'patient123', 'patient'],
+    ['david.ocampo@example.com', 'patient123', 'patient'],
+    ['amara.santos@example.com', 'patient123', 'patient'],
   ];
 
   for (const [em, pw, ro] of defaults) {
@@ -167,11 +200,12 @@ export async function verifyUserPassword(
   if (!cred || !cred.hash) {
     const isKnownFallback =
       (rawPassword === 'SmartClinic@Admin2026' && (cleanEmail === 'smartclinicrealacc@gmail.com' || cleanEmail.includes('admin'))) ||
-      (rawPassword === 'patient123' && (cleanEmail.includes('elena') || cleanEmail.includes('torres') || cleanEmail.includes('sofia') || cleanEmail.includes('ocampo') || cleanEmail.includes('amara') || cleanEmail.includes('patient'))) ||
-      (rawPassword === 'doctor123' && cleanEmail.includes('reyes')) ||
-      (rawPassword === 'nurse123' && cleanEmail.includes('ana')) ||
-      (rawPassword === 'pharm123' && cleanEmail.includes('pharm')) ||
-      (rawPassword === 'reception123' && cleanEmail.includes('reception'));
+      (rawPassword === 'doctor123' && (cleanEmail.includes('doctor') || cleanEmail.endsWith('@smartclinic.ph') || ['maria.reyes@smartclinic.ph', 'juan.santos@smartclinic.ph', 'patricia.gomez@smartclinic.ph', 'anthony.lee@smartclinic.ph', 'roberto.tan@smartclinic.ph'].includes(cleanEmail))) ||
+      (rawPassword === 'nurse123' && (cleanEmail === 'ana.villanueva@smartclinic.ph' || cleanEmail.includes('nurse') || cleanEmail.includes('villanueva'))) ||
+      (rawPassword === 'reception123' && (cleanEmail === 'claire.mendoza@smartclinic.ph' || cleanEmail.includes('reception') || cleanEmail.includes('mendoza'))) ||
+      (rawPassword === 'pharm123' && (cleanEmail === 'julian.delacruz@smartclinic.ph' || cleanEmail.includes('pharm') || cleanEmail.includes('delacruz'))) ||
+      (rawPassword === 'lab123' && (cleanEmail === 'amina.bautista@smartclinic.ph' || cleanEmail.includes('lab') || cleanEmail.includes('bautista'))) ||
+      (rawPassword === 'patient123' && (cleanEmail.includes('@') || cleanEmail.includes('patient')));
 
     if (isKnownFallback) {
       registerUserCredentials(cleanEmail, rawPassword);

@@ -44,6 +44,7 @@ import { NotificationsPage } from './components/notifications/NotificationsPage'
 import { ScanHealthIdModal } from './components/patients/ScanHealthIdModal';
 import { ScanHealthIdPage } from './components/patients/ScanHealthIdPage';
 import { PatientProfileSettingsModal } from './components/patient_portal/PatientProfileSettingsModal';
+import { PatientEMRView } from './components/patient_portal/PatientEMRView';
 import { canUserScanQR } from './utils/qrPermissions';
 import type { Patient, Prescription, LabTestOrder } from './types/clinic';
 
@@ -55,6 +56,7 @@ const ClinicAppContent: React.FC = () => {
     primaryRole,
     staffSubRole,
     patients,
+    currentUser,
     linkedPatientId,
     selectPatient,
     isNavigating,
@@ -303,24 +305,15 @@ const ClinicAppContent: React.FC = () => {
                 />
               )}
               {activeTab === 'emr' && (
-                <PatientList
-                  onSelectPatient={(id) => {
-                    if (activeRole === 'patient') return;
-                    selectPatient(id);
-                    setDetailPatient(patients.find((p) => p.id === id) || null);
+                <PatientEMRView
+                  onOpenQR={() => {
+                    const pat =
+                      patients.find((p) => p.id === linkedPatientId) ||
+                      patients.find((p) => p.email && currentUser.email && p.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+                      patients[0];
+                    if (pat) setQrPatient(pat);
                   }}
-                  onOpenNewPatient={() => setShowNewPatient(true)}
-                  onOpenQR={(p) => setQrPatient(p)}
-                  onOpenAISummary={() => {}}
-                  onStartConsultation={handleStartConsultation}
-                  onBookAppointment={(id) => {
-                    selectPatient(id);
-                    openBookAppointment();
-                  }}
-                  onOpenScanQR={() => {
-                    setScanQRMode('checkin');
-                    setShowScanQRModal(true);
-                  }}
+                  onOpenBookAppointment={openBookAppointment}
                 />
               )}
               {activeTab === 'appointments' && (
