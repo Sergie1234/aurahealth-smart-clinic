@@ -392,7 +392,7 @@ export const ConsultationWorkspace: React.FC<Props> = ({ initialPatientId, onFin
       </div>
 
       {/* Patient Clinical Caution Banner */}
-      <div className="bg-slate-900 text-white rounded-xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+      <div className="bg-slate-900 border border-slate-800 dark:border-slate-700/60 text-white rounded-xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-teal-500/20 text-teal-300 font-bold flex items-center justify-center text-sm border border-teal-500/40">
             {patient.fullName.charAt(0)}

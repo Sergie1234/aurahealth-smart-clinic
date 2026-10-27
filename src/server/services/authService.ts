@@ -23,6 +23,7 @@ export interface UserTokenPayload {
 
 export interface AuthenticatedRequest extends Request {
   user?: UserTokenPayload;
+  userId?: string;
   userRole?: string;
   linkedPatientId?: string | null;
 }
@@ -86,7 +87,7 @@ export function verifyToken(token: string): UserTokenPayload | null {
 
 /**
  * Express middleware to authenticate tokens or headers.
- * Populates req.user, req.userRole, req.linkedPatientId.
+ * Populates req.user, req.userId, req.userRole, req.linkedPatientId.
  */
 export function authMiddleware(req: AuthenticatedRequest, _res: Response, next: NextFunction) {
   const authHeader = req.headers['authorization'];
@@ -101,6 +102,7 @@ export function authMiddleware(req: AuthenticatedRequest, _res: Response, next: 
     const verified = verifyToken(token);
     if (verified) {
       req.user = verified;
+      req.userId = verified.userId;
       req.userRole = verified.role;
       req.linkedPatientId = verified.linkedPatientId || null;
       return next();
@@ -108,6 +110,7 @@ export function authMiddleware(req: AuthenticatedRequest, _res: Response, next: 
   }
 
   // Header fallback for testing or initial handshakes
+  req.userId = (req.headers['x-user-id'] as string) || undefined;
   req.userRole = String(req.headers['x-user-role'] || '').toLowerCase() || undefined;
   req.linkedPatientId = (req.headers['x-linked-patient-id'] as string) || null;
   next();

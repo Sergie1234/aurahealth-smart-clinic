@@ -45,7 +45,6 @@ import { ScanHealthIdModal } from './components/patients/ScanHealthIdModal';
 import { ScanHealthIdPage } from './components/patients/ScanHealthIdPage';
 import { PatientProfileSettingsModal } from './components/patient_portal/PatientProfileSettingsModal';
 import { PatientEMRView } from './components/patient_portal/PatientEMRView';
-import { canUserScanQR } from './utils/qrPermissions';
 import type { Patient, Prescription, LabTestOrder } from './types/clinic';
 
 const ClinicAppContent: React.FC = () => {
@@ -130,66 +129,21 @@ const ClinicAppContent: React.FC = () => {
   // Strict Role Route & Tab Isolation Guard (Enforce RA 10173 and strip unauthorized modules)
   useEffect(() => {
     if (!isAuthenticated) return;
-    const isPatient = activeRole === 'patient';
-    const isAdmin = activeRole === 'admin';
+    const roleTabMap: Record<string, string[]> = {
+      patient: ['home', 'dashboard', 'appointments', 'queue', 'emr', 'prescriptions', 'laboratory', 'billing', 'ai-assistant', 'notifications'],
+      admin: ['home', 'dashboard', 'patients', 'audit-logs', 'reports', 'predictive-analytics', 'billing', 'inventory', 'ai-assistant', 'notifications'],
+      doctor: ['home', 'dashboard', 'patients', 'appointments', 'queue', 'consultations', 'prescriptions', 'laboratory', 'inventory', 'ai-assistant', 'notifications'],
+      nurse: ['home', 'dashboard', 'patients', 'scan-qr', 'appointments', 'queue', 'consultations', 'laboratory', 'ai-assistant', 'notifications'],
+      receptionist: ['home', 'dashboard', 'patients', 'scan-qr', 'appointments', 'queue', 'ai-assistant', 'notifications'],
+      pharmacist: ['home', 'dashboard', 'prescriptions', 'inventory', 'ai-assistant', 'notifications'],
+      lab_technician: ['home', 'dashboard', 'laboratory', 'ai-assistant', 'notifications'],
+    };
 
-    if (isPatient) {
-      // Patient is strictly whitelisted to patient-authorized modules only
-      const authorizedPatientTabs = [
-        'home',
-        'dashboard',
-        'appointments',
-        'queue',
-        'emr',
-        'prescriptions',
-        'laboratory',
-        'billing',
-        'ai-assistant',
-        'notifications',
-      ];
-      if (!authorizedPatientTabs.includes(activeTab)) {
-        setActiveTab('dashboard');
-      }
-    } else if (isAdmin) {
-      // Admin is strictly whitelisted to executive administrative modules only (No QR scanner access)
-      const authorizedAdminTabs = [
-        'home',
-        'dashboard',
-        'patients',
-        'audit-logs',
-        'reports',
-        'predictive-analytics',
-        'billing',
-        'inventory',
-        'ai-assistant',
-        'notifications',
-      ];
-      if (!authorizedAdminTabs.includes(activeTab)) {
-        setActiveTab('dashboard');
-      }
-    } else {
-      // Provider (Doctor, Nurse, Staff) is strictly whitelisted to clinical modules only
-      // Only Receptionist and Nurse have scan-qr tab access
-      const canScan = canUserScanQR(activeRole, primaryRole, staffSubRole);
-      const authorizedProviderTabs = [
-        'home',
-        'dashboard',
-        'patients',
-        ...(canScan ? ['scan-qr'] : []),
-        'appointments',
-        'queue',
-        'consultations',
-        'prescriptions',
-        'laboratory',
-        'inventory',
-        'ai-assistant',
-        'notifications',
-      ];
-      if (!authorizedProviderTabs.includes(activeTab)) {
-        setActiveTab('dashboard');
-      }
+    const allowedTabs = roleTabMap[activeRole] || ['home', 'dashboard'];
+    if (!allowedTabs.includes(activeTab)) {
+      setActiveTab('dashboard');
     }
-  }, [isAuthenticated, activeRole, primaryRole, staffSubRole, activeTab, setActiveTab]);
+  }, [isAuthenticated, activeRole, activeTab, setActiveTab]);
 
   const handleStartConsultation = (patientId: string) => {
     setConsultPatientId(patientId);

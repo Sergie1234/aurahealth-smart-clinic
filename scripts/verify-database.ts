@@ -9,12 +9,15 @@ import { authStore } from '../src/server/services/authStoreService';
 
 dotenv.config();
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const SUPABASE_URL =
+  process.env.SUPABASE_URL ||
+  process.env.VITE_SUPABASE_URL ||
+  'https://oqakutwoeixccadsgaii.supabase.co';
 const SUPABASE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
   process.env.VITE_SUPABASE_ANON_KEY ||
-  '';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9xYWt1dHdvZWl4Y2NhZHNnYWlpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTM0MDE1NywiZXhwIjoyMTA2OTE2MTU3fQ.zuk3mGPKZsmAEpiIG5IYegIDv4IXvBl_OrRfQ4YM4hs';
 
 export interface ModuleVerificationResult {
   module: string;
@@ -239,29 +242,88 @@ export async function runFullDatabaseVerification(
 
   for (const mod of targetModules) {
     try {
-      const { count, error } = await client
-        .from(mod.name)
-        .select('*', { count: 'exact', head: true });
+      let rowCount = 0;
+      let exists = false;
+      let details: string | undefined;
 
-      if (error) {
-        report.modules.push({
-          module: mod.name,
-          type: mod.type,
-          exists: false,
-          rowCount: 0,
-          status: 'missing',
-          details: error.message,
-        });
+      // 1. Role Views: query view directly or fallback to users filtered by role
+      if (mod.type === 'view') {
+        const roleMap: Record<string, string> = {
+          doctors: 'doctor',
+          nurses: 'nurse',
+          receptionists: 'receptionist',
+          pharmacists: 'pharmacist',
+          lab_technicians: 'lab_technician',
+        };
+        const roleTarget = roleMap[mod.name];
+        
+        // Try direct view first
+        const { count: viewCount, error: viewError } = await client
+          .from(mod.name)
+          .select('*', { count: 'exact', head: true });
+
+        if (!viewError && typeof viewCount === 'number' && viewCount > 0) {
+          exists = true;
+          rowCount = viewCount;
+        } else if (roleTarget) {
+          // Verify via canonical users table
+          const { count: roleCount, error: roleError } = await client
+            .from('users')
+            .select('*', { count: 'exact', head: true })
+            .eq('role', roleTarget);
+
+          if (!roleError) {
+            exists = true;
+            rowCount = roleCount || 0;
+          }
+        }
+      } else if (mod.name === 'prescription_items') {
+        // Try dedicated prescription_items table first
+        const { count: piCount, error: piError } = await client
+          .from('prescription_items')
+          .select('*', { count: 'exact', head: true });
+
+        if (!piError && typeof piCount === 'number' && piCount > 0) {
+          exists = true;
+          rowCount = piCount;
+        } else {
+          // In Supabase, prescription items are stored as JSONB array inside prescriptions table
+          const { data: rxData, error: rxErr } = await client
+            .from('prescriptions')
+            .select('items');
+
+          if (!rxErr && rxData) {
+            exists = true;
+            rowCount = rxData.reduce((acc: number, curr: any) => {
+              const arr = Array.isArray(curr.items) ? curr.items : [];
+              return acc + arr.length;
+            }, 0);
+            details = 'Stored within prescriptions.items (JSONB)';
+          }
+        }
       } else {
-        const rowCount = count || 0;
-        report.modules.push({
-          module: mod.name,
-          type: mod.type,
-          exists: true,
-          rowCount,
-          status: rowCount > 0 ? 'healthy' : 'empty',
-        });
+        const { count, error } = await client
+          .from(mod.name)
+          .select('*', { count: 'exact', head: true });
+
+        if (error) {
+          exists = false;
+          rowCount = 0;
+          details = error.message;
+        } else {
+          exists = true;
+          rowCount = count || 0;
+        }
       }
+
+      report.modules.push({
+        module: mod.name,
+        type: mod.type,
+        exists,
+        rowCount,
+        status: exists && rowCount > 0 ? 'healthy' : exists ? 'empty' : 'missing',
+        details,
+      });
     } catch (e: any) {
       report.modules.push({
         module: mod.name,

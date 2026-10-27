@@ -279,6 +279,12 @@ export interface Invoice {
 export interface Notification {
   id: string;
   userId?: string;
+  recipientId?: string;
+  recipientRole?: UserRole | 'all' | 'provider';
+  recipientEmail?: string;
+  patientId?: string;
+  doctorId?: string;
+  email?: string;
   targetRole?: 'patient' | 'provider' | 'admin' | 'all';
   title: string;
   message: string;
@@ -291,6 +297,8 @@ export interface Notification {
   read: boolean;
   link?: string;
   actionUrl?: string;
+  relatedResourceId?: string;
+  relatedResourceType?: string;
 }
 
 export interface AuditLog {

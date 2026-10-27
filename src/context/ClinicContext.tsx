@@ -1097,7 +1097,9 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     try {
       localStorage.removeItem('smart_clinic_auth_session');
       localStorage.removeItem('smart_clinic_token');
+      localStorage.removeItem('smart_clinic_notifications');
     } catch { /* */ }
+    setNotifications([]);
     setActiveTab(redirectTab);
   };
 
@@ -1628,33 +1630,71 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Provider (Doctor, Nurse, Staff) -> only 'provider'
   // Admin -> only 'admin'
   // ==============================================================================
-  const currentRoleScope: 'patient' | 'provider' | 'admin' = useMemo(() => {
-    if (primaryRole === 'patient' || activeRole === 'patient') return 'patient';
-    if (primaryRole === 'admin' || activeRole === 'admin') return 'admin';
-    return 'provider';
-  }, [primaryRole, activeRole]);
-
+  // STRICT USER-SCOPED NOTIFICATIONS (Zero-Leakage RBAC & Identity Isolation)
+  // ==============================================================================
   const roleNotifications = useMemo(() => {
     return notifications
-      .filter((n) => {
-        // Strict Role-Based Isolation:
-        // - Patient only receives patient-related notifications (appointment approved, reminders, lab results, rx)
-        // - Provider only receives provider-related notifications (new appointment request, patient triage, etc.)
-        // - Admin only receives admin-related notifications (system alerts, low stock, compliance audits)
-        if (currentRoleScope === 'patient') {
-          return n.targetRole === 'patient';
+      .filter((n: any) => {
+        const notifRecipientId = n.recipientId || n.userId;
+        const notifPatientId = n.patientId || (n.relatedResourceType === 'patient' ? n.relatedResourceId : undefined);
+        const notifDoctorId = n.doctorId;
+        const notifRecipientEmail = (n.recipientEmail || n.email || '').toLowerCase();
+        const currentEmail = (currentUser?.email || '').toLowerCase();
+        const notifRole = (n.recipientRole || n.targetRole || '').toLowerCase();
+
+        // 1. PATIENT SCOPE:
+        // Patient MUST ONLY see notifications related to their specific account/record
+        if (activeRole === 'patient' || primaryRole === 'patient') {
+          const matchesPatientId = Boolean(linkedPatientId && (notifRecipientId === linkedPatientId || notifPatientId === linkedPatientId));
+          const matchesUserId = Boolean(currentUser?.id && (notifRecipientId === currentUser.id || n.userId === currentUser.id));
+          const matchesEmail = Boolean(currentEmail && notifRecipientEmail && notifRecipientEmail === currentEmail);
+
+          if (!matchesPatientId && !matchesUserId && !matchesEmail) {
+            return false;
+          }
+
+          // Disallow any provider or admin internal alerts
+          if (notifRole !== 'patient' && notifRole !== 'all' && !matchesPatientId && !matchesUserId) {
+            return false;
+          }
+          return true;
         }
-        if (currentRoleScope === 'admin') {
-          return n.targetRole === 'admin';
+
+        // 2. DOCTOR SCOPE:
+        // Doctor ONLY sees notifications for their own schedule, appointments, or assigned patients
+        if (activeRole === 'doctor' || primaryRole === 'doctor') {
+          const matchesDoctorId = Boolean(currentUser?.id && (notifDoctorId === currentUser.id || notifRecipientId === currentUser.id));
+          const matchesDoctorEmail = Boolean(currentEmail && notifRecipientEmail && notifRecipientEmail === currentEmail);
+          return matchesDoctorId || matchesDoctorEmail;
         }
-        return n.targetRole === 'provider';
+
+        // 3. ADMIN SCOPE:
+        if (activeRole === 'admin' || primaryRole === 'admin') {
+          return notifRole === 'admin' || n.category === 'inventory' || n.category === 'security' || n.category === 'system';
+        }
+
+        // 4. SPECIFIC STAFF ROLES:
+        if (activeRole === 'nurse') {
+          return notifRole === 'nurse' || (notifRole === 'provider' && (n.category === 'triage' || n.category === 'appointment'));
+        }
+        if (activeRole === 'receptionist') {
+          return notifRole === 'receptionist' || (notifRole === 'provider' && n.category === 'appointment');
+        }
+        if (activeRole === 'pharmacist') {
+          return notifRole === 'pharmacist' || n.category === 'prescription' || n.category === 'inventory';
+        }
+        if (activeRole === 'lab_technician') {
+          return notifRole === 'lab_technician' || n.category === 'lab';
+        }
+
+        return false;
       })
       .sort((a, b) => {
         const timeA = new Date(a.createdAt || a.timestamp || 0).getTime();
         const timeB = new Date(b.createdAt || b.timestamp || 0).getTime();
         return timeB - timeA;
       });
-  }, [notifications, currentRoleScope]);
+  }, [notifications, activeRole, primaryRole, currentUser, linkedPatientId]);
 
   const unreadNotificationCount = useMemo(() => {
     return roleNotifications.filter((n) => !n.read).length;
@@ -1664,7 +1704,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     let isMounted = true;
 
-    // Cross-tab broadcast channel for instant real-time sync across open windows/tabs
+    // Cross-tab broadcast channel with strict recipient verification
     let channel: BroadcastChannel | null = null;
     try {
       if (typeof window !== 'undefined' && window.BroadcastChannel) {
@@ -1673,6 +1713,17 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           if (!isMounted) return;
           if (event.data?.type === 'NEW_NOTIFICATION' && event.data.notification) {
             const incoming: Notification = event.data.notification;
+            const myEmail = (currentUser?.email || '').toLowerCase();
+            const incEmail = (incoming.recipientEmail || incoming.email || '').toLowerCase();
+            const isForMe =
+              (incoming.recipientId && (incoming.recipientId === currentUser?.id || incoming.recipientId === linkedPatientId)) ||
+              (incoming.patientId && incoming.patientId === linkedPatientId) ||
+              (incoming.doctorId && incoming.doctorId === currentUser?.id) ||
+              (incEmail && myEmail && incEmail === myEmail) ||
+              (activeRole === 'admin' && (incoming.recipientRole === 'admin' || incoming.targetRole === 'admin'));
+
+            if (!isForMe) return;
+
             setNotifications((prev) => {
               if (prev.some((n) => n.id === incoming.id)) return prev;
               return [incoming, ...prev];
@@ -1692,13 +1743,20 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           'x-user-role': activeRole,
         };
         if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (currentUser?.id) headers['x-user-id'] = currentUser.id;
+        if (currentUser?.email) headers['x-user-email'] = currentUser.email;
+        if (linkedPatientId) headers['x-linked-patient-id'] = linkedPatientId;
 
-        const res = await fetch(`${API_BASE_URL}/api/notifications`, { headers });
+        const queryParams = new URLSearchParams();
+        if (currentUser?.id) queryParams.set('userId', currentUser.id);
+        if (linkedPatientId) queryParams.set('patientId', linkedPatientId);
+        if (activeRole) queryParams.set('role', activeRole);
+
+        const res = await fetch(`${API_BASE_URL}/api/notifications?${queryParams.toString()}`, { headers });
         if (res.ok) {
           const liveData: Notification[] = await res.json();
           if (isMounted && Array.isArray(liveData)) {
             setNotifications((prev) => {
-              // Merge live server notifications without overwriting local read states
               const idMap = new Map<string, Notification>();
               prev.forEach((n) => idMap.set(n.id, n));
               liveData.forEach((liveNotif) => {
@@ -1716,25 +1774,27 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     fetchLiveNotifications();
-    const interval = setInterval(fetchLiveNotifications, 3000); // Live real-time sync every 3s
+    const interval = setInterval(fetchLiveNotifications, 3000);
 
     return () => {
       isMounted = false;
       clearInterval(interval);
       if (channel) channel.close();
     };
-  }, [activeRole, authToken]);
+  }, [activeRole, authToken, currentUser, linkedPatientId]);
 
   const addNotification = (notifData: Omit<Notification, 'id' | 'createdAt' | 'read'>): Notification => {
     const newNotif: Notification = {
       ...notifData,
       id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      recipientId: notifData.recipientId || (activeRole === 'patient' ? (linkedPatientId || currentUser?.id) : currentUser?.id),
+      recipientRole: notifData.recipientRole || activeRole,
       createdAt: new Date().toISOString(),
       read: false,
     };
     setNotifications((prev) => [newNotif, ...prev]);
 
-    // Dispatch via BroadcastChannel for instant zero-latency cross-tab update
+    // Dispatch via BroadcastChannel for instant cross-tab update
     try {
       if (typeof window !== 'undefined' && window.BroadcastChannel) {
         const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
@@ -1743,7 +1803,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     } catch {}
 
-    // Dispatch to server asynchronously for live broadcast
+    // Dispatch to server asynchronously for live persistence
     try {
       const token = authToken || localStorage.getItem('smart_clinic_token');
       fetch(`${API_BASE_URL}/api/notifications`, {
@@ -1751,6 +1811,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         headers: {
           'Content-Type': 'application/json',
           'x-user-role': activeRole,
+          'x-user-id': currentUser?.id || '',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(newNotif),
@@ -1775,10 +1836,12 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const markAllNotificationsAsRead = () => {
+    const roleScope = activeRole === 'patient' ? 'patient' : (activeRole === 'doctor' || activeRole === 'nurse' ? 'provider' : 'admin');
     setNotifications((prev) =>
       prev.map((n) => {
-        const target = n.targetRole || 'all';
-        if (target === 'all' || target === currentRoleScope) {
+        const isUserScoped = n.recipientId && currentUser?.id ? n.recipientId === currentUser.id : true;
+        const target = n.targetRole || n.recipientRole || 'all';
+        if (isUserScoped && (target === 'all' || target === roleScope || target === activeRole)) {
           return { ...n, read: true };
         }
         return n;

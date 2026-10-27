@@ -259,24 +259,34 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
       room: selectedDoctor.department?.includes('Cardio') ? 'Cardiology Suite 1' : 'Room 302',
     });
 
-    // Create a live notification for patient confirmation with approval notice
+    // Create a live notification for patient confirmation with approval notice (strictly scoped to this patient)
     addNotification({
+      recipientId: selectedPatient.id,
+      patientId: selectedPatient.id,
+      recipientRole: 'patient',
       targetRole: 'patient',
       title: 'Appointment Recorded',
       message: 'Your appointment has been recorded. Please wait for approval.',
       content: `Your appointment request with ${selectedDoctor.name} on ${selectedDate} at ${formatTimeSlot(selectedTimeSlot)} (${visitType}) has been recorded. Please wait for clinic staff confirmation. Assigned Queue Station: ${newApt.queueNumber}.`,
       category: 'appointment',
       priority: visitType === 'Emergency' ? 'high' : 'normal',
+      relatedResourceId: newApt.id,
+      relatedResourceType: 'appointment',
     });
 
-    // Also notify provider
+    // Also notify attending provider (strictly scoped to this doctor)
     addNotification({
+      recipientId: selectedDoctor.id,
+      doctorId: selectedDoctor.id,
+      recipientRole: 'doctor',
       targetRole: 'provider',
       title: 'New Patient Booking Pending Approval',
       message: `${selectedPatient.fullName} booked a consultation on ${selectedDate} at ${formatTimeSlot(selectedTimeSlot)} (${visitType}).`,
       content: `New confirmed appointment scheduled: ${selectedPatient.fullName} (${selectedPatient.mrn}) with Dr. ${selectedDoctor.name} on ${selectedDate} at ${formatTimeSlot(selectedTimeSlot)} (${visitType}). Review required.`,
       category: 'appointment',
       priority: visitType === 'Emergency' ? 'high' : 'normal',
+      relatedResourceId: newApt.id,
+      relatedResourceType: 'appointment',
     });
 
     setConfirmedAppointment(newApt);

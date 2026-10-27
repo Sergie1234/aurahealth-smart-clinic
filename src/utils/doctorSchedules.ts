@@ -142,6 +142,75 @@ export const DOCTOR_SCHEDULES: Record<string, DoctorSchedule> = {
       '12:30',
     ],
   },
+
+  // Dr. Sofia Ramos, MD (Neurology & Neurovascular Care)
+  'usr-12': {
+    doctorId: 'usr-12',
+    doctorName: 'Dr. Sofia Ramos, MD',
+    department: 'Neurology',
+    specialty: 'Neurology',
+    workDays: [1, 2, 4, 5], // Monday, Tuesday, Thursday, Friday
+    workDaysLabel: 'Monday, Tuesday, Thursday, Friday',
+    hoursLabel: '9:00 AM – 3:00 PM',
+    slots: [
+      '09:00',
+      '09:30',
+      '10:00',
+      '10:30',
+      '11:00',
+      '11:30',
+      '13:00',
+      '13:30',
+      '14:00',
+      '14:30',
+    ],
+  },
+
+  // Dr. Gabriel Castro, MD (Orthopedics & Sports Medicine)
+  'usr-13': {
+    doctorId: 'usr-13',
+    doctorName: 'Dr. Gabriel Castro, MD',
+    department: 'Orthopedics',
+    specialty: 'Orthopedics',
+    workDays: [1, 3, 5], // Monday, Wednesday, Friday
+    workDaysLabel: 'Monday, Wednesday, Friday',
+    hoursLabel: '8:00 AM – 2:00 PM',
+    slots: [
+      '08:00',
+      '08:30',
+      '09:00',
+      '09:30',
+      '10:00',
+      '10:30',
+      '11:00',
+      '11:30',
+      '13:00',
+      '13:30',
+    ],
+  },
+
+  // Dr. Elena Torres, MD (Obstetrics & Gynecology)
+  'usr-14': {
+    doctorId: 'usr-14',
+    doctorName: 'Dr. Elena Torres, MD',
+    department: 'Obstetrics & Gynecology',
+    specialty: 'Obstetrics & Gynecology',
+    workDays: [2, 3, 4, 6], // Tuesday, Wednesday, Thursday, Saturday
+    workDaysLabel: 'Tuesday – Thursday, Saturday',
+    hoursLabel: '10:00 AM – 4:00 PM',
+    slots: [
+      '10:00',
+      '10:30',
+      '11:00',
+      '11:30',
+      '13:00',
+      '13:30',
+      '14:00',
+      '14:30',
+      '15:00',
+      '15:30',
+    ],
+  },
 };
 
 export const DEFAULT_DOCTOR_SCHEDULE: Omit<DoctorSchedule, 'doctorId' | 'doctorName'> = {
@@ -187,7 +256,10 @@ export function getDoctorSchedule(doctorId: string, fallbackUser?: User): Doctor
       (queryName.includes('reyes') && s.doctorId === 'usr-1') ||
       (queryName.includes('gomez') && s.doctorId === 'usr-9') ||
       (queryName.includes('lee') && s.doctorId === 'usr-10') ||
-      (queryName.includes('tan') && s.doctorId === 'usr-11')
+      (queryName.includes('tan') && s.doctorId === 'usr-11') ||
+      (queryName.includes('ramos') && s.doctorId === 'usr-12') ||
+      (queryName.includes('castro') && s.doctorId === 'usr-13') ||
+      (queryName.includes('torres') && s.doctorId === 'usr-14')
     );
   });
 

@@ -243,12 +243,15 @@ const twoFactorEnabledUsers = new Set<string>([
 ]);
 
 // Supabase cloud integration check
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const supabaseUrl =
+  process.env.SUPABASE_URL ||
+  process.env.VITE_SUPABASE_URL ||
+  'https://oqakutwoeixccadsgaii.supabase.co';
 const supabaseKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
   process.env.VITE_SUPABASE_ANON_KEY ||
-  '';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9xYWt1dHdvZWl4Y2NhZHNnYWlpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTM0MDE1NywiZXhwIjoyMTA2OTE2MTU3fQ.zuk3mGPKZsmAEpiIG5IYegIDv4IXvBl_OrRfQ4YM4hs';
 const isSupabaseLive = Boolean(supabaseUrl && supabaseKey);
 export const supabaseServer: SupabaseClient | null = isSupabaseLive
   ? createClient(supabaseUrl, supabaseKey)
@@ -260,21 +263,57 @@ authStore.setSupabaseClient(supabaseServer);
 export async function hydrateClinicStateFromSupabase(): Promise<boolean> {
   if (!supabaseServer) return false;
   try {
-    // 1. Users
+    // 1. Users & Staff Directory (with real doctor specialties & departments from staff table)
+    const { data: dbStaff } = await supabaseServer.from('staff').select('*');
+    const staffMap = new Map<string, any>();
+    if (Array.isArray(dbStaff)) {
+      dbStaff.forEach((s: any) => {
+        if (s.email) staffMap.set(s.email.toLowerCase(), s);
+        if (s.id) staffMap.set(s.id, s);
+      });
+    }
+
     const { data: dbUsers, error: usersErr } = await supabaseServer.from('users').select('*');
     if (!usersErr && Array.isArray(dbUsers) && dbUsers.length > 0) {
-      memUsers = dbUsers.map((u: any) => ({
-        id: u.id,
-        name: u.full_name,
-        email: u.email,
-        role: u.role,
-        subRole: u.sub_role || undefined,
-        specialty: u.specialty || undefined,
-        licenseNumber: u.license_number || undefined,
-        phone: u.phone || undefined,
-        department: u.department || undefined,
-        avatar: u.avatar || '',
-      }));
+      memUsers = dbUsers.map((u: any) => {
+        const staffRecord = staffMap.get(u.email?.toLowerCase()) || staffMap.get(u.id);
+        const resolvedSpecialty = staffRecord?.specialty || u.specialty || (u.role === 'doctor' ? 'General Medicine' : undefined);
+        let resolvedDept = staffRecord?.department || u.department;
+        if (!resolvedDept && resolvedSpecialty) {
+          resolvedDept = resolvedSpecialty;
+        }
+        return {
+          id: u.id,
+          name: u.full_name,
+          email: u.email,
+          role: u.role,
+          subRole: u.sub_role || staffRecord?.role || undefined,
+          specialty: resolvedSpecialty,
+          licenseNumber: staffRecord?.license_number || u.license_number || undefined,
+          phone: staffRecord?.phone || u.phone || undefined,
+          department: resolvedDept || undefined,
+          avatar: u.avatar || '',
+        };
+      });
+
+      // Also ensure all doctors from staff table are included in memUsers if missing
+      if (Array.isArray(dbStaff)) {
+        dbStaff.forEach((s: any) => {
+          if (s.role === 'doctor' && !memUsers.some((u) => u.email?.toLowerCase() === s.email?.toLowerCase())) {
+            memUsers.push({
+              id: s.id,
+              name: s.full_name,
+              email: s.email,
+              role: 'doctor',
+              specialty: s.specialty || 'General Medicine',
+              department: s.specialty || 'General Medicine',
+              licenseNumber: s.license_number || undefined,
+              phone: s.phone || undefined,
+              avatar: '',
+            });
+          }
+        });
+      }
     }
 
     // 2. Patients
@@ -469,6 +508,39 @@ export async function hydrateClinicStateFromSupabase(): Promise<boolean> {
       }));
     }
 
+    // 10. Strictly Scoped Notifications from Supabase audit_logs (action = 'NOTIFICATION')
+    const { data: dbNotifLogs, error: notifErr } = await supabaseServer
+      .from('audit_logs')
+      .select('*')
+      .eq('action', 'NOTIFICATION')
+      .order('created_at', { ascending: false });
+
+    if (!notifErr && Array.isArray(dbNotifLogs) && dbNotifLogs.length > 0) {
+      memNotifications = dbNotifLogs.map((l: any) => {
+        const details = typeof l.details === 'object' && l.details !== null ? l.details : {};
+        return {
+          id: l.id,
+          userId: l.user_id || details.recipientId,
+          recipientId: details.recipientId || l.user_id,
+          recipientRole: details.recipientRole || l.user_role,
+          recipientEmail: details.recipientEmail,
+          patientId: details.patientId,
+          doctorId: details.doctorId,
+          targetRole: (l.user_role || details.recipientRole || 'all') as any,
+          title: details.title || l.description?.split(':')[0] || 'Clinic Notification',
+          message: details.message || l.description || '',
+          content: details.content || details.message || l.description || '',
+          category: details.category || 'system',
+          priority: details.priority || 'normal',
+          read: Boolean(details.read),
+          createdAt: l.created_at || l.timestamp,
+          link: details.link || details.actionUrl,
+          relatedResourceId: l.resource_id,
+          relatedResourceType: l.resource_type,
+        };
+      });
+    }
+
     flushClinicStateToDisk();
     return true;
   } catch (err) {
@@ -551,6 +623,16 @@ app.post('/api/supabase/verify', async (req: Request, res: Response) => {
     return res.json(result);
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || 'Verification failed' });
+  }
+});
+
+app.all('/api/database/repair', async (_req: Request, res: Response) => {
+  try {
+    const { repairAndHealDatabase } = await import('../scripts/repair-database');
+    const result = await repairAndHealDatabase();
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Database repair failed' });
   }
 });
 
@@ -2151,6 +2233,22 @@ app.post('/api/doctors', (req: Request, res: Response) => {
     memAuditLogs.unshift(auditEntry);
     flushClinicStateToDisk();
 
+    // Persist to Supabase staff table
+    if (supabaseServer) {
+      Promise.resolve(
+        supabaseServer.from('staff').insert({
+          id: doctorId,
+          full_name: cleanName,
+          email: cleanEmail,
+          role: 'doctor',
+          department: newDoctor.department,
+          specialty: newDoctor.specialty,
+          license_number: newDoctor.licenseNumber,
+          is_active: true,
+        })
+      ).catch(() => {});
+    }
+
     return res.status(201).json({
       success: true,
       user: newDoctor,
@@ -2161,6 +2259,97 @@ app.post('/api/doctors', (req: Request, res: Response) => {
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err?.message || 'Failed to add doctor.' });
   }
+});
+
+/* ==========================================================================
+   DOCTOR SPECIALTIES & DEPARTMENTS SYSTEM (Database-driven & Relational)
+   ========================================================================== */
+const CLINICAL_DEPARTMENTS_CONFIG = [
+  { id: 'gen-med', name: 'General Medicine', code: 'GM', description: 'Comprehensive primary care, chronic disease management, and internal medicine.' },
+  { id: 'cardio', name: 'Cardiology', code: 'CARD', description: 'Adult clinical cardiology, hypertension, arrhythmia monitoring, and ECG diagnostics.' },
+  { id: 'pedia', name: 'Pediatrics', code: 'PED', description: 'Neonatal, child development, immunization programs, and adolescent healthcare.' },
+  { id: 'derm', name: 'Dermatology', code: 'DERM', description: 'Clinical dermatology, cutaneous pathology, eczema, psoriasis, and skin health.' },
+  { id: 'pulmo', name: 'Pulmonology', code: 'PULM', description: 'Respiratory disease management, asthma action plans, COPD, and spirometry.' },
+  { id: 'neuro', name: 'Neurology', code: 'NEUR', description: 'Neurological evaluation, headache syndromes, stroke prevention, and neuropathy care.' },
+  { id: 'ortho', name: 'Orthopedics', code: 'ORTH', description: 'Musculoskeletal medicine, joint care, sports injuries, and fracture follow-up.' },
+  { id: 'ob-gyn', name: 'Obstetrics & Gynecology', code: 'OBGYN', description: 'Women’s health, prenatal consultations, cervical cancer screening, and pelvic health.' },
+];
+
+app.get('/api/departments', async (_req: Request, res: Response) => {
+  const doctors = memUsers.filter((u) => u.role === 'doctor');
+  const departments = CLINICAL_DEPARTMENTS_CONFIG.map((dept) => {
+    const matchingDocs = doctors.filter((d) =>
+      d.department?.toLowerCase().includes(dept.name.toLowerCase()) ||
+      d.specialty?.toLowerCase().includes(dept.name.toLowerCase())
+    );
+    return {
+      id: dept.id,
+      name: dept.name,
+      code: dept.code,
+      description: dept.description,
+      doctorsCount: matchingDocs.length,
+      headDoctor: matchingDocs[0]?.name || 'Attending Physician On-Duty',
+      activeDoctors: matchingDocs,
+    };
+  });
+  return res.json(departments);
+});
+
+app.get('/api/specialties', async (_req: Request, res: Response) => {
+  const doctors = memUsers.filter((u) => u.role === 'doctor');
+  const specialtyMap = new Map<string, { specialty: string; department: string; doctors: User[] }>();
+
+  CLINICAL_DEPARTMENTS_CONFIG.forEach((dept) => {
+    specialtyMap.set(dept.name, {
+      specialty: dept.name,
+      department: dept.name,
+      doctors: [],
+    });
+  });
+
+  doctors.forEach((d) => {
+    const spec = d.specialty || d.department || 'General Medicine';
+    if (!specialtyMap.has(spec)) {
+      specialtyMap.set(spec, {
+        specialty: spec,
+        department: d.department || spec,
+        doctors: [],
+      });
+    }
+    specialtyMap.get(spec)?.doctors.push(d);
+  });
+
+  return res.json(Array.from(specialtyMap.values()));
+});
+
+app.patch('/api/doctors/:id/specialty', async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  const { specialty, department } = req.body || {};
+
+  if (!specialty) {
+    return res.status(400).json({ error: 'Specialty is required.' });
+  }
+
+  const doc = memUsers.find((u) => u.id === id && u.role === 'doctor');
+  if (!doc) {
+    return res.status(404).json({ error: 'Doctor not found.' });
+  }
+
+  doc.specialty = specialty;
+  if (department) doc.department = department;
+
+  // Persist to Supabase staff table
+  if (supabaseServer) {
+    try {
+      await supabaseServer.from('staff').update({
+        specialty: specialty,
+        ...(department ? { department } : {}),
+      }).or(`id.eq.${id},email.eq.${doc.email}`);
+    } catch {}
+  }
+
+  flushClinicStateToDisk();
+  return res.json({ success: true, doctor: doc, message: `Specialty updated to ${specialty}` });
 });
 
 /* ==========================================================================
@@ -2331,6 +2520,39 @@ app.post('/api/appointments', (req: AuthenticatedRequest, res: Response) => {
   newApt.createdAt = newApt.createdAt || new Date().toISOString();
   memAppointments.unshift(newApt);
   flushClinicStateToDisk();
+
+  // Create strictly scoped notification for the patient
+  createAndPersistNotification({
+    recipientId: newApt.patientId,
+    patientId: newApt.patientId,
+    recipientRole: 'patient',
+    targetRole: 'patient',
+    title: 'Appointment Scheduled',
+    message: `Your appointment with ${newApt.doctorName} is scheduled for ${newApt.date} at ${newApt.time}.`,
+    content: `Your ${newApt.department || 'Consultation'} with ${newApt.doctorName} is recorded for ${newApt.date} at ${newApt.time}. Assigned Room: ${newApt.room || 'Outpatient Clinic'}.`,
+    category: 'appointment',
+    priority: 'normal',
+    relatedResourceId: newApt.id,
+    relatedResourceType: 'appointment',
+  }).catch(() => {});
+
+  // Create strictly scoped notification for the attending doctor
+  if (newApt.doctorId) {
+    createAndPersistNotification({
+      recipientId: newApt.doctorId,
+      doctorId: newApt.doctorId,
+      recipientRole: 'doctor',
+      targetRole: 'provider',
+      title: 'New Consultation Booked',
+      message: `${newApt.patientName} (${newApt.patientMrn}) scheduled an appointment for ${newApt.date} at ${newApt.time}.`,
+      content: `New confirmed appointment scheduled: ${newApt.patientName} (${newApt.patientMrn}) with ${newApt.doctorName} on ${newApt.date} at ${newApt.time}. Reason: ${newApt.reason}.`,
+      category: 'appointment',
+      priority: 'normal',
+      relatedResourceId: newApt.id,
+      relatedResourceType: 'appointment',
+    }).catch(() => {});
+  }
+
   return res.status(201).json(newApt);
 });
 
@@ -2342,19 +2564,19 @@ app.patch('/api/appointments/:id/status', (req: AuthenticatedRequest, res: Respo
   apt.status = status;
 
   if (status === 'Confirmed') {
-    const notif: Notification = {
-      id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    createAndPersistNotification({
+      recipientId: apt.patientId,
+      patientId: apt.patientId,
+      recipientRole: 'patient',
       targetRole: 'patient',
-      userId: apt.patientId,
       title: 'Appointment Approved',
-      message: 'Your appointment has been approved.',
+      message: `Your appointment with ${apt.doctorName} has been approved.`,
       content: `Your appointment with ${apt.doctorName} on ${apt.date} at ${apt.time} (${apt.type}) has been approved. Location: ${apt.room || 'Outpatient Clinic'}. Queue Number: ${apt.queueNumber || 'Standard Queue'}.`,
       category: 'appointment',
       priority: 'normal',
-      read: false,
-      createdAt: new Date().toISOString(),
-    };
-    memNotifications.unshift(notif);
+      relatedResourceId: apt.id,
+      relatedResourceType: 'appointment',
+    }).catch(() => {});
   }
 
   flushClinicStateToDisk();
@@ -2625,9 +2847,47 @@ app.get('/api/clinic/sync', async (req: AuthenticatedRequest, res: Response) => 
     );
   }
 
-  const rawRole = (req.userRole || req.user?.role || 'patient').toLowerCase();
-  const roleScope = rawRole === 'patient' ? 'patient' : rawRole === 'admin' ? 'admin' : 'provider';
-  const notificationsData = memNotifications.filter((n) => n.targetRole === roleScope);
+  // Strict user-scoped notification filtering for sync endpoint
+  const currentUserId = req.userId || req.user?.userId || (req.headers['x-user-id'] as string) || (req.query.userId as string);
+  const currentUserEmail = (req.user?.email || (req.headers['x-user-email'] as string) || (req.query.email as string) || '').toLowerCase();
+  const rawRole = (req.userRole || req.user?.role || (req.headers['x-user-role'] as string) || (req.query.role as string) || 'patient').toLowerCase();
+
+  const notificationsData = memNotifications.filter((n: any) => {
+    const notifRecipientId = n.recipientId || n.userId;
+    const notifPatientId = n.patientId || (n.relatedResourceType === 'patient' ? n.relatedResourceId : undefined);
+    const notifDoctorId = n.doctorId;
+    const notifRecipientEmail = (n.recipientEmail || n.email || '').toLowerCase();
+    const notifRole = (n.recipientRole || n.targetRole || '').toLowerCase();
+
+    // 1. PATIENT ISOLATION:
+    if (rawRole === 'patient') {
+      const matchesPatientId = Boolean(linkedId && (notifRecipientId === linkedId || notifPatientId === linkedId));
+      const matchesUserId = Boolean(currentUserId && notifRecipientId === currentUserId);
+      const matchesEmail = Boolean(currentUserEmail && notifRecipientEmail && notifRecipientEmail === currentUserEmail);
+      if (!matchesPatientId && !matchesUserId && !matchesEmail) return false;
+      return notifRole === 'patient' || notifRole === 'all' || matchesPatientId || matchesUserId;
+    }
+
+    // 2. DOCTOR ISOLATION:
+    if (rawRole === 'doctor') {
+      const matchesDocId = Boolean(currentUserId && (notifDoctorId === currentUserId || notifRecipientId === currentUserId));
+      const matchesDocEmail = Boolean(currentUserEmail && notifRecipientEmail && notifRecipientEmail === currentUserEmail);
+      return matchesDocId || matchesDocEmail;
+    }
+
+    // 3. ADMIN ISOLATION:
+    if (rawRole === 'admin') {
+      return notifRole === 'admin' || n.category === 'inventory' || n.category === 'security' || n.category === 'system';
+    }
+
+    // 4. SPECIFIC STAFF:
+    if (rawRole === 'nurse') return notifRole === 'nurse' || (notifRole === 'provider' && (n.category === 'triage' || n.category === 'appointment'));
+    if (rawRole === 'receptionist') return notifRole === 'receptionist' || (notifRole === 'provider' && n.category === 'appointment');
+    if (rawRole === 'pharmacist') return notifRole === 'pharmacist' || n.category === 'prescription' || n.category === 'inventory';
+    if (rawRole === 'lab_technician') return notifRole === 'lab_technician' || n.category === 'lab';
+
+    return false;
+  });
 
   return res.json({
     status: 'synced',
@@ -2647,63 +2907,227 @@ app.get('/api/clinic/sync', async (req: AuthenticatedRequest, res: Response) => 
 });
 
 /* ==========================================================================
-   ROLE-BASED NOTIFICATIONS (Real-time live & RBAC isolated)
+   STRICTLY USER-SCOPED NOTIFICATIONS (Real-time Supabase Relational Persistence)
    ========================================================================== */
-app.get('/api/notifications', (req: AuthenticatedRequest, res: Response) => {
-  const rawRole = (req.userRole || req.user?.role || 'patient').toLowerCase();
-  const isPatient = rawRole === 'patient';
-  const isAdmin = rawRole === 'admin';
-  const roleScope: 'patient' | 'provider' | 'admin' = isPatient ? 'patient' : isAdmin ? 'admin' : 'provider';
+export async function createAndPersistNotification(notif: Partial<Notification> & { title: string; message: string; recipientEmail?: string }): Promise<Notification> {
+  const finalId = notif.id || `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+  const fullNotif: Notification = {
+    ...notif,
+    id: finalId,
+    title: notif.title,
+    message: notif.message,
+    createdAt: notif.createdAt || new Date().toISOString(),
+    read: Boolean(notif.read),
+  };
 
-  // Strict role filter: ONLY return notifications matching the user's role scope
-  const filtered = memNotifications.filter((n) => {
-    return n.targetRole === roleScope;
-  });
+  memNotifications.unshift(fullNotif);
+  if (memNotifications.length > 500) memNotifications.pop();
+  flushClinicStateToDisk();
 
-  return res.json(filtered);
+  // Persist directly to Supabase audit_logs under action = 'NOTIFICATION'
+  if (supabaseServer) {
+    try {
+      const auditLogRecord = {
+        id: finalId.startsWith('notif-') ? undefined : finalId, // Allow auto UUID if not uuid
+        user_id: notif.recipientId || notif.userId || 'system',
+        user_name: notif.title || 'Notification',
+        user_role: notif.recipientRole || notif.targetRole || 'all',
+        action: 'NOTIFICATION',
+        resource_type: (notif.relatedResourceType || notif.category || 'System') as any,
+        resource_id: notif.relatedResourceId || finalId,
+        description: `${notif.title}: ${notif.message}`,
+        details: {
+          title: notif.title,
+          message: notif.message,
+          content: notif.content || notif.message,
+          category: notif.category || 'system',
+          priority: notif.priority || 'normal',
+          read: fullNotif.read,
+          recipientId: notif.recipientId || notif.userId,
+          recipientRole: notif.recipientRole || notif.targetRole,
+          recipientEmail: notif.recipientEmail,
+          patientId: notif.patientId,
+          doctorId: notif.doctorId,
+          actionUrl: notif.link || notif.actionUrl,
+        },
+      };
+
+      await supabaseServer.from('audit_logs').insert(auditLogRecord);
+    } catch (e) {
+      // Non-fatal fallback
+    }
+  }
+
+  return fullNotif;
+}
+
+app.get('/api/notifications', async (req: AuthenticatedRequest, res: Response) => {
+  const currentUserId = req.userId || req.user?.userId || (req.headers['x-user-id'] as string) || (req.query.userId as string);
+  const currentUserEmail = (req.user?.email || (req.headers['x-user-email'] as string) || (req.query.email as string) || '').toLowerCase();
+  const rawRole = (req.userRole || req.user?.role || (req.headers['x-user-role'] as string) || (req.query.role as string) || 'patient').toLowerCase();
+  const linkedPatientId = req.linkedPatientId || req.user?.linkedPatientId || (req.headers['x-linked-patient-id'] as string) || (req.query.patientId as string);
+
+  try {
+    // 1. Fetch live notifications from Supabase audit_logs where action = 'NOTIFICATION'
+    let dbNotifs: Notification[] = [];
+    if (supabaseServer) {
+      const { data: logs, error } = await supabaseServer
+        .from('audit_logs')
+        .select('*')
+        .eq('action', 'NOTIFICATION')
+        .order('created_at', { ascending: false });
+
+      if (!error && Array.isArray(logs)) {
+        dbNotifs = logs.map((l: any) => {
+          const details = typeof l.details === 'object' && l.details !== null ? l.details : {};
+          return {
+            id: l.id,
+            userId: l.user_id || details.recipientId,
+            recipientId: details.recipientId || l.user_id,
+            recipientRole: details.recipientRole || l.user_role,
+            recipientEmail: details.recipientEmail,
+            patientId: details.patientId,
+            doctorId: details.doctorId,
+            targetRole: (l.user_role || details.recipientRole || 'all') as any,
+            title: details.title || l.description?.split(':')[0] || 'Clinic Notification',
+            message: details.message || l.description || '',
+            content: details.content || details.message || l.description || '',
+            category: details.category || 'system',
+            priority: details.priority || 'normal',
+            read: Boolean(details.read),
+            createdAt: l.created_at || l.timestamp,
+            link: details.link || details.actionUrl,
+            relatedResourceId: l.resource_id,
+            relatedResourceType: l.resource_type,
+          };
+        });
+      }
+    }
+
+    // Combine Supabase notifications with in-memory notifications without duplicates
+    const combinedMap = new Map<string, Notification>();
+    dbNotifs.forEach((n) => combinedMap.set(n.id, n));
+    memNotifications.forEach((n) => {
+      if (!combinedMap.has(n.id)) combinedMap.set(n.id, n);
+    });
+    const allNotifs = Array.from(combinedMap.values());
+
+    // 2. Strict User-Based Filtering
+    const filtered = allNotifs.filter((n: any) => {
+      const notifRecipientId = n.recipientId || n.userId;
+      const notifPatientId = n.patientId || (n.relatedResourceType === 'patient' ? n.relatedResourceId : undefined);
+      const notifDoctorId = n.doctorId;
+      const notifRecipientEmail = (n.recipientEmail || n.email || '').toLowerCase();
+      const notifRole = (n.recipientRole || n.targetRole || '').toLowerCase();
+
+      // PATIENT SCOPE:
+      if (rawRole === 'patient') {
+        const matchesPatientId = Boolean(linkedPatientId && (notifRecipientId === linkedPatientId || notifPatientId === linkedPatientId));
+        const matchesUserId = Boolean(currentUserId && notifRecipientId === currentUserId);
+        const matchesEmail = Boolean(currentUserEmail && notifRecipientEmail && notifRecipientEmail === currentUserEmail);
+
+        if (!matchesPatientId && !matchesUserId && !matchesEmail) {
+          return false;
+        }
+        return notifRole === 'patient' || notifRole === 'all' || matchesPatientId || matchesUserId;
+      }
+
+      // DOCTOR SCOPE:
+      if (rawRole === 'doctor') {
+        const matchesDoctorId = Boolean(currentUserId && (notifDoctorId === currentUserId || notifRecipientId === currentUserId));
+        const matchesDoctorEmail = Boolean(currentUserEmail && notifRecipientEmail && notifRecipientEmail === currentUserEmail);
+        return matchesDoctorId || matchesDoctorEmail;
+      }
+
+      // ADMIN SCOPE:
+      if (rawRole === 'admin') {
+        return notifRole === 'admin' || n.category === 'inventory' || n.category === 'security' || n.category === 'system';
+      }
+
+      // STAFF SCOPES:
+      if (rawRole === 'nurse') return notifRole === 'nurse' || (notifRole === 'provider' && (n.category === 'triage' || n.category === 'appointment'));
+      if (rawRole === 'receptionist') return notifRole === 'receptionist' || (notifRole === 'provider' && n.category === 'appointment');
+      if (rawRole === 'pharmacist') return notifRole === 'pharmacist' || n.category === 'prescription' || n.category === 'inventory';
+      if (rawRole === 'lab_technician') return notifRole === 'lab_technician' || n.category === 'lab';
+
+      return false;
+    });
+
+    filtered.sort((a, b) => {
+      const timeA = new Date(a.createdAt || a.timestamp || 0).getTime();
+      const timeB = new Date(b.createdAt || b.timestamp || 0).getTime();
+      return timeB - timeA;
+    });
+
+    return res.json(filtered);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch scoped notifications' });
+  }
 });
 
-app.patch('/api/notifications/:id/read', (req: AuthenticatedRequest, res: Response) => {
+app.patch('/api/notifications/:id/read', async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const notif = memNotifications.find((n) => n.id === id);
-  if (!notif) {
-    return res.status(404).json({ error: 'Notification not found' });
+  if (notif) {
+    notif.read = true;
   }
-  notif.read = true;
-  return res.json({ success: true, notification: notif });
+
+  // Update in Supabase audit_logs
+  if (supabaseServer) {
+    try {
+      const { data: existing } = await supabaseServer.from('audit_logs').select('details').eq('id', id).maybeSingle();
+      if (existing) {
+        const updatedDetails = { ...(existing.details || {}), read: true, readAt: new Date().toISOString() };
+        await supabaseServer.from('audit_logs').update({ details: updatedDetails }).eq('id', id);
+      }
+    } catch {}
+  }
+
+  flushClinicStateToDisk();
+  return res.json({ success: true, notification: notif || { id, read: true } });
 });
 
-app.post('/api/notifications/read-all', (req: AuthenticatedRequest, res: Response) => {
+app.post('/api/notifications/read-all', async (req: AuthenticatedRequest, res: Response) => {
+  const currentUserId = req.userId || req.user?.userId;
   const rawRole = (req.userRole || req.user?.role || 'patient').toLowerCase();
-  const isPatient = rawRole === 'patient';
-  const isAdmin = rawRole === 'admin';
-  const roleScope: 'patient' | 'provider' | 'admin' = isPatient ? 'patient' : isAdmin ? 'admin' : 'provider';
+  const linkedId = req.linkedPatientId || req.user?.linkedPatientId;
 
-  memNotifications.forEach((n) => {
-    const target = n.targetRole || 'all';
-    if (target === 'all' || target === roleScope) {
+  memNotifications.forEach((n: any) => {
+    const notifRecipientId = n.recipientId || n.userId;
+    const notifPatientId = n.patientId;
+    if (rawRole === 'patient' && linkedId && (notifRecipientId === linkedId || notifPatientId === linkedId)) {
+      n.read = true;
+    } else if (rawRole === 'doctor' && currentUserId && (n.doctorId === currentUserId || notifRecipientId === currentUserId)) {
+      n.read = true;
+    } else if (rawRole === 'admin' && (n.recipientRole === 'admin' || n.targetRole === 'admin')) {
       n.read = true;
     }
   });
 
-  return res.json({ success: true, message: 'All authorized notifications marked as read' });
+  flushClinicStateToDisk();
+  return res.json({ success: true, message: 'All authorized user notifications marked as read' });
 });
 
-app.post('/api/notifications', (req: AuthenticatedRequest, res: Response) => {
+app.post('/api/notifications', async (req: AuthenticatedRequest, res: Response) => {
   const body = req.body || {};
-  const newNotif: Notification = {
-    id: body.id || `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+  const newNotif = await createAndPersistNotification({
+    id: body.id,
+    recipientId: body.recipientId || body.userId,
+    recipientRole: body.recipientRole || body.targetRole || 'patient',
     targetRole: body.targetRole || 'all',
+    patientId: body.patientId,
+    doctorId: body.doctorId,
     title: body.title || 'New Clinic Update',
     message: body.message || '',
     content: body.content || body.message || '',
     category: body.category || 'system',
     priority: body.priority || 'normal',
     read: false,
-    createdAt: new Date().toISOString(),
-  };
+    link: body.link || body.actionUrl,
+    relatedResourceId: body.relatedResourceId,
+    relatedResourceType: body.relatedResourceType,
+  });
 
-  memNotifications.unshift(newNotif);
   return res.status(201).json(newNotif);
 });
 
