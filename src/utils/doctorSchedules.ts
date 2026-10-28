@@ -581,10 +581,14 @@ export function getDoctorSchedule(doctorId: string, fallbackUser?: User): Doctor
  */
 export function isDoctorWorkingOnDate(doctorId: string, dateStr: string, fallbackUser?: User): boolean {
   if (!dateStr) return false;
+  const cleanDate = dateStr.split('T')[0].trim();
+  const parts = cleanDate.split('-').map(Number);
+  if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) {
+    return false;
+  }
   const schedule = getDoctorSchedule(doctorId, fallbackUser);
   // Parse YYYY-MM-DD cleanly in local timezone
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const dateObj = new Date(year, month - 1, day);
+  const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
   const dayOfWeek = dateObj.getDay();
   return schedule.workDays.includes(dayOfWeek);
 }
@@ -653,7 +657,8 @@ export function getDoctorSlotAvailability(
 ): SlotAvailability[] {
   if (!doctorId || !dateStr) return [];
 
-  const isWorking = isDoctorWorkingOnDate(doctorId, dateStr, fallbackUser);
+  const cleanTargetDate = dateStr.split('T')[0].trim();
+  const isWorking = isDoctorWorkingOnDate(doctorId, cleanTargetDate, fallbackUser);
   if (!isWorking) {
     return []; // Doctor is off; no slots available
   }
@@ -662,7 +667,8 @@ export function getDoctorSlotAvailability(
 
   // Find all active booked appointments for this doctor on this date
   const bookedOnDate = appointments.filter((a) => {
-    if (a.date !== dateStr) return false;
+    const aDate = (a.date || '').split('T')[0].trim();
+    if (aDate !== cleanTargetDate) return false;
     if (a.status === 'Cancelled') return false;
     if (excludeAppointmentId && a.id === excludeAppointmentId) return false;
 
@@ -683,7 +689,9 @@ export function getDoctorSlotAvailability(
   bookedOnDate.forEach((a) => {
     const norm = normalizeTimeTo24Hour(a.time);
     bookedMap.set(norm, a);
-    bookedMap.set(a.time, a);
+    if (a.time) {
+      bookedMap.set(a.time.trim(), a);
+    }
   });
 
   return schedule.slots.map((slot) => {

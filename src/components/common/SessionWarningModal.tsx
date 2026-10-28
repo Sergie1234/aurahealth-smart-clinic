@@ -83,14 +83,20 @@ export const SessionWarningModal: React.FC = () => {
         <div className="flex items-center gap-3 pt-1">
           <button
             type="button"
-            onClick={resetSessionTimer}
+            onClick={(e) => {
+              e.stopPropagation();
+              resetSessionTimer();
+            }}
             className="flex-1 py-3 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white rounded-2xl text-xs font-bold shadow-lg shadow-teal-900/20 transition cursor-pointer transform hover:scale-[1.02]"
           >
             {t.session.stayLoggedInBtn}
           </button>
           <button
             type="button"
-            onClick={() => logout('login')}
+            onClick={(e) => {
+              e.stopPropagation();
+              logout('login');
+            }}
             className="px-4 py-3 bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/40 text-slate-700 hover:text-rose-600 dark:text-slate-300 dark:hover:text-rose-400 rounded-2xl text-xs font-bold border border-slate-200 dark:border-slate-700 transition cursor-pointer"
           >
             {t.session.logOutBtn}

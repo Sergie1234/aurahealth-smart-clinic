@@ -28,6 +28,7 @@ import {
   isDoctorWorkingOnDate,
   formatTimeSlot,
   getDoctorSlotAvailability,
+  normalizeTimeTo24Hour,
 } from '../../utils/doctorSchedules';
 
 export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClose }) => {
@@ -35,6 +36,7 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
     patients,
     users,
     appointments,
+    allClinicAppointments,
     addAppointment,
     primaryRole,
     linkedPatientId,
@@ -177,14 +179,15 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
     }> = [];
 
     const todayDateStr = new Date().toISOString().split('T')[0];
+    const clinicAppointments = allClinicAppointments || appointments;
 
     for (let day = 1; day <= totalDaysInMonth; day++) {
       const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const isWorkDay = isDoctorWorkingOnDate(selectedDoctor?.id || '', dateString, selectedDoctor);
       const isPast = dateString < todayDateStr;
 
-      // Check slot availability for this doctor on this day using doctor's personal schedule
-      const daySlots = getDoctorSlotAvailability(selectedDoctor?.id || '', dateString, appointments, undefined, selectedDoctor);
+      // Check slot availability for this doctor on this day using doctor's personal schedule and full clinic bookings
+      const daySlots = getDoctorSlotAvailability(selectedDoctor?.id || '', dateString, clinicAppointments, undefined, selectedDoctor);
       const availableSlotsCount = (isWorkDay && !isPast) ? daySlots.filter((s) => s.isAvailable).length : 0;
 
       days.push({
@@ -198,13 +201,14 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
     }
 
     return { firstDayIndex, days };
-  }, [calendarMonth, selectedDoctor, appointments]);
+  }, [calendarMonth, selectedDoctor, allClinicAppointments, appointments]);
 
   // Slots for the currently selected date: ONLY matching doctor's personal individual schedule
   const slotAvailability = useMemo(() => {
     if (!selectedDate || !selectedDoctor) return [];
-    return getDoctorSlotAvailability(selectedDoctor.id, selectedDate, appointments, undefined, selectedDoctor);
-  }, [selectedDate, selectedDoctor, appointments]);
+    const clinicAppointments = allClinicAppointments || appointments;
+    return getDoctorSlotAvailability(selectedDoctor.id, selectedDate, clinicAppointments, undefined, selectedDoctor);
+  }, [selectedDate, selectedDoctor, allClinicAppointments, appointments]);
 
   // Available slots count for selected date
   const remainingSlotsForSelectedDate = useMemo(() => {
@@ -216,12 +220,15 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
     e.preventDefault();
     if (!selectedPatient || !selectedDoctor || !selectedDate || !selectedTimeSlot) return;
 
-    // Double-check race condition prevention
-    const isAlreadyBooked = appointments.some(
+    // Double-check race condition prevention with normalized date and 24-hour time across full clinic schedule
+    const cleanSelDate = selectedDate.split('T')[0].trim();
+    const cleanSelTime = normalizeTimeTo24Hour(selectedTimeSlot);
+    const clinicAppointments = allClinicAppointments || appointments;
+    const isAlreadyBooked = clinicAppointments.some(
       (a) =>
-        a.doctorId === selectedDoctor.id &&
-        a.date === selectedDate &&
-        a.time === selectedTimeSlot &&
+        (a.doctorId === selectedDoctor.id || a.doctorName?.toLowerCase() === selectedDoctor.name.toLowerCase()) &&
+        (a.date || '').split('T')[0].trim() === cleanSelDate &&
+        normalizeTimeTo24Hour(a.time) === cleanSelTime &&
         a.status !== 'Cancelled'
     );
 

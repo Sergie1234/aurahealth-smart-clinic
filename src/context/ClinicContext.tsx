@@ -178,6 +178,7 @@ interface ClinicContextType {
   setIsBookAppointmentOpen: (open: boolean) => void;
   openBookAppointmentWithDraft: (draft: TriageBookingDraft) => void;
   appointments: Appointment[];
+  allClinicAppointments: Appointment[];
   addAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt'>) => Appointment;
   updateAppointmentStatus: (id: string, status: AppointmentStatus, room?: string) => void;
   cancelAppointment: (id: string, reason?: string) => void;
@@ -286,6 +287,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       .then((res) => res.json())
       .then((serverDoctors) => {
         if (Array.isArray(serverDoctors) && serverDoctors.length > 0) {
+          serverDoctors.forEach((d: User) => {
+            if (d.role === 'doctor') {
+              registerDoctorSchedule(d.id, getDoctorSchedule(d.id, d));
+            }
+          });
           setUsers((prev) => {
             const map = new Map<string, User>();
             prev.forEach((u) => map.set(u.id, u));
@@ -378,6 +384,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [sessionTimeoutTotal, setSessionTimeoutTotal] = useState<number>(() => 10 * 60);
   const [sessionSecondsRemaining, setSessionSecondsRemaining] = useState<number>(() => 10 * 60);
 
+  const logoutRef = React.useRef<(redirectTab?: string) => void>(() => {});
+
   const resetSessionTimer = useCallback(() => {
     lastActivityRef.current = Date.now();
     setShowSessionWarning(false);
@@ -399,19 +407,12 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     let lastLoggedActivity = Date.now();
     const handleUserActivity = (ev: Event) => {
-      const now = Date.now();
+      // While the warning modal is shown, do NOT let background window events reset the timer or close the modal!
+      // The user must explicitly click "Stay Logged In" or "Log Out Now".
       if (showSessionWarningRef.current) {
-        // While the warning modal is up, deliberate interaction (click, keydown, touch) resets
-        if (ev.type === 'mousemove' || ev.type === 'scroll') {
-          return;
-        }
-        lastLoggedActivity = now;
-        lastActivityRef.current = now;
-        setShowSessionWarning(false);
-        const curTotal = getTimeoutSeconds();
-        setSessionSecondsRemaining(curTotal);
         return;
       }
+      const now = Date.now();
       // During active session, throttle activity updates so we maintain top performance
       if (now - lastLoggedActivity > 500) {
         lastLoggedActivity = now;
@@ -432,19 +433,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       if (remainingSecs <= 0) {
         setShowSessionWarning(false);
-        // Automatic logout and redirect to login page when time is up
-        setIsAuthenticated(false);
-        setPrimaryRole(null);
-        setStaffSubRole(null);
-        setLinkedPatientId(null);
-        setPendingAction(null);
-        setActiveRole('patient');
-        setAuthToken(null);
-        try {
-          localStorage.removeItem('smart_clinic_auth_session');
-          localStorage.removeItem('smart_clinic_token');
-        } catch {}
-        setActiveTabState('login');
+        // Automatic full logout and redirect to login page when time is up
+        logoutRef.current('login');
       } else if (remainingSecs <= 60) {
         // Show warning when 60 seconds (1 minute) remain before timeout
         setShowSessionWarning(true);
@@ -626,7 +616,11 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const incomingIds = new Set(data.appointments.map((a: Appointment) => a.id));
             prev.forEach((local) => {
               if (!incomingIds.has(local.id)) {
-                merged.unshift(local);
+                // Only retain local appointments that were created very recently (<60s) in-flight
+                const isRecent = local.createdAt && (Date.now() - new Date(local.createdAt).getTime() < 60000);
+                if (isRecent) {
+                  merged.unshift(local);
+                }
               }
             });
             return merged;
@@ -1240,7 +1234,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  const logout = (redirectTab: string = 'login') => {
+  const logout = useCallback((redirectTab: string = 'login') => {
     setIsAuthenticated(false);
     setPrimaryRole(null);
     setStaffSubRole(null);
@@ -1250,7 +1244,10 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setCurrentUser(GUEST_USER);
     setAuthToken(null);
     setShowSessionWarning(false);
+    setSelectedPatientId(null);
+    setTriageDraftForBooking(null);
     setSessionSecondsRemaining(10 * 60);
+    lastActivityRef.current = Date.now();
     try {
       localStorage.removeItem('smart_clinic_auth_session');
       localStorage.removeItem('smart_clinic_token');
@@ -1260,8 +1257,13 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       sessionStorage.clear();
     } catch { /* ignore */ }
     setNotifications([]);
-    setActiveTab(redirectTab);
-  };
+    setIsNavigating(false);
+    setActiveTabState(redirectTab);
+  }, []);
+
+  useEffect(() => {
+    logoutRef.current = logout;
+  }, [logout]);
 
   const syncToBackend = async (url: string, options: RequestInit, contextDescription: string) => {
     try {
@@ -1286,64 +1288,75 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  const isPatientScope = primaryRole === 'patient' || activeRole === 'patient';
+  const isPatientScope = isAuthenticated && (primaryRole === 'patient' || activeRole === 'patient');
 
   // Identify current authenticated patient record
   const currentPatientRecord = useMemo(() => {
-    if (!isPatientScope) return null;
+    if (!isAuthenticated || !isPatientScope) return null;
     return (
       patients.find((p) => p.id === linkedPatientId) ||
       patients.find((p) => currentUser.email && p.email?.toLowerCase() === currentUser.email?.toLowerCase()) ||
-      patients[0]
+      null
     );
-  }, [isPatientScope, linkedPatientId, patients, currentUser.email]);
+  }, [isAuthenticated, isPatientScope, linkedPatientId, patients, currentUser.email]);
 
   // When patient is logged in, isolated arrays only contain their OWN records
   const isolatedPatients = useMemo(() => {
-    if (isPatientScope && currentPatientRecord) {
-      return [currentPatientRecord];
+    if (!isAuthenticated) return [];
+    if (isPatientScope) {
+      return currentPatientRecord ? [currentPatientRecord] : [];
     }
     return patients;
-  }, [isPatientScope, currentPatientRecord, patients]);
+  }, [isAuthenticated, isPatientScope, currentPatientRecord, patients]);
 
   const isolatedAppointments = useMemo(() => {
-    if (isPatientScope && currentPatientRecord) {
+    if (!isAuthenticated) return [];
+    if (isPatientScope) {
+      if (!currentPatientRecord) return [];
       return appointments.filter(
-        (a) => a.patientId === currentPatientRecord.id || a.patientName === currentPatientRecord.fullName
+        (a) => a.patientId !== 'REDACTED' && (a.patientId === currentPatientRecord.id || a.patientName === currentPatientRecord.fullName)
       );
     }
     return appointments;
-  }, [isPatientScope, currentPatientRecord, appointments]);
+  }, [isAuthenticated, isPatientScope, currentPatientRecord, appointments]);
 
   const isolatedConsultations = useMemo(() => {
-    if (isPatientScope && currentPatientRecord) {
+    if (!isAuthenticated) return [];
+    if (isPatientScope) {
+      if (!currentPatientRecord) return [];
       return consultations.filter(
         (c) => c.patientId === currentPatientRecord.id || c.patientName === currentPatientRecord.fullName
       );
     }
     return consultations;
-  }, [isPatientScope, currentPatientRecord, consultations]);
+  }, [isAuthenticated, isPatientScope, currentPatientRecord, consultations]);
 
   const isolatedPrescriptions = useMemo(() => {
-    if (isPatientScope && currentPatientRecord) {
+    if (!isAuthenticated) return [];
+    if (isPatientScope) {
+      if (!currentPatientRecord) return [];
       return prescriptions.filter(
         (p) => p.patientId === currentPatientRecord.id || p.patientName === currentPatientRecord.fullName
       );
     }
     return prescriptions;
-  }, [isPatientScope, currentPatientRecord, prescriptions]);
+  }, [isAuthenticated, isPatientScope, currentPatientRecord, prescriptions]);
 
   const isolatedLabOrders = useMemo(() => {
-    if (isPatientScope && currentPatientRecord) {
+    if (!isAuthenticated) return [];
+    if (isPatientScope) {
+      if (!currentPatientRecord) return [];
       return labOrders.filter(
         (l) => l.patientId === currentPatientRecord.id || l.patientName === currentPatientRecord.fullName
       );
     }
     return labOrders;
-  }, [isPatientScope, currentPatientRecord, labOrders]);
+  }, [isAuthenticated, isPatientScope, currentPatientRecord, labOrders]);
 
   const isolatedInvoices = useMemo(() => {
-    if (isPatientScope && currentPatientRecord) {
+    if (!isAuthenticated) return [];
+    if (isPatientScope) {
+      if (!currentPatientRecord) return [];
       return invoices.filter(
         (i) => i.patientId === currentPatientRecord.id || i.patientName === currentPatientRecord.fullName
       );
@@ -1357,16 +1370,19 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     }
     return invoices;
-  }, [isPatientScope, currentPatientRecord, invoices, activeRole, currentUser]);
+  }, [isAuthenticated, isPatientScope, currentPatientRecord, invoices, activeRole, currentUser]);
 
   const visiblePatients = isolatedPatients;
   const myAppointments = isolatedAppointments;
 
-  const selectedPatient = isPatientScope && currentPatientRecord
-    ? currentPatientRecord
-    : (patients.find((p) => p.id === selectedPatientId) || null);
+  const selectedPatient = !isAuthenticated
+    ? null
+    : isPatientScope && currentPatientRecord
+      ? currentPatientRecord
+      : (patients.find((p) => p.id === selectedPatientId) || null);
 
   const selectPatient = (id: string | null) => {
+    if (!isAuthenticated) return;
     if (isPatientScope && currentPatientRecord && id && id !== currentPatientRecord.id) return;
     setSelectedPatientId(id);
   };
@@ -1528,18 +1544,27 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       body: JSON.stringify(newApt),
     }, 'Create appointment');
 
+    if (typeof window !== 'undefined' && window.BroadcastChannel) {
+      try {
+        const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
+        channel.postMessage({ type: 'NEW_APPOINTMENT', appointment: newApt });
+        channel.close();
+      } catch {}
+    }
+
     return newApt;
   };
 
-  const updateAppointmentStatus = (id: string, status: AppointmentStatus, room?: string) => {
+  const updateAppointmentStatus = (id: string, status: AppointmentStatus, room?: string, customNotes?: string) => {
     const existingApt = appointments.find((a) => a.id === id);
     const targetRoom = room || (existingApt ? existingApt.room : undefined);
+    const finalNotes = customNotes !== undefined ? customNotes : (existingApt ? existingApt.notes : undefined);
     const updatedApt: Appointment | null = existingApt
-      ? { ...existingApt, status, ...(targetRoom ? { room: targetRoom } : {}) }
+      ? { ...existingApt, status, ...(targetRoom ? { room: targetRoom } : {}), ...(finalNotes !== undefined ? { notes: finalNotes } : {}) }
       : null;
 
     setAppointments((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, status, ...(targetRoom ? { room: targetRoom } : {}) } : a))
+      prev.map((a) => (a.id === id ? { ...a, status, ...(targetRoom ? { room: targetRoom } : {}), ...(finalNotes !== undefined ? { notes: finalNotes } : {}) } : a))
     );
 
     // Immediately persist to localStorage for instant reload protection
@@ -1547,7 +1572,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const saved = localStorage.getItem('smart_clinic_appointments');
       if (saved) {
         const parsed: Appointment[] = JSON.parse(saved);
-        const nextList = parsed.map((a) => (a.id === id ? { ...a, status, ...(targetRoom ? { room: targetRoom } : {}) } : a));
+        const nextList = parsed.map((a) => (a.id === id ? { ...a, status, ...(targetRoom ? { room: targetRoom } : {}), ...(finalNotes !== undefined ? { notes: finalNotes } : {}) } : a));
         localStorage.setItem('smart_clinic_appointments', JSON.stringify(nextList));
       }
     } catch {}
@@ -1691,15 +1716,17 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       body: JSON.stringify({
         status,
         room: targetRoom,
-        notes: updatedApt?.notes,
+        notes: finalNotes,
         queueNumber: updatedApt?.queueNumber,
       }),
     }, 'Update appointment status');
 
     if (typeof window !== 'undefined' && window.BroadcastChannel) {
-      const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
-      channel.postMessage({ type: 'UPDATE_APPOINTMENT_STATUS', id, status, room: targetRoom });
-      channel.close();
+      try {
+        const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
+        channel.postMessage({ type: 'UPDATE_APPOINTMENT_STATUS', id, status, room: targetRoom, notes: finalNotes });
+        channel.close();
+      } catch {}
     }
   };
 
@@ -1707,34 +1734,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const apt = appointments.find((a) => a.id === id);
     if (!apt) return;
     const updatedNotes = reason ? `${apt.notes ? apt.notes + ' • ' : ''}Cancellation reason: ${reason}` : apt.notes;
-    const cancelledApt: Appointment = {
-      ...apt,
-      status: 'Cancelled',
-      notes: updatedNotes,
-    };
-
-    setAppointments((prev) =>
-      prev.map((a) => (a.id === id ? cancelledApt : a))
-    );
-
-    // Immediately persist to localStorage
-    try {
-      const saved = localStorage.getItem('smart_clinic_appointments');
-      if (saved) {
-        const parsed: Appointment[] = JSON.parse(saved);
-        const nextList = parsed.map((a) => (a.id === id ? cancelledApt : a));
-        localStorage.setItem('smart_clinic_appointments', JSON.stringify(nextList));
-      }
-    } catch {}
-
-    syncAppointmentToSupabase(cancelledApt);
-    updateAppointmentStatus(id, 'Cancelled');
     logAction('APPOINTMENT_CANCELLED', 'Appointment', id, `Cancelled appointment for ${apt.patientName}${reason ? ` (${reason})` : ''}`);
-
-    syncToBackend(`/api/appointments/${id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: 'Cancelled', notes: updatedNotes }),
-    }, 'Cancel appointment');
+    updateAppointmentStatus(id, 'Cancelled', undefined, updatedNotes);
   };
 
   const updateAppointmentRoom = (id: string, room: string) => {
@@ -2325,8 +2326,22 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // STRICT USER-SCOPED NOTIFICATIONS (Zero-Leakage RBAC & Identity Isolation)
   // ==============================================================================
   const roleNotifications = useMemo(() => {
+    if (!isAuthenticated) return [];
+
+    const seenIds = new Set<string>();
+    const seenSignatures = new Set<string>();
+
     return notifications
       .filter((n: any) => {
+        if (!n || !n.id) return false;
+
+        // Deduplicate by ID
+        if (seenIds.has(n.id)) return false;
+
+        // Deduplicate by semantic signature (title + message + target)
+        const sig = `${(n.title || '').trim().toLowerCase()}|${(n.message || '').trim().toLowerCase()}|${n.recipientId || ''}|${n.patientId || ''}|${n.doctorId || ''}`;
+        if (seenSignatures.has(sig)) return false;
+
         const notifRecipientId = n.recipientId || n.userId;
         const notifPatientId = n.patientId || (n.relatedResourceType === 'patient' ? n.relatedResourceId : undefined);
         const notifDoctorId = n.doctorId;
@@ -2349,6 +2364,8 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           if (notifRole !== 'patient' && notifRole !== 'all' && !matchesPatientId && !matchesUserId) {
             return false;
           }
+          seenIds.add(n.id);
+          seenSignatures.add(sig);
           return true;
         }
 
@@ -2357,26 +2374,42 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (activeRole === 'doctor' || primaryRole === 'doctor') {
           const matchesDoctorId = Boolean(currentUser?.id && (notifDoctorId === currentUser.id || notifRecipientId === currentUser.id));
           const matchesDoctorEmail = Boolean(currentEmail && notifRecipientEmail && notifRecipientEmail === currentEmail);
-          return matchesDoctorId || matchesDoctorEmail;
+          const isGeneralDoctorNotif = (notifRole === 'doctor' || notifRole === 'provider') && !notifDoctorId && !notifRecipientId;
+          if (matchesDoctorId || matchesDoctorEmail || isGeneralDoctorNotif) {
+            seenIds.add(n.id);
+            seenSignatures.add(sig);
+            return true;
+          }
+          return false;
         }
 
         // 3. ADMIN SCOPE:
         if (activeRole === 'admin' || primaryRole === 'admin') {
-          return notifRole === 'admin' || n.category === 'inventory' || n.category === 'security' || n.category === 'system';
+          const isAdminNotif = notifRole === 'admin' || n.category === 'inventory' || n.category === 'security' || n.category === 'system' || notifRole === 'all';
+          if (isAdminNotif) {
+            seenIds.add(n.id);
+            seenSignatures.add(sig);
+            return true;
+          }
+          return false;
         }
 
         // 4. SPECIFIC STAFF ROLES:
+        let isStaffMatch = false;
         if (activeRole === 'nurse') {
-          return notifRole === 'nurse' || (notifRole === 'provider' && (n.category === 'triage' || n.category === 'appointment'));
+          isStaffMatch = notifRole === 'nurse' || (notifRole === 'provider' && (n.category === 'triage' || n.category === 'appointment'));
+        } else if (activeRole === 'receptionist') {
+          isStaffMatch = notifRole === 'receptionist' || (notifRole === 'provider' && n.category === 'appointment');
+        } else if (activeRole === 'pharmacist') {
+          isStaffMatch = notifRole === 'pharmacist' || n.category === 'prescription' || n.category === 'inventory';
+        } else if (activeRole === 'lab_technician') {
+          isStaffMatch = notifRole === 'lab_technician' || n.category === 'lab';
         }
-        if (activeRole === 'receptionist') {
-          return notifRole === 'receptionist' || (notifRole === 'provider' && n.category === 'appointment');
-        }
-        if (activeRole === 'pharmacist') {
-          return notifRole === 'pharmacist' || n.category === 'prescription' || n.category === 'inventory';
-        }
-        if (activeRole === 'lab_technician') {
-          return notifRole === 'lab_technician' || n.category === 'lab';
+
+        if (isStaffMatch) {
+          seenIds.add(n.id);
+          seenSignatures.add(sig);
+          return true;
         }
 
         return false;
@@ -2386,7 +2419,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const timeB = new Date(b.createdAt || b.timestamp || 0).getTime();
         return timeB - timeA;
       });
-  }, [notifications, activeRole, primaryRole, currentUser, linkedPatientId]);
+  }, [notifications, activeRole, primaryRole, currentUser, linkedPatientId, isAuthenticated]);
 
   const unreadNotificationCount = useMemo(() => {
     return roleNotifications.filter((n) => !n.read).length;
@@ -2412,17 +2445,36 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               (incoming.patientId && incoming.patientId === linkedPatientId) ||
               (incoming.doctorId && incoming.doctorId === currentUser?.id) ||
               (incEmail && myEmail && incEmail === myEmail) ||
-              (activeRole === 'admin' && (incoming.recipientRole === 'admin' || incoming.targetRole === 'admin'));
+              (activeRole === 'admin' && (incoming.recipientRole === 'admin' || incoming.targetRole === 'admin')) ||
+              (activeRole === 'doctor' && (incoming.recipientRole === 'doctor' || incoming.recipientRole === 'provider')) ||
+              (activeRole === 'nurse' && (incoming.recipientRole === 'nurse' || incoming.recipientRole === 'provider')) ||
+              (activeRole === 'receptionist' && (incoming.recipientRole === 'receptionist' || incoming.recipientRole === 'provider'));
 
             if (!isForMe) return;
 
             setNotifications((prev) => {
-              if (prev.some((n) => n.id === incoming.id)) return prev;
+              if (
+                prev.some(
+                  (n) =>
+                    n.id === incoming.id ||
+                    (n.title === incoming.title &&
+                      n.message === incoming.message &&
+                      Math.abs(new Date(n.createdAt || 0).getTime() - new Date(incoming.createdAt || 0).getTime()) < 5000)
+                )
+              ) {
+                return prev;
+              }
               return [incoming, ...prev];
             });
           } else if (event.data?.type === 'UPDATE_APPOINTMENT_STATUS') {
-            const { id, status } = event.data;
-            setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
+            const { id, status, notes } = event.data;
+            setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status, ...(notes !== undefined ? { notes } : {}) } : a)));
+          } else if (event.data?.type === 'NEW_APPOINTMENT' && event.data.appointment) {
+            const incomingApt: Appointment = event.data.appointment;
+            setAppointments((prev) => {
+              if (prev.some((a) => a.id === incomingApt.id)) return prev;
+              return [incomingApt, ...prev];
+            });
           }
         };
       }
@@ -2450,12 +2502,37 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           if (isMounted && Array.isArray(liveData)) {
             setNotifications((prev) => {
               const idMap = new Map<string, Notification>();
-              prev.forEach((n) => idMap.set(n.id, n));
-              liveData.forEach((liveNotif) => {
-                if (!idMap.has(liveNotif.id)) {
-                  idMap.set(liveNotif.id, liveNotif);
+              const signatureMap = new Map<string, Notification>();
+
+              // Register authoritative live data first
+              liveData.forEach((item) => {
+                const sig = `${(item.title || '').trim().toLowerCase()}|${(item.message || '').trim().toLowerCase()}|${item.recipientId || ''}|${item.patientId || ''}`;
+                signatureMap.set(sig, item);
+                idMap.set(item.id, item);
+              });
+
+              // Check existing local notifications
+              prev.forEach((localItem) => {
+                if (idMap.has(localItem.id)) {
+                  // Retain user's local read status if marked read locally before server poll
+                  const serverItem = idMap.get(localItem.id)!;
+                  if (localItem.read && !serverItem.read) {
+                    idMap.set(localItem.id, { ...serverItem, read: true });
+                  }
+                  return;
+                }
+                const sig = `${(localItem.title || '').trim().toLowerCase()}|${(localItem.message || '').trim().toLowerCase()}|${localItem.recipientId || ''}|${localItem.patientId || ''}`;
+                if (signatureMap.has(sig)) {
+                  // Already represented on server by content signature
+                  return;
+                }
+                // Only keep local notifications that are recent (<15 seconds in-flight)
+                const isRecent = localItem.createdAt && (Date.now() - new Date(localItem.createdAt).getTime() < 15000);
+                if (isRecent) {
+                  idMap.set(localItem.id, localItem);
                 }
               });
+
               return Array.from(idMap.values());
             });
           }
@@ -3156,6 +3233,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setIsBookAppointmentOpen,
         openBookAppointmentWithDraft,
         appointments: isolatedAppointments,
+        allClinicAppointments: appointments,
         addAppointment,
         updateAppointmentStatus,
         cancelAppointment,

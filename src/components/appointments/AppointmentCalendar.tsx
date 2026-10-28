@@ -24,6 +24,7 @@ import {
   isDoctorWorkingOnDate,
   formatTimeSlot,
   getDoctorSlotAvailability,
+  normalizeTimeTo24Hour,
 } from '../../utils/doctorSchedules';
 
 interface Props {
@@ -37,6 +38,7 @@ export const AppointmentCalendar: React.FC<Props> = ({
 }) => {
   const {
     appointments,
+    allClinicAppointments,
     updateAppointmentStatus,
     rescheduleAppointment,
     users,
@@ -232,12 +234,15 @@ export const AppointmentCalendar: React.FC<Props> = ({
     if (!reschedulingApt || !newReschedDate || !newReschedTime) return;
 
     // Double check that the selected slot is not already booked by another patient
-    const isBooked = appointments.some(
+    const cleanReschedDate = newReschedDate.split('T')[0].trim();
+    const cleanReschedTime = normalizeTimeTo24Hour(newReschedTime);
+    const clinicAppointments = allClinicAppointments || appointments;
+    const isBooked = clinicAppointments.some(
       (a) =>
         a.id !== reschedulingApt.id &&
-        a.doctorId === reschedulingApt.doctorId &&
-        a.date === newReschedDate &&
-        a.time === newReschedTime &&
+        (a.doctorId === reschedulingApt.doctorId || a.doctorName?.toLowerCase() === reschedulingApt.doctorName?.toLowerCase()) &&
+        (a.date || '').split('T')[0].trim() === cleanReschedDate &&
+        normalizeTimeTo24Hour(a.time) === cleanReschedTime &&
         a.status !== 'Cancelled'
     );
     if (isBooked) {
@@ -876,8 +881,9 @@ export const AppointmentCalendar: React.FC<Props> = ({
         const reschedDoc = users.find((u) => u.id === reschedulingApt.doctorId);
         const docSchedule = getDoctorSchedule(reschedulingApt.doctorId, reschedDoc);
         const isDocWorking = newReschedDate ? isDoctorWorkingOnDate(reschedulingApt.doctorId, newReschedDate, reschedDoc) : false;
+        const clinicAppointments = allClinicAppointments || appointments;
         const availableSlots = newReschedDate
-          ? getDoctorSlotAvailability(reschedulingApt.doctorId, newReschedDate, appointments, reschedulingApt.id, reschedDoc)
+          ? getDoctorSlotAvailability(reschedulingApt.doctorId, newReschedDate, clinicAppointments, reschedulingApt.id, reschedDoc)
           : [];
 
         return (

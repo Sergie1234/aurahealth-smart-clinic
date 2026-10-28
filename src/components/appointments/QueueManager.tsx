@@ -178,7 +178,11 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
 
   // Active Queue: strictly include active visits in outpatient clinic
   const todayStr = new Date().toISOString().split('T')[0];
-  const isTodayOrDemoDate = (d?: string) => !d || d === todayStr || d === '2026-10-06';
+  const isTodayOrDemoDate = (d?: string) => {
+    if (!d) return true;
+    const clean = d.split('T')[0].trim();
+    return clean === todayStr || clean === '2026-10-06' || clean === '2026-10-28';
+  };
   const activeQueueList = appointments.filter(
     (a) =>
       a.status !== 'Cancelled' &&
@@ -205,10 +209,11 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
 
   // Current user's patient ticket if authenticated as patient (strictly live Checked In or In Consultation)
   const patientTicket =
-    activeRole === 'patient'
+    isAuthenticated && activeRole === 'patient'
       ? appointments.find(
           (a) =>
-            (a.patientId === linkedPatientId || (currentUser?.name && a.patientName === currentUser.name)) &&
+            (a.patientId === linkedPatientId ||
+              (currentUser?.name && a.patientName.toLowerCase() === currentUser.name.toLowerCase())) &&
             (a.status === 'Checked In' || a.status === 'In Consultation')
         )
       : null;

@@ -3087,9 +3087,34 @@ app.get('/api/clinic/sync', async (req: AuthenticatedRequest, res: Response) => 
   if (isPatient && linkedId) {
     const patient = memPatients.find((p) => p.id === linkedId);
     patientsData = memPatients.filter((p) => p.id === linkedId);
-    appointmentsData = memAppointments.filter(
+    
+    // Patient's own full appointments with complete medical context
+    const ownAppointments = memAppointments.filter(
       (a) => a.patientId === linkedId || (patient && a.patientName === patient.fullName)
     );
+
+    // Sanitized slot reservations for other patients (NO personal medical details, names, or MRNs)
+    // strictly to allow live, accurate doctor slot availability and prevent double bookings
+    const otherBookedSlots = memAppointments
+      .filter((a) => a.status !== 'Cancelled' && a.patientId !== linkedId && (!patient || a.patientName !== patient.fullName))
+      .map((a) => ({
+        id: a.id,
+        doctorId: a.doctorId,
+        doctorName: a.doctorName,
+        department: a.department,
+        date: a.date,
+        time: a.time,
+        durationMinutes: a.durationMinutes || 30,
+        status: a.status,
+        type: 'Consultation' as const,
+        patientId: 'REDACTED',
+        patientName: 'Occupied Slot',
+        patientMrn: 'REDACTED',
+        reason: 'Reserved Time Slot',
+        createdAt: a.createdAt,
+      }));
+
+    appointmentsData = [...ownAppointments, ...otherBookedSlots];
     consultationsData = memConsultations.filter(
       (c) => c.patientId === linkedId || (patient && c.patientName === patient.fullName)
     );
@@ -3177,7 +3202,18 @@ export async function createAndPersistNotification(notif: Partial<Notification> 
     read: Boolean(notif.read),
   };
 
-  memNotifications.unshift(fullNotif);
+  const existingIdx = memNotifications.findIndex(
+    (m) =>
+      m.id === finalId ||
+      (m.title === fullNotif.title &&
+        m.message === fullNotif.message &&
+        (m.recipientId || m.userId) === (fullNotif.recipientId || fullNotif.userId))
+  );
+  if (existingIdx >= 0) {
+    memNotifications[existingIdx] = fullNotif;
+  } else {
+    memNotifications.unshift(fullNotif);
+  }
   if (memNotifications.length > 500) memNotifications.pop();
   flushClinicStateToDisk();
 
@@ -3237,7 +3273,7 @@ app.get('/api/notifications', async (req: AuthenticatedRequest, res: Response) =
       if (!error && Array.isArray(logs)) {
         dbNotifs = logs.map((l: any) => {
           const details = typeof l.details === 'object' && l.details !== null ? l.details : {};
-          const notifId = details.notificationId || (l.resource_id && l.resource_id.startsWith('notif-') ? l.resource_id : l.id);
+          const notifId = details.notificationId || (l.resource_id && l.resource_id.startsWith('notif-') ? l.resource_id : String(l.id));
           return {
             id: notifId,
             userId: l.user_id || details.recipientId,
@@ -3264,23 +3300,28 @@ app.get('/api/notifications', async (req: AuthenticatedRequest, res: Response) =
 
     // Combine Supabase notifications with in-memory notifications without duplicates
     const seenSignatures = new Set<string>();
+    const seenIds = new Set<string>();
     const combinedMap = new Map<string, Notification>();
 
     const getSoftSig = (n: any) =>
-      `${(n.title || '').trim()}::${(n.message || '').trim()}::${n.recipientId || n.userId || ''}::${n.relatedResourceId || ''}`;
+      `${(n.title || '').trim()}::${(n.message || '').trim()}::${n.recipientId || n.userId || ''}::${n.patientId || ''}::${n.doctorId || ''}`;
 
     for (const n of dbNotifs) {
+      if (!n || !n.id) continue;
       const sig = getSoftSig(n);
-      if (!seenSignatures.has(sig) && !combinedMap.has(n.id)) {
+      if (!seenSignatures.has(sig) && !seenIds.has(n.id)) {
         seenSignatures.add(sig);
+        seenIds.add(n.id);
         combinedMap.set(n.id, n);
       }
     }
 
     for (const n of memNotifications) {
+      if (!n || !n.id) continue;
       const sig = getSoftSig(n);
-      if (!combinedMap.has(n.id) && !seenSignatures.has(sig)) {
+      if (!seenIds.has(n.id) && !seenSignatures.has(sig)) {
         seenSignatures.add(sig);
+        seenIds.add(n.id);
         combinedMap.set(n.id, n);
       }
     }
