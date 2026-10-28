@@ -172,7 +172,7 @@ const ClinicAppContent: React.FC = () => {
 
     const roleTabMap: Record<string, string[]> = {
       patient: ['home', 'dashboard', 'appointments', 'queue', 'emr', 'prescriptions', 'laboratory', 'billing', 'ai-assistant', 'notifications'],
-      admin: ['home', 'dashboard', 'patients', 'doctors', 'clinical-staff', 'staff-management', 'audit-logs', 'reports', 'predictive-analytics', 'billing', 'inventory', 'ai-assistant', 'notifications'],
+      admin: ['home', 'dashboard', 'patients', 'doctors', 'clinical-staff', 'staff-management', 'consultations', 'audit-logs', 'reports', 'predictive-analytics', 'billing', 'inventory', 'ai-assistant', 'notifications'],
       doctor: ['home', 'dashboard', 'patients', 'appointments', 'queue', 'consultations', 'prescriptions', 'laboratory', 'inventory', 'ai-assistant', 'notifications'],
       nurse: ['home', 'dashboard', 'patients', 'scan-qr', 'appointments', 'queue', 'consultations', 'laboratory', 'ai-assistant', 'notifications'],
       receptionist: ['home', 'dashboard', 'patients', 'scan-qr', 'appointments', 'queue', 'billing', 'ai-assistant', 'notifications'],

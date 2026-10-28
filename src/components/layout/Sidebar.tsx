@@ -104,7 +104,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
       id: 'consultations',
       label: t.nav.consultations,
       icon: Stethoscope,
-      roles: ['doctor', 'nurse'],
+      roles: ['doctor', 'nurse', 'admin'],
       permissionKey: 'consultations',
     },
     {
