@@ -2577,10 +2577,11 @@ app.post('/api/appointments', (req: AuthenticatedRequest, res: Response) => {
 
 app.patch('/api/appointments/:id/status', (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
-  const { status } = req.body;
+  const { status, room } = req.body;
   const apt = memAppointments.find((a) => a.id === id);
   if (!apt) return res.status(404).json({ error: 'Appointment not found' });
   apt.status = status;
+  if (room) apt.room = room;
 
   if (status === 'Confirmed') {
     createAndPersistNotification({
@@ -2591,6 +2592,140 @@ app.patch('/api/appointments/:id/status', (req: AuthenticatedRequest, res: Respo
       title: 'Appointment Approved',
       message: `Your appointment with ${apt.doctorName} has been approved.`,
       content: `Your appointment with ${apt.doctorName} on ${apt.date} at ${apt.time} (${apt.type}) has been approved. Location: ${apt.room || 'Outpatient Clinic'}. Queue Number: ${apt.queueNumber || 'Standard Queue'}.`,
+      category: 'appointment',
+      priority: 'normal',
+      relatedResourceId: apt.id,
+      relatedResourceType: 'appointment',
+    }).catch(() => {});
+  } else if (status === 'Cancelled') {
+    // 1. Mark existing queue/triage notifications for this appointment as read
+    memNotifications.forEach((n) => {
+      if (n.relatedResourceId === apt.id || (n.category === 'appointment' && n.content?.includes(apt.queueNumber || apt.id))) {
+        n.read = true;
+      }
+    });
+
+    // 2. Cancellation notification to patient
+    createAndPersistNotification({
+      recipientId: apt.patientId,
+      patientId: apt.patientId,
+      recipientRole: 'patient',
+      targetRole: 'patient',
+      title: 'Appointment Cancelled',
+      message: `Your appointment with ${apt.doctorName} on ${apt.date} at ${apt.time} has been cancelled.`,
+      content: `Your appointment reservation with ${apt.doctorName} on ${apt.date} has been cancelled and removed from the active queue. You may reschedule whenever convenient.`,
+      category: 'appointment',
+      priority: 'normal',
+      relatedResourceId: apt.id,
+      relatedResourceType: 'appointment',
+    }).catch(() => {});
+
+    // 3. Notification to attending physician
+    if (apt.doctorId) {
+      createAndPersistNotification({
+        recipientId: apt.doctorId,
+        doctorId: apt.doctorId,
+        recipientRole: 'doctor',
+        targetRole: 'provider',
+        title: 'Consultation Cancelled',
+        message: `${apt.patientName} (${apt.patientMrn}) appointment on ${apt.date} at ${apt.time} was cancelled.`,
+        content: `Patient ${apt.patientName} was cancelled and cleared from your schedule and live waiting queue.`,
+        category: 'appointment',
+        priority: 'normal',
+        relatedResourceId: apt.id,
+        relatedResourceType: 'appointment',
+      }).catch(() => {});
+    }
+
+    // 4. Notification to reception desk
+    createAndPersistNotification({
+      targetRole: 'provider',
+      recipientRole: 'receptionist',
+      title: 'Queue Updated — Appointment Cancelled',
+      message: `Patient ${apt.patientName} (${apt.queueNumber || 'Queue'}) cancelled and removed from waiting room.`,
+      content: `Reception desk: ${apt.patientName} (${apt.patientMrn}) cancelled consultation with ${apt.doctorName}. Live queue updated.`,
+      category: 'appointment',
+      priority: 'normal',
+      relatedResourceId: apt.id,
+      relatedResourceType: 'appointment',
+    }).catch(() => {});
+  } else if (status === 'Completed') {
+    // Mark active queue notifications as read
+    memNotifications.forEach((n) => {
+      if (n.relatedResourceId === apt.id) n.read = true;
+    });
+
+    createAndPersistNotification({
+      recipientId: apt.patientId,
+      patientId: apt.patientId,
+      recipientRole: 'patient',
+      targetRole: 'patient',
+      title: 'Consultation Completed',
+      message: `Your consultation with ${apt.doctorName} is complete.`,
+      content: `Clinical notes and any issued prescriptions or diagnostic orders are now accessible in your patient portal.`,
+      category: 'appointment',
+      priority: 'normal',
+      relatedResourceId: apt.id,
+      relatedResourceType: 'appointment',
+    }).catch(() => {});
+  } else if (status === 'Checked In') {
+    createAndPersistNotification({
+      recipientId: apt.patientId,
+      patientId: apt.patientId,
+      recipientRole: 'patient',
+      targetRole: 'patient',
+      title: 'Checked In to Outpatient Clinic',
+      message: `You are checked in with ticket #${apt.queueNumber || 'Q-10'}. Please wait in ${apt.room || 'Waiting Room B'}.`,
+      category: 'appointment',
+      priority: 'normal',
+      relatedResourceId: apt.id,
+      relatedResourceType: 'appointment',
+    }).catch(() => {});
+
+    if (apt.doctorId) {
+      createAndPersistNotification({
+        recipientId: apt.doctorId,
+        doctorId: apt.doctorId,
+        recipientRole: 'doctor',
+        targetRole: 'provider',
+        title: 'Patient Checked In: Waiting in Lobby',
+        message: `${apt.patientName} (${apt.patientMrn}) checked in with ticket #${apt.queueNumber || 'Q-10'}. Seated in ${apt.room || 'Waiting Room B'}.`,
+        category: 'triage',
+        priority: 'normal',
+        relatedResourceId: apt.id,
+        relatedResourceType: 'appointment',
+      }).catch(() => {});
+    }
+  } else if (status === 'In Consultation') {
+    memNotifications.forEach((n) => {
+      if (n.relatedResourceId === apt.id && n.category === 'triage') n.read = true;
+    });
+
+    createAndPersistNotification({
+      recipientId: apt.patientId,
+      patientId: apt.patientId,
+      recipientRole: 'patient',
+      targetRole: 'patient',
+      title: 'Now Serving: Proceed to Consultation Room',
+      message: `Ticket #${apt.queueNumber || 'Q-10'}. Please proceed to ${apt.room || 'Room 302'} for your consultation with ${apt.doctorName}.`,
+      category: 'appointment',
+      priority: 'high',
+      relatedResourceId: apt.id,
+      relatedResourceType: 'appointment',
+    }).catch(() => {});
+  } else if (status === 'No Show') {
+    memNotifications.forEach((n) => {
+      if (n.relatedResourceId === apt.id) n.read = true;
+    });
+
+    createAndPersistNotification({
+      recipientId: apt.patientId,
+      patientId: apt.patientId,
+      recipientRole: 'patient',
+      targetRole: 'patient',
+      title: 'Appointment Marked as No-Show',
+      message: `You missed your scheduled consultation on ${apt.date} at ${apt.time}.`,
+      content: `Our clinical records show you were unable to attend your scheduled consultation on ${apt.date} with ${apt.doctorName}. Please contact the clinic or rebook via your portal.`,
       category: 'appointment',
       priority: 'normal',
       relatedResourceId: apt.id,

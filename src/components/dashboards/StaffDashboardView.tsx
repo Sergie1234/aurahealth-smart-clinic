@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { useClinic } from '../../context/ClinicContext';
 import { StaffSubRole } from '../../context/ClinicContext';
 import { useToast } from '../../context/ToastContext';
@@ -12,6 +12,14 @@ import {
   CheckCircle2,
   Layers,
   UserPlus,
+  XCircle,
+  AlertCircle,
+  Clock,
+  Search,
+  UserX,
+  CalendarDays,
+  RotateCcw,
+  History,
 } from 'lucide-react';
 import { SmartClinicLogo } from '../common/SmartClinicLogo';
 import { RoleHeroBanner } from '../common/RoleHeroBanner';
@@ -35,12 +43,13 @@ export const StaffDashboardView: React.FC<Props> = ({
     prescriptions,
     labOrders,
     updateAppointmentStatus,
+    cancelAppointment,
     dispenseMedication,
     updateLabStatus,
     t,
     language,
   } = useClinic();
-  const { info: toastInfo } = useToast();
+  const { info: toastInfo, success: toastSuccess } = useToast();
 
   const isFil = language === 'fil';
 
@@ -102,6 +111,55 @@ export const StaffDashboardView: React.FC<Props> = ({
   const pendingRx = prescriptions.filter((p) => p.status === 'Active');
   const lowStock = inventory.filter((i) => i.stockQuantity <= i.reorderLevel);
   const pendingLabs = labOrders.filter((l) => l.status === 'Requested' || l.status === 'Processing');
+
+  // Receptionist Tab & Filter State (Strict Categorization: Canceled appointments NEVER leak into Current or Recent)
+  const [receptionistTab, setReceptionistTab] = useState<'queue' | 'upcoming' | 'recent' | 'cancelled' | 'all'>('queue');
+  const [receptionistSearch, setReceptionistSearch] = useState('');
+
+  const liveQueueAppointments = useMemo(
+    () => appointments.filter((a) => a.status === 'Checked In' || a.status === 'In Consultation'),
+    [appointments]
+  );
+  const upcomingBookings = useMemo(
+    () => appointments.filter((a) => a.status === 'Scheduled' || a.status === 'Confirmed'),
+    [appointments]
+  );
+  const recentCompletedAppointments = useMemo(
+    () => appointments.filter((a) => a.status === 'Completed'),
+    [appointments]
+  );
+  const cancelledAppointments = useMemo(
+    () => appointments.filter((a) => a.status === 'Cancelled' || a.status === 'No Show'),
+    [appointments]
+  );
+
+  const filteredReceptionistAppointments = useMemo(() => {
+    let list = appointments;
+    if (receptionistTab === 'queue') list = liveQueueAppointments;
+    else if (receptionistTab === 'upcoming') list = upcomingBookings;
+    else if (receptionistTab === 'recent') list = recentCompletedAppointments;
+    else if (receptionistTab === 'cancelled') list = cancelledAppointments;
+
+    const query = receptionistSearch.trim().toLowerCase();
+    if (!query) return list;
+
+    return list.filter(
+      (a) =>
+        a.patientName.toLowerCase().includes(query) ||
+        (a.patientMrn && a.patientMrn.toLowerCase().includes(query)) ||
+        (a.queueNumber && a.queueNumber.toLowerCase().includes(query)) ||
+        (a.doctorName && a.doctorName.toLowerCase().includes(query)) ||
+        (a.reason && a.reason.toLowerCase().includes(query))
+    );
+  }, [
+    appointments,
+    receptionistTab,
+    liveQueueAppointments,
+    upcomingBookings,
+    recentCompletedAppointments,
+    cancelledAppointments,
+    receptionistSearch,
+  ]);
 
   const cardClass = 'bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-1';
   const panelClass = 'bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-xs space-y-4';
@@ -311,62 +369,369 @@ export const StaffDashboardView: React.FC<Props> = ({
       {/* Receptionist workspace */}
       {subRole === 'receptionist' && (
         <div className={panelClass}>
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 gap-3">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-sky-600" />
-              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{isFil ? 'Front Desk ng Klinika at Pila ng Pasyente' : 'Clinic Front Desk & Waiting Room Queue'}</h3>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                  {isFil ? 'Front Desk ng Klinika at Pamamahala ng Pila' : 'Clinic Front Desk & Queue Management'}
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  {isFil ? 'Tiyaking nakatala nang tama ang mga aktibo, tapos, at kinanselang pasyente' : 'Real-time patient intake, consultation call dispatch, and verified status lifecycle'}
+                </p>
+              </div>
             </div>
-            <span className="text-xs text-slate-500">{isFil ? 'Live Intake at Pagtawag sa Pasyente' : 'Live Intake & Consultation Call Dispatch'}</span>
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder={isFil ? 'Maghanap ng pasyente, MRN, o ticket...' : 'Search patient, MRN, ticket, or MD...'}
+                value={receptionistSearch}
+                onChange={(e) => setReceptionistSearch(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              />
+            </div>
           </div>
 
-          <div className="space-y-3">
-            {appointments.map((apt) => (
-              <div key={apt.id} className={rowClass}>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-black text-sm text-slate-900 dark:text-slate-100">{apt.patientName}</span>
-                    <span className="font-mono text-xs font-bold bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 px-2.5 py-0.5 rounded border border-sky-200 dark:border-sky-800">
-                      #{apt.queueNumber || 'Q-10'}
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
-                      {apt.status}
-                    </span>
-                  </div>
-                  <p className="text-slate-500 text-[11px] mt-1">
-                    Physician: {apt.doctorName} • Scheduled: {apt.date} at {apt.time} • {apt.reason}
-                  </p>
-                </div>
+          {/* Categorized Workflow Tabs */}
+          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl text-xs">
+            <button
+              onClick={() => setReceptionistTab('queue')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                receptionistTab === 'queue'
+                  ? 'bg-sky-600 text-white shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>{isFil ? 'Kasalukuyang Pila' : 'Current Queue'}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                receptionistTab === 'queue' ? 'bg-sky-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
+              }`}>
+                {liveQueueAppointments.length}
+              </span>
+            </button>
 
-                <div className="flex items-center gap-2">
-                  {apt.status === 'Scheduled' && (
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => updateAppointmentStatus(apt.id, 'Confirmed')}
-                        className="px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 dark:bg-teal-950 dark:hover:bg-teal-900 dark:text-teal-300 font-bold cursor-pointer transition text-xs border border-teal-200 dark:border-teal-800 flex items-center gap-1 shadow-2xs"
-                        title={isFil ? 'Aprubahan ang appointment' : 'Approve appointment'}
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                        <span>{isFil ? 'Aprubahan' : 'Approve'}</span>
-                      </button>
-                      <button
-                        onClick={() => updateAppointmentStatus(apt.id, 'Checked In')}
-                        className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold cursor-pointer transition text-xs"
-                      >
-                        {t.staff.checkInPatient}
-                      </button>
-                    </div>
-                  )}
-                  {apt.status === 'Checked In' && (
-                    <button
-                      onClick={() => updateAppointmentStatus(apt.id, 'In Consultation')}
-                      className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer transition text-xs"
-                    >
-                      {t.staff.callNextPatient}
-                    </button>
-                  )}
-                </div>
+            <button
+              onClick={() => setReceptionistTab('upcoming')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                receptionistTab === 'upcoming'
+                  ? 'bg-teal-600 text-white shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              <span>{isFil ? 'Paparating na Bookings' : 'Upcoming Bookings'}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                receptionistTab === 'upcoming' ? 'bg-teal-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
+              }`}>
+                {upcomingBookings.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setReceptionistTab('recent')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                receptionistTab === 'recent'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>{isFil ? 'Kamakailang Natapos' : 'Recent Completed'}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                receptionistTab === 'recent' ? 'bg-emerald-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
+              }`}>
+                {recentCompletedAppointments.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setReceptionistTab('cancelled')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                receptionistTab === 'cancelled'
+                  ? 'bg-rose-600 text-white shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <XCircle className="w-3.5 h-3.5" />
+              <span>{isFil ? 'Kinansela at Di-Sumipot' : 'Cancelled & No-Show'}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                receptionistTab === 'cancelled' ? 'bg-rose-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
+              }`}>
+                {cancelledAppointments.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setReceptionistTab('all')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                receptionistTab === 'all'
+                  ? 'bg-slate-700 text-white shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>{isFil ? 'Lahat' : 'All'}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                receptionistTab === 'all' ? 'bg-slate-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
+              }`}>
+                {appointments.length}
+              </span>
+            </button>
+          </div>
+
+          {/* Tab Information Notice */}
+          {receptionistTab === 'cancelled' && (
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-[11px] text-rose-800 dark:text-rose-300 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+              <span>
+                {isFil
+                  ? 'Naka-isolate ang mga kinanselang appointment at no-show dito upang hindi sila lumitaw sa aktibong live queue o kamakailang pasyente.'
+                  : 'Canceled and no-show appointments are strictly sequestered here. They are permanently removed from the live queue, lobby tickets, and active status.'}
+              </span>
+            </div>
+          )}
+
+          {/* List Display */}
+          <div className="space-y-3">
+            {filteredReceptionistAppointments.length === 0 ? (
+              <div className="py-8 text-center text-slate-400 space-y-1">
+                <Calendar className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600" />
+                <p className="font-semibold text-xs text-slate-600 dark:text-slate-400">
+                  {isFil ? 'Walang nahanap na appointment sa kategoryang ito.' : 'No appointments found in this category.'}
+                </p>
+                {receptionistSearch && (
+                  <button
+                    onClick={() => setReceptionistSearch('')}
+                    className="text-sky-600 hover:underline text-[11px] font-bold cursor-pointer"
+                  >
+                    {isFil ? 'I-clear ang paghahanap' : 'Clear search query'}
+                  </button>
+                )}
               </div>
-            ))}
+            ) : (
+              filteredReceptionistAppointments.map((apt) => {
+                const isCancelled = apt.status === 'Cancelled';
+                const isNoShow = apt.status === 'No Show';
+                const isCompleted = apt.status === 'Completed';
+
+                let badgeColor = 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200';
+                if (apt.status === 'In Consultation') badgeColor = 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800';
+                else if (apt.status === 'Checked In') badgeColor = 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800';
+                else if (apt.status === 'Confirmed') badgeColor = 'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800';
+                else if (apt.status === 'Completed') badgeColor = 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800';
+                else if (isCancelled) badgeColor = 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800 font-bold';
+                else if (isNoShow) badgeColor = 'bg-slate-300 text-slate-800 border-slate-400 dark:bg-slate-800 dark:text-slate-300 font-bold';
+
+                return (
+                  <div
+                    key={apt.id}
+                    className={`p-4 rounded-xl border transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                      isCancelled
+                        ? 'border-rose-200 dark:border-rose-900/60 bg-rose-50/40 dark:bg-rose-950/20'
+                        : isNoShow
+                        ? 'border-slate-300 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/40'
+                        : isCompleted
+                        ? 'border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/30 dark:bg-emerald-950/20'
+                        : 'border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-black text-sm text-slate-900 dark:text-slate-100">{apt.patientName}</span>
+                        {apt.patientMrn && (
+                          <span className="text-[10px] font-mono text-slate-400">
+                            {apt.patientMrn}
+                          </span>
+                        )}
+                        {!isCancelled && !isNoShow && apt.queueNumber && (
+                          <span className="font-mono text-xs font-bold bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 px-2.5 py-0.5 rounded border border-sky-200 dark:border-sky-800">
+                            #{apt.queueNumber}
+                          </span>
+                        )}
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${badgeColor}`}>
+                          {apt.status}
+                        </span>
+                        {apt.room && !isCancelled && (
+                          <span className="text-[10px] font-medium text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-800">
+                            {apt.room}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-slate-500 text-[11px] mt-1">
+                        Doctor: <strong className="text-slate-700 dark:text-slate-300">{apt.doctorName}</strong> ({apt.department}) • Scheduled: {apt.date} at {apt.time}
+                        {apt.reason && ` • ${apt.reason}`}
+                      </p>
+                      {apt.notes && (
+                        <p className="text-[10px] text-slate-400 mt-0.5 italic">
+                          Notes: {apt.notes}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap self-start sm:self-center shrink-0">
+                      {/* Scheduled Actions */}
+                      {apt.status === 'Scheduled' && (
+                        <>
+                          <button
+                            onClick={() => {
+                              updateAppointmentStatus(apt.id, 'Confirmed');
+                              toastSuccess(`Confirmed appointment for ${apt.patientName}`);
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 dark:bg-teal-950 dark:hover:bg-teal-900 dark:text-teal-300 font-bold cursor-pointer transition text-xs border border-teal-200 dark:border-teal-800 flex items-center gap-1"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                            <span>{isFil ? 'Aprubahan' : 'Approve'}</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              updateAppointmentStatus(apt.id, 'Checked In');
+                              toastSuccess(`Checked in ${apt.patientName}`);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold cursor-pointer transition text-xs flex items-center gap-1"
+                          >
+                            <span>{t.staff.checkInPatient}</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              cancelAppointment(apt.id, 'Cancelled at reception intake');
+                              toastInfo(`Cancelled appointment for ${apt.patientName}`);
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950 dark:hover:bg-rose-900 dark:text-rose-300 font-semibold cursor-pointer transition text-xs border border-rose-200 dark:border-rose-800 flex items-center gap-1"
+                            title="Cancel appointment and notify patient/doctor"
+                          >
+                            <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                            <span>{isFil ? 'Kanselahin' : 'Cancel'}</span>
+                          </button>
+                        </>
+                      )}
+
+                      {/* Confirmed Actions */}
+                      {apt.status === 'Confirmed' && (
+                        <>
+                          <button
+                            onClick={() => {
+                              updateAppointmentStatus(apt.id, 'Checked In');
+                              toastSuccess(`Checked in ${apt.patientName}`);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold cursor-pointer transition text-xs flex items-center gap-1"
+                          >
+                            <span>{t.staff.checkInPatient}</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              updateAppointmentStatus(apt.id, 'No Show');
+                              toastInfo(`Marked ${apt.patientName} as No-Show`);
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 font-semibold cursor-pointer transition text-xs border border-slate-200 dark:border-slate-700 flex items-center gap-1"
+                            title="Mark as No Show"
+                          >
+                            <UserX className="w-3.5 h-3.5 text-slate-500" />
+                            <span>No Show</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              cancelAppointment(apt.id, 'Cancelled by patient via front desk');
+                              toastInfo(`Cancelled appointment for ${apt.patientName}`);
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950 dark:hover:bg-rose-900 dark:text-rose-300 font-semibold cursor-pointer transition text-xs border border-rose-200 dark:border-rose-800 flex items-center gap-1"
+                          >
+                            <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                            <span>{isFil ? 'Kanselahin' : 'Cancel'}</span>
+                          </button>
+                        </>
+                      )}
+
+                      {/* Checked In Actions */}
+                      {apt.status === 'Checked In' && (
+                        <>
+                          <button
+                            onClick={() => {
+                              updateAppointmentStatus(apt.id, 'In Consultation');
+                              toastSuccess(`Called ${apt.patientName} into consultation room`);
+                            }}
+                            className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer transition text-xs flex items-center gap-1"
+                          >
+                            <span>{t.staff.callNextPatient}</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              updateAppointmentStatus(apt.id, 'No Show');
+                              toastInfo(`Marked ${apt.patientName} as No-Show`);
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 font-semibold cursor-pointer transition text-xs border border-slate-200 dark:border-slate-700 flex items-center gap-1"
+                          >
+                            <UserX className="w-3.5 h-3.5 text-slate-500" />
+                            <span>No Show</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              cancelAppointment(apt.id, 'Patient left clinic prior to consult');
+                              toastInfo(`Removed ${apt.patientName} from active queue`);
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950 dark:hover:bg-rose-900 dark:text-rose-300 font-semibold cursor-pointer transition text-xs border border-rose-200 dark:border-rose-800 flex items-center gap-1"
+                            title="Remove from queue & cancel visit"
+                          >
+                            <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                            <span>{isFil ? 'Alisin sa Pila' : 'Cancel Visit'}</span>
+                          </button>
+                        </>
+                      )}
+
+                      {/* In Consultation Actions */}
+                      {apt.status === 'In Consultation' && (
+                        <>
+                          <button
+                            onClick={() => {
+                              updateAppointmentStatus(apt.id, 'Completed');
+                              toastSuccess(`Marked consultation completed for ${apt.patientName}`);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer transition text-xs flex items-center gap-1"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>{isFil ? 'Markahang Tapos' : 'Mark Completed'}</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              cancelAppointment(apt.id, 'Consultation cancelled');
+                              toastInfo(`Cancelled consultation for ${apt.patientName}`);
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950 dark:hover:bg-rose-900 dark:text-rose-300 font-semibold cursor-pointer transition text-xs border border-rose-200 dark:border-rose-800 flex items-center gap-1"
+                          >
+                            <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                            <span>{isFil ? 'Kanselahin' : 'Cancel'}</span>
+                          </button>
+                        </>
+                      )}
+
+                      {/* Cancelled or No Show Actions */}
+                      {(isCancelled || isNoShow) && (
+                        <button
+                          onClick={() => {
+                            updateAppointmentStatus(apt.id, 'Scheduled');
+                            toastSuccess(`Reactivated booking for ${apt.patientName}`);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-800 dark:bg-sky-950 dark:hover:bg-sky-900 dark:text-sky-300 font-bold cursor-pointer transition text-xs border border-sky-200 dark:border-sky-800 flex items-center gap-1"
+                          title="Rebook or reactivate appointment"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+                          <span>{isFil ? 'Muling I-book' : 'Rebook / Reactivate'}</span>
+                        </button>
+                      )}
+
+                      {/* Completed Badge */}
+                      {isCompleted && (
+                        <span className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100/60 dark:bg-emerald-950/60 rounded-lg border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                          <span>Done</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}

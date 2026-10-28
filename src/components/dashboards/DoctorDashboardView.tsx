@@ -59,7 +59,9 @@ export const DoctorDashboardView: React.FC<Props> = ({
   }, [appointments, currentUser]);
 
   const todayAppointments = useMemo(() => {
-    return myAppointments.filter((a) => a.date === todayStr);
+    return myAppointments.filter(
+      (a) => (a.date === todayStr || a.date === '2026-10-06') && a.status !== 'Cancelled' && a.status !== 'No Show'
+    );
   }, [myAppointments, todayStr]);
 
   const activeQueue = useMemo(() => {

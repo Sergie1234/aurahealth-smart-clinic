@@ -399,9 +399,11 @@ export function forecastClinicSurgeCapacity(
   const maxStaffThroughputPerHour = activeStaffCount * 2; // 2 patients per staff member per hour capacity
 
   return hours.map((hour) => {
-    // Count appointments starting around this hour
+    // Count active appointments starting around this hour (excluding cancelled and no-show visits)
     const hourPrefix = hour.split(':')[0];
-    const scheduled = appointments.filter((a) => a.time.startsWith(hourPrefix)).length;
+    const scheduled = appointments.filter(
+      (a) => a.status !== 'Cancelled' && a.status !== 'No Show' && a.time.startsWith(hourPrefix)
+    ).length;
 
     // Add estimated walk-in volume (peak between 10am-12pm and 2pm-3pm)
     const walkInBoost = hour === '10:00' || hour === '11:00' ? 3 : hour === '14:00' ? 2 : 1;

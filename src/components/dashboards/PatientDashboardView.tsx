@@ -14,7 +14,10 @@ import {
   Search,
   X,
   RotateCcw,
-  ArrowUpRight
+  ArrowUpRight,
+  History,
+  XCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import { RoleHeroBanner } from '../common/RoleHeroBanner';
 import { formatPeso } from '../../utils/currency';
@@ -45,6 +48,7 @@ export const PatientDashboardView: React.FC<Props> = ({
     currentUser,
     users,
     setActiveTab,
+    cancelAppointment,
     t,
     language,
   } = useClinic();
@@ -54,6 +58,7 @@ export const PatientDashboardView: React.FC<Props> = ({
   const [rxSearch, setRxSearch] = useState('');
   const [labSearch, setLabSearch] = useState('');
   const [billingSearch, setBillingSearch] = useState('');
+  const [showPastAppointments, setShowPastAppointments] = useState(false);
 
   const handlePrintPrescription = (rx: Prescription) => {
     if (onOpenPrescription) {
@@ -101,6 +106,16 @@ export const PatientDashboardView: React.FC<Props> = ({
   const primaryDoctorName = primaryDoctor?.name || 'Dr. Maria Cristina Reyes, MD';
 
   const patientAppointments = appointments.filter((a) => a.patientId === patient.id || a.patientName === patient.fullName);
+  const activeUpcomingAppointments = useMemo(() => {
+    return patientAppointments.filter(
+      (a) => a.status !== 'Completed' && a.status !== 'Cancelled' && a.status !== 'No Show'
+    );
+  }, [patientAppointments]);
+  const pastAndCancelledAppointments = useMemo(() => {
+    return patientAppointments.filter(
+      (a) => a.status === 'Completed' || a.status === 'Cancelled' || a.status === 'No Show'
+    );
+  }, [patientAppointments]);
   const patientPrescriptions = prescriptions.filter((p) => p.patientId === patient.id || p.patientName === patient.fullName);
   const patientLabs = labOrders.filter((l) => l.patientId === patient.id || l.patientName === patient.fullName);
   const patientInvoices = invoices.filter((i) => i.patientId === patient.id || i.patientName === patient.fullName);
@@ -280,47 +295,149 @@ export const PatientDashboardView: React.FC<Props> = ({
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-7 space-y-6">
-          {/* Upcoming Appointments Card */}
+          {/* Upcoming Appointments Card (Strictly Active: Scheduled, Confirmed, Checked In, In Consultation) */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4 transition-colors">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                 <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{t.patient.nextAppointment}</h3>
               </div>
-              <button
-                onClick={() => setActiveTab('appointments')}
-                className="text-[11px] font-semibold text-teal-700 dark:text-teal-300 hover:underline flex items-center gap-0.5 cursor-pointer"
-              >
-                <span>{patientAppointments.length} {language === 'fil' ? 'Nakatakda' : 'Booked'}</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setActiveTab('appointments')}
+                  className="text-[11px] font-semibold text-teal-700 dark:text-teal-300 hover:underline flex items-center gap-0.5 cursor-pointer"
+                >
+                  <span>{activeUpcomingAppointments.length} {language === 'fil' ? 'Nakatakda' : 'Active'}</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
             <div className="space-y-3">
-              {patientAppointments.length === 0 ? (
-                <p className="text-slate-400 py-4 text-center">{t.patient.noUpcomingAppointments}</p>
+              {activeUpcomingAppointments.length === 0 ? (
+                <div className="py-6 text-center space-y-2">
+                  <p className="text-slate-400 text-xs">{t.patient.noUpcomingAppointments}</p>
+                  {onOpenBookAppointment && (
+                    <button
+                      onClick={onOpenBookAppointment}
+                      className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+                    >
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>{t.common.bookAppointment}</span>
+                    </button>
+                  )}
+                </div>
               ) : (
-                patientAppointments.map((apt) => (
+                activeUpcomingAppointments.map((apt) => (
                   <div
                     key={apt.id}
-                    className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-between gap-3"
+                    className="p-3.5 rounded-xl border border-teal-200/80 dark:border-teal-900/60 bg-teal-50/20 dark:bg-teal-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                   >
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-slate-900 dark:text-slate-100">{apt.doctorName}</span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
                           {apt.status}
                         </span>
+                        {apt.room && (
+                          <span className="text-[10px] text-slate-500 font-medium">
+                            {apt.room}
+                          </span>
+                        )}
                       </div>
                       <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">
                         {apt.date} at {apt.time} • {apt.reason}
                       </p>
                     </div>
-                    <span className="text-xs font-mono text-slate-600 dark:text-slate-300 font-bold bg-white dark:bg-slate-900 px-2.5 py-1 rounded border border-slate-200 dark:border-slate-700">
-                      #{apt.queueNumber || 'Q-10'}
-                    </span>
+
+                    <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                      <span className="text-xs font-mono text-slate-600 dark:text-slate-300 font-bold bg-white dark:bg-slate-900 px-2.5 py-1 rounded border border-slate-200 dark:border-slate-700">
+                        #{apt.queueNumber || 'Q-10'}
+                      </span>
+                      {(apt.status === 'Scheduled' || apt.status === 'Confirmed') && (
+                        <button
+                          onClick={() => {
+                            if (window.confirm(language === 'fil' ? 'Kanselahin ang appointment na ito?' : 'Are you sure you want to cancel this appointment?')) {
+                              cancelAppointment(apt.id, 'Cancelled by patient');
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-800 transition cursor-pointer flex items-center gap-1"
+                          title="Cancel appointment"
+                        >
+                          <XCircle className="w-3 h-3 text-rose-500" />
+                          <span>{language === 'fil' ? 'Kanselahin' : 'Cancel'}</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))
+              )}
+
+              {/* Past & Cancelled Consultation Toggle */}
+              {pastAndCancelledAppointments.length > 0 && (
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    onClick={() => setShowPastAppointments(!showPastAppointments)}
+                    className="text-[11px] font-semibold text-slate-500 hover:text-teal-700 dark:hover:text-teal-300 flex items-center gap-1 cursor-pointer transition"
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    <span>
+                      {showPastAppointments
+                        ? (language === 'fil' ? 'Itago ang nakaraan at kinanselang tala' : 'Hide past & cancelled visits')
+                        : (language === 'fil'
+                            ? `Tingnan ang nakaraan at kinanselang tala (${pastAndCancelledAppointments.length})`
+                            : `View past & cancelled visit history (${pastAndCancelledAppointments.length})`)}
+                    </span>
+                    <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showPastAppointments ? 'rotate-90' : ''}`} />
+                  </button>
+
+                  {showPastAppointments && (
+                    <div className="space-y-2 mt-2.5 pt-1">
+                      {pastAndCancelledAppointments.map((pastApt) => {
+                        const isCancelled = pastApt.status === 'Cancelled';
+                        const isNoShow = pastApt.status === 'No Show';
+
+                        return (
+                          <div
+                            key={pastApt.id}
+                            className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                              isCancelled
+                                ? 'bg-rose-50/30 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40'
+                                : isNoShow
+                                ? 'bg-slate-100/40 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700'
+                                : 'bg-slate-50/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                                  {pastApt.doctorName}
+                                </span>
+                                <span
+                                  className={`px-2 py-0.2 rounded-full text-[9px] font-bold ${
+                                    isCancelled
+                                      ? 'bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800'
+                                      : isNoShow
+                                      ? 'bg-slate-200 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:text-slate-400'
+                                      : 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300'
+                                  }`}
+                                >
+                                  {pastApt.status}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 mt-0.5">
+                                {pastApt.date} • {pastApt.reason}
+                              </p>
+                            </div>
+                            <span className="text-[10px] font-mono text-slate-400">
+                              {pastApt.time}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

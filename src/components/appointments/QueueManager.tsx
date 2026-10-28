@@ -175,13 +175,16 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
     return () => clearInterval(pulseTimer);
   }, []);
 
-  // Active Queue: include current day or all active visits in outpatient clinic
+  // Active Queue: strictly include active visits in outpatient clinic
   const todayStr = new Date().toISOString().split('T')[0];
   const activeQueueList = appointments.filter(
     (a) =>
       a.status !== 'Cancelled' &&
       a.status !== 'Completed' &&
-      (a.date === todayStr || a.date === '2026-10-06' || a.status === 'Checked In' || a.status === 'In Consultation')
+      a.status !== 'No Show' &&
+      (a.status === 'Checked In' ||
+        a.status === 'In Consultation' ||
+        ((a.status === 'Scheduled' || a.status === 'Confirmed') && (a.date === todayStr || a.date === '2026-10-06')))
   );
 
   const checkedInList = activeQueueList.filter((a) => a.status === 'Checked In');
@@ -196,14 +199,13 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
   // Determine current active serving ticket for the big screen
   const currentServingTicket = inConsultList[0] || null;
 
-  // Current user's patient ticket if authenticated as patient
+  // Current user's patient ticket if authenticated as patient (strictly live Checked In or In Consultation)
   const patientTicket =
     activeRole === 'patient'
       ? appointments.find(
           (a) =>
             (a.patientId === linkedPatientId || (currentUser?.name && a.patientName === currentUser.name)) &&
-            a.status !== 'Completed' &&
-            a.status !== 'Cancelled'
+            (a.status === 'Checked In' || a.status === 'In Consultation')
         )
       : null;
 
@@ -610,16 +612,26 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0">
                   {isStaffOrDoctor && (
-                    <button
-                      type="button"
-                      onClick={() => handleCallPatient(apt)}
-                      className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
-                    >
-                      <BellRing className="w-3.5 h-3.5" />
-                      <span>Call Ticket</span>
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleCallPatient(apt)}
+                        className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
+                      >
+                        <BellRing className="w-3.5 h-3.5" />
+                        <span>Call Ticket</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateAppointmentStatus(apt.id, 'Cancelled')}
+                        className="px-2 py-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl text-xs font-medium transition cursor-pointer"
+                        title="Cancel visit and remove from queue"
+                      >
+                        Cancel
+                      </button>
+                    </>
                   )}
                   {!isStaffOrDoctor && (
                     <span className="text-[11px] text-slate-400 font-mono">
@@ -669,13 +681,23 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
                         {apt.department} • Dr. {apt.doctorName}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => checkInPatient(apt.id, 'Waiting Room B')}
-                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs shrink-0"
-                    >
-                      Check In
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => checkInPatient(apt.id, 'Waiting Room B')}
+                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs shrink-0"
+                      >
+                        Check In
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateAppointmentStatus(apt.id, 'Cancelled')}
+                        className="px-2 py-1 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg text-xs font-medium transition cursor-pointer shrink-0"
+                        title="Cancel appointment"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

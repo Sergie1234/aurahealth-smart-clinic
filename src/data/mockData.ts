@@ -150,7 +150,7 @@ export const INITIAL_PATIENTS: Patient[] = [
 ];
 
 export const INITIAL_APPOINTMENTS: Appointment[] = [
-  { id: 'apt-101', patientId: 'pat-1', patientName: 'Elena Vargas', patientMrn: 'MRN-2026-081', doctorId: 'usr-1', doctorName: 'Dr. Maria Cristina Reyes, MD', department: 'Internal Medicine', date: '2026-10-06', time: '09:30', durationMinutes: 30, reason: 'Quarterly Diabetic & Hypertension Follow-up, HbA1c review', status: 'In Consultation', type: 'Follow-up', queueNumber: 'A-101', room: 'Room 302', notes: 'Patient checked in on time; vitals recorded.', createdAt: '2026-09-28T10:00:00Z' },
+  { id: 'apt-101', patientId: 'pat-1', patientName: 'Elena Vargas', patientMrn: 'MRN-2026-081', doctorId: 'usr-1', doctorName: 'Dr. Maria Cristina Reyes, MD', department: 'Internal Medicine', date: '2026-10-06', time: '09:30', durationMinutes: 30, reason: 'Quarterly Diabetic & Hypertension Follow-up, HbA1c review', status: 'Completed', type: 'Follow-up', queueNumber: 'A-101', room: 'Room 302', notes: 'Patient checked in on time; vitals recorded.', createdAt: '2026-09-28T10:00:00Z' },
   { id: 'apt-102', patientId: 'pat-2', patientName: 'Liam Gabriel Torres', patientMrn: 'MRN-2026-104', doctorId: 'usr-1', doctorName: 'Dr. Maria Cristina Reyes, MD', department: 'Internal Medicine', date: '2026-10-06', time: '10:15', durationMinutes: 30, reason: 'Asthma exacerbation during physical exertion & allergy review', status: 'Checked In', type: 'In-Person', queueNumber: 'A-102', room: 'Waiting Room B', notes: 'Nurse triaged; vitals stable.', createdAt: '2026-10-01T11:30:00Z' },
   { id: 'apt-103', patientId: 'pat-3', patientName: 'Sofia Ramirez-Diaz', patientMrn: 'MRN-2026-218', doctorId: 'usr-2', doctorName: 'Dr. Juan Miguel Santos, MD', department: 'Cardiology', date: '2026-10-06', time: '11:00', durationMinutes: 45, reason: 'Atrial fibrillation monitoring, INR & Renal Panel check', status: 'Scheduled', type: 'Follow-up', queueNumber: 'B-201', room: 'Cardiology Suite 1', notes: 'Bring current medication list.', createdAt: '2026-09-20T08:15:00Z' },
   { id: 'apt-104', patientId: 'pat-5', patientName: 'Amara Patel Santos', patientMrn: 'MRN-2026-442', doctorId: 'usr-1', doctorName: 'Dr. Maria Cristina Reyes, MD', department: 'Internal Medicine', date: '2026-10-06', time: '11:45', durationMinutes: 30, reason: 'Recurrent severe migraines and persistent fatigue', status: 'Confirmed', type: 'In-Person', queueNumber: 'A-103', room: 'Room 304', notes: 'Patient arrived early.', createdAt: '2026-10-02T15:20:00Z' },
@@ -324,13 +324,13 @@ export const INITIAL_NOTIFICATIONS: Notification[] = [
     doctorId: 'usr-1',
     recipientRole: 'doctor',
     targetRole: 'provider',
-    title: 'Patient Triage Alert: Urgent Vitals',
-    message: 'Elena Vargas checked in with elevated Blood Pressure (148/92 mmHg). Assigned to Queue Station A-101.',
-    content: 'Nurse triage intake has logged elevated blood pressure readings for Elena Vargas (MRN-2026-081). Seated in Waiting Room.',
+    title: 'Patient Checked In: Waiting in Lobby',
+    message: 'Liam Gabriel Torres checked in for Asthma exacerbation. Assigned to Ticket A-102 in Waiting Room B.',
+    content: 'Nurse triage intake has logged vital signs for Liam Gabriel Torres (MRN-2026-104). Patient is seated in Waiting Room B ready for consultation.',
     category: 'triage',
-    priority: 'high',
+    priority: 'normal',
     read: false,
-    createdAt: '2026-10-06T09:22:00Z',
+    createdAt: '2026-10-06T10:15:00Z',
   },
   {
     id: 'notif-pr-2',

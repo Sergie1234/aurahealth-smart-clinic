@@ -180,6 +180,7 @@ interface ClinicContextType {
   appointments: Appointment[];
   addAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt'>) => Appointment;
   updateAppointmentStatus: (id: string, status: AppointmentStatus) => void;
+  cancelAppointment: (id: string, reason?: string) => void;
   updateAppointmentRoom: (id: string, room: string) => void;
   checkInPatient: (appointmentId: string, room?: string) => void;
   advanceQueueStatus: (appointmentId: string, nextStatus: AppointmentStatus, room?: string) => void;
@@ -1496,17 +1497,132 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
     logAction('APPOINTMENT_STATUS', 'Appointment', id, `Updated status to: ${status}`);
 
-    // If an appointment is approved (status 'Confirmed')
-    if (status === 'Confirmed' && existingApt) {
-      addNotification({
-        userId: existingApt.patientId,
-        targetRole: 'patient',
-        title: 'Appointment Approved',
-        message: 'Your appointment has been approved.',
-        content: `Your appointment with ${existingApt.doctorName} on ${existingApt.date} at ${formatTimeSlot(existingApt.time)} (${existingApt.type}) has been approved. Location: ${existingApt.room || 'Outpatient Clinic'}. Queue Number: ${existingApt.queueNumber || 'Standard Queue'}.`,
-        category: 'appointment',
-        priority: 'normal',
-      });
+    if (existingApt) {
+      if (status === 'Confirmed') {
+        addNotification({
+          userId: existingApt.patientId,
+          recipientId: existingApt.patientId,
+          patientId: existingApt.patientId,
+          targetRole: 'patient',
+          recipientRole: 'patient',
+          title: 'Appointment Approved',
+          message: 'Your appointment has been approved.',
+          content: `Your appointment with ${existingApt.doctorName} on ${existingApt.date} at ${formatTimeSlot(existingApt.time)} (${existingApt.type}) has been approved. Location: ${existingApt.room || 'Outpatient Clinic'}. Queue Number: ${existingApt.queueNumber || 'Standard Queue'}.`,
+          category: 'appointment',
+          priority: 'normal',
+          relatedResourceId: id,
+          relatedResourceType: 'appointment',
+        });
+      } else if (status === 'Cancelled') {
+        // 1. Immediately dismiss/mark read any stale queue or triage alerts for this appointment
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n.relatedResourceId === id || (n.category === 'appointment' && n.content?.includes(existingApt.queueNumber || id))
+              ? { ...n, read: true }
+              : n
+          )
+        );
+
+        // 2. Cancellation notification to patient
+        addNotification({
+          userId: existingApt.patientId,
+          recipientId: existingApt.patientId,
+          patientId: existingApt.patientId,
+          targetRole: 'patient',
+          recipientRole: 'patient',
+          title: 'Appointment Cancelled',
+          message: `Your appointment with ${existingApt.doctorName} on ${existingApt.date} at ${formatTimeSlot(existingApt.time)} has been cancelled.`,
+          content: `Your appointment reservation with ${existingApt.doctorName} on ${existingApt.date} has been cancelled and removed from the active queue. You may reschedule whenever convenient.`,
+          category: 'appointment',
+          priority: 'normal',
+          relatedResourceId: id,
+          relatedResourceType: 'appointment',
+        });
+
+        // 3. Notification to attending physician
+        if (existingApt.doctorId) {
+          addNotification({
+            userId: existingApt.doctorId,
+            recipientId: existingApt.doctorId,
+            doctorId: existingApt.doctorId,
+            targetRole: 'provider',
+            recipientRole: 'doctor',
+            title: 'Consultation Cancelled',
+            message: `${existingApt.patientName} (${existingApt.patientMrn}) appointment on ${existingApt.date} at ${formatTimeSlot(existingApt.time)} was cancelled.`,
+            content: `Patient ${existingApt.patientName} was cancelled and cleared from your schedule and live waiting queue.`,
+            category: 'appointment',
+            priority: 'normal',
+            relatedResourceId: id,
+            relatedResourceType: 'appointment',
+          });
+        }
+
+        // 4. Notification to reception desk
+        addNotification({
+          targetRole: 'provider',
+          recipientRole: 'receptionist',
+          title: 'Queue Updated — Appointment Cancelled',
+          message: `Patient ${existingApt.patientName} (${existingApt.queueNumber || 'Queue'}) cancelled and removed from waiting room.`,
+          content: `Reception desk: ${existingApt.patientName} (${existingApt.patientMrn}) cancelled consultation with ${existingApt.doctorName}. Live queue updated.`,
+          category: 'appointment',
+          priority: 'normal',
+          relatedResourceId: id,
+          relatedResourceType: 'appointment',
+        });
+      } else if (status === 'Completed') {
+        // Mark active queue notifications for this appointment as read
+        setNotifications((prev) =>
+          prev.map((n) => (n.relatedResourceId === id ? { ...n, read: true } : n))
+        );
+        addNotification({
+          userId: existingApt.patientId,
+          recipientId: existingApt.patientId,
+          patientId: existingApt.patientId,
+          targetRole: 'patient',
+          recipientRole: 'patient',
+          title: 'Consultation Completed',
+          message: `Your consultation with ${existingApt.doctorName} is complete.`,
+          content: `Clinical notes and any issued prescriptions or diagnostic orders are now accessible in your patient portal.`,
+          category: 'appointment',
+          priority: 'normal',
+          relatedResourceId: id,
+          relatedResourceType: 'appointment',
+        });
+      } else if (status === 'No Show') {
+        setNotifications((prev) =>
+          prev.map((n) => (n.relatedResourceId === id ? { ...n, read: true } : n))
+        );
+        addNotification({
+          userId: existingApt.patientId,
+          recipientId: existingApt.patientId,
+          patientId: existingApt.patientId,
+          targetRole: 'patient',
+          recipientRole: 'patient',
+          title: 'Appointment Marked as No-Show',
+          message: `You missed your scheduled consultation on ${existingApt.date} at ${formatTimeSlot(existingApt.time)}.`,
+          content: `Our clinical records show you were unable to attend your scheduled consultation on ${existingApt.date} with ${existingApt.doctorName}. Please contact the clinic or rebook via your portal.`,
+          category: 'appointment',
+          priority: 'normal',
+          relatedResourceId: id,
+          relatedResourceType: 'appointment',
+        });
+        if (existingApt.doctorId) {
+          addNotification({
+            userId: existingApt.doctorId,
+            recipientId: existingApt.doctorId,
+            doctorId: existingApt.doctorId,
+            targetRole: 'provider',
+            recipientRole: 'doctor',
+            title: 'Patient No-Show Recorded',
+            message: `${existingApt.patientName} did not arrive for their ${formatTimeSlot(existingApt.time)} appointment.`,
+            content: `No-show recorded for ${existingApt.patientName} (${existingApt.patientMrn}) with ${existingApt.doctorName}. Queue updated.`,
+            category: 'appointment',
+            priority: 'normal',
+            relatedResourceId: id,
+            relatedResourceType: 'appointment',
+          });
+        }
+      }
     }
 
     syncToBackend(`/api/appointments/${id}/status`, {
@@ -1519,6 +1635,24 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       channel.postMessage({ type: 'UPDATE_APPOINTMENT_STATUS', id, status });
       channel.close();
     }
+  };
+
+  const cancelAppointment = (id: string, reason?: string) => {
+    const apt = appointments.find((a) => a.id === id);
+    if (!apt) return;
+    setAppointments((prev) =>
+      prev.map((a) =>
+        a.id === id
+          ? {
+              ...a,
+              status: 'Cancelled',
+              notes: reason ? `${a.notes ? a.notes + ' • ' : ''}Cancellation reason: ${reason}` : a.notes,
+            }
+          : a
+      )
+    );
+    updateAppointmentStatus(id, 'Cancelled');
+    logAction('APPOINTMENT_CANCELLED', 'Appointment', id, `Cancelled appointment for ${apt.patientName}${reason ? ` (${reason})` : ''}`);
   };
 
   const updateAppointmentRoom = (id: string, room: string) => {
@@ -1552,12 +1686,32 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     logAction('PATIENT_CHECKED_IN', 'Appointment', appointmentId, `Patient checked in to ${defaultRoom} (Ticket: ${queueNum})`);
     addNotification({
       userId: apt.patientId,
+      recipientId: apt.patientId,
+      patientId: apt.patientId,
       targetRole: 'patient',
+      recipientRole: 'patient',
       title: 'Checked In to Outpatient Clinic',
       message: `You are checked in with ticket #${queueNum}. Please wait in ${defaultRoom}.`,
       category: 'appointment',
       priority: 'normal',
+      relatedResourceId: appointmentId,
+      relatedResourceType: 'appointment',
     });
+    if (apt.doctorId) {
+      addNotification({
+        userId: apt.doctorId,
+        recipientId: apt.doctorId,
+        doctorId: apt.doctorId,
+        targetRole: 'provider',
+        recipientRole: 'doctor',
+        title: 'Patient Checked In: Waiting in Lobby',
+        message: `${apt.patientName} (${apt.patientMrn}) checked in with ticket #${queueNum}. Seated in ${defaultRoom}.`,
+        category: 'triage',
+        priority: 'normal',
+        relatedResourceId: appointmentId,
+        relatedResourceType: 'appointment',
+      });
+    }
     if (typeof window !== 'undefined' && window.BroadcastChannel) {
       const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
       channel.postMessage({ type: 'UPDATE_APPOINTMENT_STATUS', id: appointmentId, status: 'Checked In', room: defaultRoom });
@@ -1568,6 +1722,10 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const advanceQueueStatus = (appointmentId: string, nextStatus: AppointmentStatus, room?: string) => {
     const apt = appointments.find((a) => a.id === appointmentId);
     if (!apt) return;
+    if (nextStatus === 'Cancelled') {
+      cancelAppointment(appointmentId);
+      return;
+    }
     const targetRoom = room || apt.room || (nextStatus === 'In Consultation' ? 'Room 302 (Consultation Suite)' : 'Waiting Room B');
     setAppointments((prev) =>
       prev.map((a) =>
@@ -1577,6 +1735,30 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       )
     );
     logAction('QUEUE_ADVANCED', 'Appointment', appointmentId, `Queue status advanced to ${nextStatus} in ${targetRoom}`);
+
+    if (nextStatus === 'In Consultation') {
+      // Mark checked-in alerts as read
+      setNotifications((prev) =>
+        prev.map((n) => (n.relatedResourceId === appointmentId ? { ...n, read: true } : n))
+      );
+      addNotification({
+        userId: apt.patientId,
+        recipientId: apt.patientId,
+        patientId: apt.patientId,
+        targetRole: 'patient',
+        recipientRole: 'patient',
+        title: 'Now Serving: Proceed to Consultation Room',
+        message: `Ticket #${apt.queueNumber || 'Q-10'}. Please proceed to ${targetRoom} for your consultation with ${apt.doctorName}.`,
+        category: 'appointment',
+        priority: 'high',
+        relatedResourceId: appointmentId,
+        relatedResourceType: 'appointment',
+      });
+    } else if (nextStatus === 'Completed') {
+      updateAppointmentStatus(appointmentId, 'Completed');
+      return;
+    }
+
     if (typeof window !== 'undefined' && window.BroadcastChannel) {
       const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
       channel.postMessage({ type: 'UPDATE_APPOINTMENT_STATUS', id: appointmentId, status: nextStatus, room: targetRoom });
@@ -2872,6 +3054,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         appointments: isolatedAppointments,
         addAppointment,
         updateAppointmentStatus,
+        cancelAppointment,
         updateAppointmentRoom,
         checkInPatient,
         advanceQueueStatus,

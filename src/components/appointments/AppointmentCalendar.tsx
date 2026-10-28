@@ -84,9 +84,19 @@ export const AppointmentCalendar: React.FC<Props> = ({
     return doc ? getDoctorSchedule(doc.id, doc) : null;
   }, [doctorFilter, doctors]);
 
-  // Helper to determine whether an appointment is Past
+  // Helper to determine whether an appointment is Past or Inactive
   const isPastAppointment = (apt: Appointment): boolean => {
-    return apt.date < todayStr || apt.status === 'Completed';
+    return apt.date < todayStr || apt.status === 'Completed' || apt.status === 'Cancelled' || apt.status === 'No Show';
+  };
+
+  // Helper to determine whether an appointment is Active & Upcoming
+  const isUpcomingAppointment = (apt: Appointment): boolean => {
+    return (
+      apt.date >= todayStr &&
+      apt.status !== 'Completed' &&
+      apt.status !== 'Cancelled' &&
+      apt.status !== 'No Show'
+    );
   };
 
   // Month navigation helpers
@@ -136,7 +146,7 @@ export const AppointmentCalendar: React.FC<Props> = ({
         if (doctorFilter !== 'ALL' && a.doctorId !== doctorFilter) return false;
         return true;
       });
-      const hasUpcoming = dayAppointments.some((a) => !isPastAppointment(a));
+      const hasUpcoming = dayAppointments.some((a) => isUpcomingAppointment(a));
       const hasPast = dayAppointments.some((a) => isPastAppointment(a));
 
       days.push({
@@ -154,9 +164,9 @@ export const AppointmentCalendar: React.FC<Props> = ({
     return { firstDayIndex, days };
   }, [calendarMonth, appointments, doctorFilter, doctors]);
 
-  // Overall counts for summary
+  // Overall counts for summary (Cancelled and No Show are excluded from active upcomingCount)
   const upcomingCount = useMemo(
-    () => appointments.filter((a) => !isPastAppointment(a)).length,
+    () => appointments.filter((a) => isUpcomingAppointment(a)).length,
     [appointments]
   );
   const pastCount = useMemo(
@@ -173,12 +183,13 @@ export const AppointmentCalendar: React.FC<Props> = ({
 
         // Timeframe filter (Upcoming vs Past vs All)
         const isPast = isPastAppointment(a);
+        const isUpcoming = isUpcomingAppointment(a);
         const matchesTimeframe =
           timeframeFilter === 'ALL'
             ? true
             : timeframeFilter === 'PAST'
             ? isPast
-            : !isPast;
+            : isUpcoming;
 
         // Status filter
         const matchesStatus = statusFilter === 'ALL' || a.status === statusFilter;
@@ -696,7 +707,17 @@ export const AppointmentCalendar: React.FC<Props> = ({
                       {/* Past / Upcoming Label & Status Badges */}
                       <div className="flex items-center gap-2 flex-wrap">
                         {/* Clear Past vs Upcoming Badge */}
-                        {isPast ? (
+                        {apt.status === 'Cancelled' ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800 flex items-center gap-1 shadow-2xs">
+                            <XCircle className="w-3 h-3 text-rose-500" />
+                            <span>Cancelled Appointment</span>
+                          </span>
+                        ) : apt.status === 'No Show' ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 text-slate-500" />
+                            <span>No Show</span>
+                          </span>
+                        ) : isPast ? (
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 flex items-center gap-1">
                             <History className="w-3 h-3 text-slate-500" />
                             <span>Past Appointment</span>
