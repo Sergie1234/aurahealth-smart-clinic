@@ -93,6 +93,7 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
   const {
     appointments,
     updateAppointmentStatus,
+    cancelAppointment,
     updateAppointmentRoom,
     checkInPatient,
     advanceQueueStatus,
@@ -177,14 +178,17 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
 
   // Active Queue: strictly include active visits in outpatient clinic
   const todayStr = new Date().toISOString().split('T')[0];
+  const isTodayOrDemoDate = (d?: string) => !d || d === todayStr || d === '2026-10-06';
   const activeQueueList = appointments.filter(
     (a) =>
       a.status !== 'Cancelled' &&
       a.status !== 'Completed' &&
       a.status !== 'No Show' &&
+      isTodayOrDemoDate(a.date) &&
       (a.status === 'Checked In' ||
         a.status === 'In Consultation' ||
-        ((a.status === 'Scheduled' || a.status === 'Confirmed') && (a.date === todayStr || a.date === '2026-10-06')))
+        a.status === 'Scheduled' ||
+        a.status === 'Confirmed')
   );
 
   const checkedInList = activeQueueList.filter((a) => a.status === 'Checked In');
@@ -193,7 +197,7 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
     (a) => a.status === 'Scheduled' || a.status === 'Confirmed'
   );
   const completedTodayCount = appointments.filter(
-    (a) => a.status === 'Completed' && (a.date === todayStr || a.date === '2026-10-06')
+    (a) => a.status === 'Completed' && isTodayOrDemoDate(a.date)
   ).length;
 
   // Determine current active serving ticket for the big screen
@@ -229,7 +233,7 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
     };
 
     setLastCalledAnnouncement(announcement);
-    updateAppointmentStatus(apt.id, 'In Consultation');
+    updateAppointmentStatus(apt.id, 'In Consultation', room);
 
     if (soundEnabled) {
       playHospitalBroadcastChime();
@@ -625,7 +629,7 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
                       </button>
                       <button
                         type="button"
-                        onClick={() => updateAppointmentStatus(apt.id, 'Cancelled')}
+                        onClick={() => cancelAppointment(apt.id, 'Cancelled from waiting room')}
                         className="px-2 py-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl text-xs font-medium transition cursor-pointer"
                         title="Cancel visit and remove from queue"
                       >
@@ -691,7 +695,7 @@ export const QueueManager: React.FC<Props> = ({ onStartConsultation }) => {
                       </button>
                       <button
                         type="button"
-                        onClick={() => updateAppointmentStatus(apt.id, 'Cancelled')}
+                        onClick={() => cancelAppointment(apt.id, 'Cancelled from waiting room')}
                         className="px-2 py-1 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg text-xs font-medium transition cursor-pointer shrink-0"
                         title="Cancel appointment"
                       >

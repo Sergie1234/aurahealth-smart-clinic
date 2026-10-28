@@ -220,26 +220,31 @@ export async function syncPatientToSupabase(patient: any) {
 // 2. Appointment Sync
 export async function syncAppointmentToSupabase(appointment: any) {
   const client = getSupabaseClient();
-  if (!client) return null;
+  if (!client || !appointment) return null;
   try {
     const { data, error } = await client
       .from('appointments')
-      .upsert({
-        patient_name: appointment.patientName,
-        patient_mrn: appointment.patientMrn,
-        doctor_id: appointment.doctorId,
-        doctor_name: appointment.doctorName,
-        department: appointment.department,
-        appointment_date: appointment.date,
-        appointment_time: appointment.time,
-        duration_minutes: appointment.durationMinutes,
-        reason: appointment.reason,
-        status: appointment.status,
-        type: appointment.type,
-        queue_number: appointment.queueNumber,
-        room: appointment.room,
-        notes: appointment.notes,
-      })
+      .upsert(
+        {
+          id: appointment.id,
+          patient_id: appointment.patientId || null,
+          patient_name: appointment.patientName,
+          patient_mrn: appointment.patientMrn,
+          doctor_id: appointment.doctorId || null,
+          doctor_name: appointment.doctorName,
+          department: appointment.department,
+          appointment_date: appointment.date,
+          appointment_time: appointment.time,
+          duration_minutes: appointment.durationMinutes,
+          reason: appointment.reason,
+          status: appointment.status,
+          type: appointment.type,
+          queue_number: appointment.queueNumber,
+          room: appointment.room,
+          notes: appointment.notes,
+        },
+        { onConflict: 'id' }
+      )
       .select();
 
     if (error) {

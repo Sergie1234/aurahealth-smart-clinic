@@ -603,6 +603,34 @@ export function formatTimeSlot(timeStr: string): string {
   return `${hour12}:${m} ${ampm}`;
 }
 
+/**
+ * Normalizes any time representation ('9:30 AM', '09:30 AM', '2:00 PM', '14:00', '9:30')
+ * into canonical 24-hour 'HH:mm' format (e.g. '09:30', '14:00').
+ */
+export function normalizeTimeTo24Hour(timeStr: string): string {
+  if (!timeStr) return '';
+  const trimmed = timeStr.trim();
+  // Standard HH:mm (24-hour)
+  if (/^([01]\d|2[0-3]):[0-5]\d$/.test(trimmed)) {
+    return trimmed;
+  }
+  // Single-digit hour H:mm
+  if (/^[0-9]:[0-5]\d$/.test(trimmed)) {
+    return `0${trimmed}`;
+  }
+  // 12-hour format with AM/PM (e.g., "9:30 AM", "09:30 AM", "2:00 PM", "12:00 PM")
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})(?:\s*([APap][Mm]))?$/);
+  if (match) {
+    let hour = parseInt(match[1], 10);
+    const minute = match[2];
+    const modifier = match[3]?.toUpperCase();
+    if (modifier === 'PM' && hour < 12) hour += 12;
+    if (modifier === 'AM' && hour === 12) hour = 0;
+    return `${String(hour).padStart(2, '0')}:${minute}`;
+  }
+  return trimmed;
+}
+
 export interface SlotAvailability {
   slot: string;
   formatted: string;
@@ -638,26 +666,33 @@ export function getDoctorSlotAvailability(
     if (a.status === 'Cancelled') return false;
     if (excludeAppointmentId && a.id === excludeAppointmentId) return false;
 
-    const matchesId = a.doctorId === doctorId || a.doctorId === schedule.doctorId;
+    const matchesId =
+      a.doctorId === doctorId ||
+      a.doctorId === schedule.doctorId ||
+      (fallbackUser && a.doctorId === fallbackUser.id);
     const matchesName =
       a.doctorName &&
       (a.doctorName.toLowerCase().includes(schedule.doctorName.toLowerCase()) ||
-        schedule.doctorName.toLowerCase().includes(a.doctorName.toLowerCase()));
+        schedule.doctorName.toLowerCase().includes(a.doctorName.toLowerCase()) ||
+        (fallbackUser && a.doctorName.toLowerCase().includes(fallbackUser.name.toLowerCase())));
 
-    return matchesId || matchesName;
+    return Boolean(matchesId || matchesName);
   });
 
   const bookedMap = new Map<string, Appointment>();
   bookedOnDate.forEach((a) => {
+    const norm = normalizeTimeTo24Hour(a.time);
+    bookedMap.set(norm, a);
     bookedMap.set(a.time, a);
   });
 
   return schedule.slots.map((slot) => {
-    const bookedAppointment = bookedMap.get(slot);
+    const normSlot = normalizeTimeTo24Hour(slot);
+    const bookedAppointment = bookedMap.get(normSlot) || bookedMap.get(slot);
     const isBooked = !!bookedAppointment;
     return {
-      slot,
-      formatted: formatTimeSlot(slot),
+      slot: normSlot,
+      formatted: formatTimeSlot(normSlot),
       isAvailable: !isBooked,
       isBooked,
       bookedAppointment,

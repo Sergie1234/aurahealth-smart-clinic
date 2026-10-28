@@ -55,7 +55,7 @@ import {
   INITIAL_AUDIT_LOGS,
   INITIAL_NOTIFICATIONS,
 } from './data/mockData';
-import type { Notification, User, AuditLog } from './types/clinic';
+import type { Notification, User, AuditLog, Appointment } from './types/clinic';
 import { validatePasswordStrength } from './utils/passwordValidation';
 import { createCustomDoctorSchedule, DOCTOR_SCHEDULES, getDoctorSchedule } from './utils/doctorSchedules';
 
@@ -361,25 +361,55 @@ export async function hydrateClinicStateFromSupabase(): Promise<boolean> {
     // 3. Appointments
     const { data: dbAppts, error: apptErr } = await supabaseServer.from('appointments').select('*');
     if (!apptErr && Array.isArray(dbAppts) && dbAppts.length > 0) {
-      memAppointments = dbAppts.map((a: any) => ({
-        id: a.id,
-        patientId: a.patient_id,
-        patientName: a.patient_name,
-        patientMrn: a.patient_mrn,
-        doctorId: a.doctor_id,
-        doctorName: a.doctor_name,
-        department: a.department,
-        date: a.appointment_date,
-        time: a.appointment_time,
-        durationMinutes: a.duration_minutes || 30,
-        reason: a.reason,
-        status: a.status,
-        type: a.type || 'In-Person',
-        queueNumber: a.queue_number,
-        room: a.room,
-        notes: a.notes,
-        createdAt: a.created_at || new Date().toISOString(),
-      }));
+      const memMap = new Map<string, any>(memAppointments.map((a) => [a.id, a]));
+      const mapped: Appointment[] = dbAppts.map((a: any) => {
+        const local = memMap.get(a.id);
+        let resolvedStatus = a.status;
+        if (local) {
+          if (local.status === 'Cancelled' && a.status !== 'Cancelled') {
+            resolvedStatus = 'Cancelled';
+          } else if (
+            local.status === 'Completed' &&
+            (a.status === 'Scheduled' || a.status === 'Confirmed' || a.status === 'Checked In' || a.status === 'In Consultation')
+          ) {
+            resolvedStatus = 'Completed';
+          } else if (
+            local.status === 'In Consultation' &&
+            (a.status === 'Scheduled' || a.status === 'Confirmed' || a.status === 'Checked In')
+          ) {
+            resolvedStatus = 'In Consultation';
+          }
+        }
+        return {
+          id: a.id,
+          patientId: a.patient_id,
+          patientName: a.patient_name,
+          patientMrn: a.patient_mrn,
+          doctorId: a.doctor_id,
+          doctorName: a.doctor_name,
+          department: a.department,
+          date: a.appointment_date,
+          time: a.appointment_time,
+          durationMinutes: a.duration_minutes || 30,
+          reason: a.reason,
+          status: resolvedStatus,
+          type: a.type || 'In-Person',
+          queueNumber: a.queue_number || local?.queueNumber,
+          room: local?.room || a.room,
+          notes: local?.notes || a.notes,
+          createdAt: a.created_at || new Date().toISOString(),
+        };
+      });
+
+      // Preserve any in-memory appointments that are not present in Supabase
+      const dbIds = new Set(dbAppts.map((a: any) => a.id));
+      memAppointments.forEach((a) => {
+        if (!dbIds.has(a.id)) {
+          mapped.unshift(a);
+        }
+      });
+
+      memAppointments = mapped;
     }
 
     // 4. Consultations
@@ -2523,7 +2553,7 @@ app.get('/api/appointments', (req: AuthenticatedRequest, res: Response) => {
   return res.json(memAppointments);
 });
 
-app.post('/api/appointments', (req: AuthenticatedRequest, res: Response) => {
+app.post('/api/appointments', async (req: AuthenticatedRequest, res: Response) => {
   const newApt = req.body;
   const isPatient = (req.userRole || req.user?.role) === 'patient';
   const linkedId = req.linkedPatientId || req.user?.linkedPatientId;
@@ -2539,6 +2569,35 @@ app.post('/api/appointments', (req: AuthenticatedRequest, res: Response) => {
   newApt.createdAt = newApt.createdAt || new Date().toISOString();
   memAppointments.unshift(newApt);
   flushClinicStateToDisk();
+
+  // Persist directly to Supabase appointments table
+  if (supabaseServer) {
+    try {
+      await supabaseServer.from('appointments').upsert(
+        {
+          id: newApt.id,
+          patient_id: newApt.patientId || null,
+          patient_name: newApt.patientName,
+          patient_mrn: newApt.patientMrn,
+          doctor_id: newApt.doctorId || null,
+          doctor_name: newApt.doctorName,
+          department: newApt.department,
+          appointment_date: newApt.date,
+          appointment_time: newApt.time,
+          duration_minutes: newApt.durationMinutes || 30,
+          reason: newApt.reason,
+          status: newApt.status || 'Scheduled',
+          type: newApt.type || 'In-Person',
+          queue_number: newApt.queueNumber || null,
+          room: newApt.room || null,
+          notes: newApt.notes || null,
+        },
+        { onConflict: 'id' }
+      );
+    } catch (err: any) {
+      console.error('Failed to sync new appointment to Supabase:', err?.message);
+    }
+  }
 
   // Create strictly scoped notification for the patient
   createAndPersistNotification({
@@ -2575,13 +2634,15 @@ app.post('/api/appointments', (req: AuthenticatedRequest, res: Response) => {
   return res.status(201).json(newApt);
 });
 
-app.patch('/api/appointments/:id/status', (req: AuthenticatedRequest, res: Response) => {
+app.patch('/api/appointments/:id/status', async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
-  const { status, room } = req.body;
+  const { status, room, queueNumber, notes } = req.body || {};
   const apt = memAppointments.find((a) => a.id === id);
   if (!apt) return res.status(404).json({ error: 'Appointment not found' });
   apt.status = status;
   if (room) apt.room = room;
+  if (queueNumber) apt.queueNumber = queueNumber;
+  if (notes !== undefined) apt.notes = notes;
 
   if (status === 'Confirmed') {
     createAndPersistNotification({
@@ -2734,16 +2795,51 @@ app.patch('/api/appointments/:id/status', (req: AuthenticatedRequest, res: Respo
   }
 
   flushClinicStateToDisk();
+
+  // Persist status update directly to Supabase
+  if (supabaseServer) {
+    try {
+      const updateData: any = { status };
+      if (room) updateData.room = room;
+      if (queueNumber) updateData.queue_number = queueNumber;
+      if (notes !== undefined) updateData.notes = notes;
+      await supabaseServer.from('appointments').update(updateData).eq('id', id);
+    } catch (err: any) {
+      console.error('Failed to sync appointment status to Supabase:', err?.message);
+    }
+  }
+
   return res.json({ success: true, appointment: apt });
 });
 
-app.patch('/api/appointments/:id', (req: AuthenticatedRequest, res: Response) => {
+app.patch('/api/appointments/:id', async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const aptIdx = memAppointments.findIndex((a) => a.id === id);
   if (aptIdx === -1) return res.status(404).json({ error: 'Appointment not found' });
   const updates = req.body || {};
   memAppointments[aptIdx] = { ...memAppointments[aptIdx], ...updates };
   flushClinicStateToDisk();
+
+  if (supabaseServer) {
+    try {
+      const dbUpdate: any = {};
+      if (updates.status) dbUpdate.status = updates.status;
+      if (updates.room) dbUpdate.room = updates.room;
+      if (updates.queueNumber) dbUpdate.queue_number = updates.queueNumber;
+      if (updates.notes !== undefined) dbUpdate.notes = updates.notes;
+      if (updates.date) dbUpdate.appointment_date = updates.date;
+      if (updates.time) dbUpdate.appointment_time = updates.time;
+      if (updates.durationMinutes) dbUpdate.duration_minutes = updates.durationMinutes;
+      if (updates.reason) dbUpdate.reason = updates.reason;
+      if (updates.type) dbUpdate.type = updates.type;
+      if (Object.keys(dbUpdate).length > 0) {
+        await supabaseServer.from('appointments').update(dbUpdate).eq('id', id);
+      }
+    } catch (err: any) {
+      console.error('Failed to sync appointment updates to Supabase:', err?.message);
+    }
+  }
+
   return res.json({ success: true, appointment: memAppointments[aptIdx] });
 });
 
@@ -2775,6 +2871,13 @@ app.post('/api/consultations', (req: Request, res: Response) => {
     const apt = memAppointments.find((a) => a.id === newConsult.appointmentId);
     if (apt) {
       apt.status = 'Completed';
+    }
+    if (supabaseServer) {
+      (async () => {
+        try {
+          await supabaseServer.from('appointments').update({ status: 'Completed' }).eq('id', newConsult.appointmentId);
+        } catch {}
+      })();
     }
   }
 
@@ -2964,7 +3067,7 @@ app.post('/api/audit-logs', (req: AuthenticatedRequest, res: Response) => {
    FULL CLINIC STATE SYNCHRONIZATION (High-speed initial & continuous sync)
    ========================================================================== */
 app.get('/api/clinic/sync', async (req: AuthenticatedRequest, res: Response) => {
-  if (supabaseServer) {
+  if (supabaseServer && memAppointments.length === 0) {
     try {
       await hydrateClinicStateFromSupabase();
     } catch {}
@@ -3082,7 +3185,6 @@ export async function createAndPersistNotification(notif: Partial<Notification> 
   if (supabaseServer) {
     try {
       const auditLogRecord = {
-        id: finalId.startsWith('notif-') ? undefined : finalId, // Allow auto UUID if not uuid
         user_id: notif.recipientId || notif.userId || 'system',
         user_name: notif.title || 'Notification',
         user_role: notif.recipientRole || notif.targetRole || 'all',
@@ -3091,6 +3193,7 @@ export async function createAndPersistNotification(notif: Partial<Notification> 
         resource_id: notif.relatedResourceId || finalId,
         description: `${notif.title}: ${notif.message}`,
         details: {
+          notificationId: finalId,
           title: notif.title,
           message: notif.message,
           content: notif.content || notif.message,
@@ -3134,8 +3237,9 @@ app.get('/api/notifications', async (req: AuthenticatedRequest, res: Response) =
       if (!error && Array.isArray(logs)) {
         dbNotifs = logs.map((l: any) => {
           const details = typeof l.details === 'object' && l.details !== null ? l.details : {};
+          const notifId = details.notificationId || (l.resource_id && l.resource_id.startsWith('notif-') ? l.resource_id : l.id);
           return {
-            id: l.id,
+            id: notifId,
             userId: l.user_id || details.recipientId,
             recipientId: details.recipientId || l.user_id,
             recipientRole: details.recipientRole || l.user_role,
@@ -3159,11 +3263,27 @@ app.get('/api/notifications', async (req: AuthenticatedRequest, res: Response) =
     }
 
     // Combine Supabase notifications with in-memory notifications without duplicates
+    const seenSignatures = new Set<string>();
     const combinedMap = new Map<string, Notification>();
-    dbNotifs.forEach((n) => combinedMap.set(n.id, n));
-    memNotifications.forEach((n) => {
-      if (!combinedMap.has(n.id)) combinedMap.set(n.id, n);
-    });
+
+    const getSoftSig = (n: any) =>
+      `${(n.title || '').trim()}::${(n.message || '').trim()}::${n.recipientId || n.userId || ''}::${n.relatedResourceId || ''}`;
+
+    for (const n of dbNotifs) {
+      const sig = getSoftSig(n);
+      if (!seenSignatures.has(sig) && !combinedMap.has(n.id)) {
+        seenSignatures.add(sig);
+        combinedMap.set(n.id, n);
+      }
+    }
+
+    for (const n of memNotifications) {
+      const sig = getSoftSig(n);
+      if (!combinedMap.has(n.id) && !seenSignatures.has(sig)) {
+        seenSignatures.add(sig);
+        combinedMap.set(n.id, n);
+      }
+    }
     const allNotifs = Array.from(combinedMap.values());
 
     // 2. Strict User-Based Filtering

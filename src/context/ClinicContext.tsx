@@ -17,7 +17,7 @@ import {
   syncInvoiceToSupabase, syncAuditLogToSupabase, syncAllClinicDataToSupabase,
   getSupabaseConfigInfo,
 } from '../lib/supabase';
-import { formatTimeSlot, createCustomDoctorSchedule, registerDoctorSchedule, getDoctorSchedule } from '../utils/doctorSchedules';
+import { formatTimeSlot, createCustomDoctorSchedule, registerDoctorSchedule, getDoctorSchedule, normalizeTimeTo24Hour } from '../utils/doctorSchedules';
 
 import { getTranslation, type AppLanguage, type Translations } from '../utils/translations';
 
@@ -179,7 +179,7 @@ interface ClinicContextType {
   openBookAppointmentWithDraft: (draft: TriageBookingDraft) => void;
   appointments: Appointment[];
   addAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt'>) => Appointment;
-  updateAppointmentStatus: (id: string, status: AppointmentStatus) => void;
+  updateAppointmentStatus: (id: string, status: AppointmentStatus, room?: string) => void;
   cancelAppointment: (id: string, reason?: string) => void;
   updateAppointmentRoom: (id: string, room: string) => void;
   checkInPatient: (appointmentId: string, room?: string) => void;
@@ -591,7 +591,46 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           });
         }
         if (Array.isArray(data.appointments)) {
-          setAppointments(data.appointments);
+          setAppointments((prev) => {
+            const prevMap = new Map<string, Appointment>(prev.map((a) => [a.id, a]));
+            const merged = data.appointments.map((incoming: Appointment) => {
+              const local = prevMap.get(incoming.id);
+              if (!local) return incoming;
+              let resolvedStatus = incoming.status;
+              if (local.status === 'Cancelled') {
+                resolvedStatus = 'Cancelled';
+              } else if (
+                local.status === 'Completed' &&
+                (incoming.status === 'Scheduled' ||
+                  incoming.status === 'Confirmed' ||
+                  incoming.status === 'Checked In' ||
+                  incoming.status === 'In Consultation')
+              ) {
+                resolvedStatus = 'Completed';
+              } else if (
+                local.status === 'In Consultation' &&
+                (incoming.status === 'Scheduled' ||
+                  incoming.status === 'Confirmed' ||
+                  incoming.status === 'Checked In')
+              ) {
+                resolvedStatus = 'In Consultation';
+              }
+              return {
+                ...incoming,
+                status: resolvedStatus,
+                room: local.room || incoming.room,
+                notes: local.notes || incoming.notes,
+                queueNumber: local.queueNumber || incoming.queueNumber,
+              };
+            });
+            const incomingIds = new Set(data.appointments.map((a: Appointment) => a.id));
+            prev.forEach((local) => {
+              if (!incomingIds.has(local.id)) {
+                merged.unshift(local);
+              }
+            });
+            return merged;
+          });
         }
         if (Array.isArray(data.consultations)) {
           setConsultations(data.consultations);
@@ -1492,10 +1531,32 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return newApt;
   };
 
-  const updateAppointmentStatus = (id: string, status: AppointmentStatus) => {
+  const updateAppointmentStatus = (id: string, status: AppointmentStatus, room?: string) => {
     const existingApt = appointments.find((a) => a.id === id);
-    setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
-    logAction('APPOINTMENT_STATUS', 'Appointment', id, `Updated status to: ${status}`);
+    const targetRoom = room || (existingApt ? existingApt.room : undefined);
+    const updatedApt: Appointment | null = existingApt
+      ? { ...existingApt, status, ...(targetRoom ? { room: targetRoom } : {}) }
+      : null;
+
+    setAppointments((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, status, ...(targetRoom ? { room: targetRoom } : {}) } : a))
+    );
+
+    // Immediately persist to localStorage for instant reload protection
+    try {
+      const saved = localStorage.getItem('smart_clinic_appointments');
+      if (saved) {
+        const parsed: Appointment[] = JSON.parse(saved);
+        const nextList = parsed.map((a) => (a.id === id ? { ...a, status, ...(targetRoom ? { room: targetRoom } : {}) } : a));
+        localStorage.setItem('smart_clinic_appointments', JSON.stringify(nextList));
+      }
+    } catch {}
+
+    logAction('APPOINTMENT_STATUS', 'Appointment', id, `Updated status to: ${status}${targetRoom ? ` in ${targetRoom}` : ''}`);
+
+    if (updatedApt) {
+      syncAppointmentToSupabase(updatedApt);
+    }
 
     if (existingApt) {
       if (status === 'Confirmed') {
@@ -1507,7 +1568,7 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           recipientRole: 'patient',
           title: 'Appointment Approved',
           message: 'Your appointment has been approved.',
-          content: `Your appointment with ${existingApt.doctorName} on ${existingApt.date} at ${formatTimeSlot(existingApt.time)} (${existingApt.type}) has been approved. Location: ${existingApt.room || 'Outpatient Clinic'}. Queue Number: ${existingApt.queueNumber || 'Standard Queue'}.`,
+          content: `Your appointment with ${existingApt.doctorName} on ${existingApt.date} at ${formatTimeSlot(existingApt.time)} (${existingApt.type}) has been approved. Location: ${targetRoom || existingApt.room || 'Outpatient Clinic'}. Queue Number: ${existingApt.queueNumber || 'Standard Queue'}.`,
           category: 'appointment',
           priority: 'normal',
           relatedResourceId: id,
@@ -1627,12 +1688,17 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     syncToBackend(`/api/appointments/${id}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({
+        status,
+        room: targetRoom,
+        notes: updatedApt?.notes,
+        queueNumber: updatedApt?.queueNumber,
+      }),
     }, 'Update appointment status');
 
     if (typeof window !== 'undefined' && window.BroadcastChannel) {
       const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
-      channel.postMessage({ type: 'UPDATE_APPOINTMENT_STATUS', id, status });
+      channel.postMessage({ type: 'UPDATE_APPOINTMENT_STATUS', id, status, room: targetRoom });
       channel.close();
     }
   };
@@ -1640,23 +1706,61 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const cancelAppointment = (id: string, reason?: string) => {
     const apt = appointments.find((a) => a.id === id);
     if (!apt) return;
+    const updatedNotes = reason ? `${apt.notes ? apt.notes + ' • ' : ''}Cancellation reason: ${reason}` : apt.notes;
+    const cancelledApt: Appointment = {
+      ...apt,
+      status: 'Cancelled',
+      notes: updatedNotes,
+    };
+
     setAppointments((prev) =>
-      prev.map((a) =>
-        a.id === id
-          ? {
-              ...a,
-              status: 'Cancelled',
-              notes: reason ? `${a.notes ? a.notes + ' • ' : ''}Cancellation reason: ${reason}` : a.notes,
-            }
-          : a
-      )
+      prev.map((a) => (a.id === id ? cancelledApt : a))
     );
+
+    // Immediately persist to localStorage
+    try {
+      const saved = localStorage.getItem('smart_clinic_appointments');
+      if (saved) {
+        const parsed: Appointment[] = JSON.parse(saved);
+        const nextList = parsed.map((a) => (a.id === id ? cancelledApt : a));
+        localStorage.setItem('smart_clinic_appointments', JSON.stringify(nextList));
+      }
+    } catch {}
+
+    syncAppointmentToSupabase(cancelledApt);
     updateAppointmentStatus(id, 'Cancelled');
     logAction('APPOINTMENT_CANCELLED', 'Appointment', id, `Cancelled appointment for ${apt.patientName}${reason ? ` (${reason})` : ''}`);
+
+    syncToBackend(`/api/appointments/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'Cancelled', notes: updatedNotes }),
+    }, 'Cancel appointment');
   };
 
   const updateAppointmentRoom = (id: string, room: string) => {
+    const apt = appointments.find((a) => a.id === id);
+    const updatedApt = apt ? { ...apt, room } : null;
+
     setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, room } : a)));
+
+    try {
+      const saved = localStorage.getItem('smart_clinic_appointments');
+      if (saved) {
+        const parsed: Appointment[] = JSON.parse(saved);
+        const nextList = parsed.map((a) => (a.id === id ? { ...a, room } : a));
+        localStorage.setItem('smart_clinic_appointments', JSON.stringify(nextList));
+      }
+    } catch {}
+
+    if (updatedApt) {
+      syncAppointmentToSupabase(updatedApt);
+    }
+
+    syncToBackend(`/api/appointments/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ room }),
+    }, 'Update appointment room');
+
     logAction('APPOINTMENT_ROOM_ASSIGNED', 'Appointment', id, `Assigned consultation room: ${room}`);
     if (typeof window !== 'undefined' && window.BroadcastChannel) {
       const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
@@ -1670,19 +1774,33 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!apt) return;
     const defaultRoom = room || apt.room || 'Waiting Room B';
     const queueNum = apt.queueNumber || `Q-${100 + appointments.length + 1}`;
+    const checkedInApt: Appointment = {
+      ...apt,
+      status: 'Checked In',
+      room: defaultRoom,
+      queueNumber: apt.queueNumber || queueNum,
+    };
 
     setAppointments((prev) =>
-      prev.map((a) =>
-        a.id === appointmentId
-          ? {
-              ...a,
-              status: 'Checked In',
-              room: defaultRoom,
-              queueNumber: a.queueNumber || queueNum,
-            }
-          : a
-      )
+      prev.map((a) => (a.id === appointmentId ? checkedInApt : a))
     );
+
+    try {
+      const saved = localStorage.getItem('smart_clinic_appointments');
+      if (saved) {
+        const parsed: Appointment[] = JSON.parse(saved);
+        const nextList = parsed.map((a) => (a.id === appointmentId ? checkedInApt : a));
+        localStorage.setItem('smart_clinic_appointments', JSON.stringify(nextList));
+      }
+    } catch {}
+
+    syncAppointmentToSupabase(checkedInApt);
+
+    syncToBackend(`/api/appointments/${appointmentId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'Checked In', room: defaultRoom, queueNumber: queueNum }),
+    }, 'Check in patient');
+
     logAction('PATIENT_CHECKED_IN', 'Appointment', appointmentId, `Patient checked in to ${defaultRoom} (Ticket: ${queueNum})`);
     addNotification({
       userId: apt.patientId,
@@ -1723,17 +1841,12 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const apt = appointments.find((a) => a.id === appointmentId);
     if (!apt) return;
     if (nextStatus === 'Cancelled') {
-      cancelAppointment(appointmentId);
+      cancelAppointment(appointmentId, 'Cancelled from queue');
       return;
     }
     const targetRoom = room || apt.room || (nextStatus === 'In Consultation' ? 'Room 302 (Consultation Suite)' : 'Waiting Room B');
-    setAppointments((prev) =>
-      prev.map((a) =>
-        a.id === appointmentId
-          ? { ...a, status: nextStatus, room: targetRoom }
-          : a
-      )
-    );
+
+    updateAppointmentStatus(appointmentId, nextStatus, targetRoom);
     logAction('QUEUE_ADVANCED', 'Appointment', appointmentId, `Queue status advanced to ${nextStatus} in ${targetRoom}`);
 
     if (nextStatus === 'In Consultation') {
@@ -1754,15 +1867,6 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         relatedResourceId: appointmentId,
         relatedResourceType: 'appointment',
       });
-    } else if (nextStatus === 'Completed') {
-      updateAppointmentStatus(appointmentId, 'Completed');
-      return;
-    }
-
-    if (typeof window !== 'undefined' && window.BroadcastChannel) {
-      const channel = new BroadcastChannel('smart_clinic_notifications_broadcast');
-      channel.postMessage({ type: 'UPDATE_APPOINTMENT_STATUS', id: appointmentId, status: nextStatus, room: targetRoom });
-      channel.close();
     }
   };
 
