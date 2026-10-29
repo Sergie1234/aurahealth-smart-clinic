@@ -446,19 +446,32 @@ export const AIAssistantHub: React.FC = () => {
         };
       }
 
-      // Synchronize appointment state if scheduling assistant moved to tomorrow or cancelled
+      // Synchronize appointment state if scheduling assistant moved, rescheduled, or cancelled
       const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
       const replyLower = res.reply.toLowerCase();
-      if (replyLower.includes('rescheduled to tomorrow')) {
+      const finalMatch = res.reply.match(/final[:\s]+([A-Za-z0-9\s,\-]+?)(?:[\r\n]|$)/i);
+      const isRescheduled = replyLower.includes('rescheduled') || replyLower.includes('moved to the next calendar day');
+      const isCancelled =
+        replyLower.includes('appointment has been cancelled') ||
+        replyLower.includes('appointment was cancelled') ||
+        replyLower.includes('appointment has been canceled') ||
+        replyLower.includes('appointment was canceled') ||
+        (replyLower.includes('appointment for') && replyLower.includes('canceled'));
+
+      if (isRescheduled) {
         const apt = appointments.find((a) =>
           (!inFocusPatient || a.patientId === inFocusPatient.id) &&
           a.status !== 'Completed' &&
           a.status !== 'Cancelled'
         );
         if (apt) {
-          rescheduleAppointment(apt.id, tomorrowStr, apt.time || '09:30');
+          const rawFinal = finalMatch ? finalMatch[1].trim() : '';
+          const targetDate = rawFinal
+            ? (rawFinal.toLowerCase().includes('tomorrow') ? tomorrowStr : rawFinal)
+            : (replyLower.includes('tomorrow') ? tomorrowStr : apt.date);
+          rescheduleAppointment(apt.id, targetDate, apt.time || '09:30');
         }
-      } else if (replyLower.includes('appointment has been cancelled') || replyLower.includes('appointment was cancelled')) {
+      } else if (isCancelled) {
         const apt = appointments.find((a) =>
           (!inFocusPatient || a.patientId === inFocusPatient.id) &&
           a.status !== 'Completed' &&
@@ -1212,14 +1225,15 @@ export const AIAssistantHub: React.FC = () => {
                     msg.text.toLowerCase().includes('standard clinic policy') ||
                     msg.text.toLowerCase().includes('clinic policy')) && (
                     <div className="pt-2 pb-1 flex items-center gap-2 flex-wrap">
-                      {msg.text.toLowerCase().includes('rescheduled to tomorrow') && (
+                      {(msg.text.toLowerCase().includes('rescheduled') ||
+                        msg.text.toLowerCase().includes('final:')) && (
                         <button
                           type="button"
                           onClick={() => setActiveTab('appointments')}
                           className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
                         >
                           <CalendarCheck className="w-3.5 h-3.5" />
-                          <span>View in Tomorrow's Calendar</span>
+                          <span>View in Appointments Calendar</span>
                         </button>
                       )}
                       {(msg.text.toLowerCase().includes('cancelled') ||
@@ -1548,7 +1562,19 @@ export const AIAssistantHub: React.FC = () => {
             </span>
             {[
               {
-                label: 'Reschedule for Today → Move to Tomorrow',
+                label: 'Ex 1: Jun 10 → Jun 11 (Same-Day Move)',
+                prompt: 'Original: Jun 10\nRequest: reschedule to Jun 10',
+              },
+              {
+                label: 'Ex 2: Oct 25 → Oct 26',
+                prompt: 'Original: Oct 25\nRequest: reschedule to Oct 26',
+              },
+              {
+                label: 'Ex 3: Dec 18 → Cancel & Book Tomorrow',
+                prompt: 'Original: Dec 18\nRequest: cancel and book tomorrow',
+              },
+              {
+                label: 'Reschedule Today → Move to Tomorrow',
                 prompt: 'I need to reschedule my appointment for today',
               },
               {

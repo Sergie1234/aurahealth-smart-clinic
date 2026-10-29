@@ -18,6 +18,7 @@ import {
   getSupabaseConfigInfo,
 } from '../lib/supabase';
 import { formatTimeSlot, createCustomDoctorSchedule, registerDoctorSchedule, getDoctorSchedule, normalizeTimeTo24Hour } from '../utils/doctorSchedules';
+import { applyReschedulingRule, type RescheduleComparisonResult } from '../utils/schedulingRules';
 
 import { getTranslation, type AppLanguage, type Translations } from '../utils/translations';
 
@@ -187,7 +188,7 @@ interface ClinicContextType {
   updateAppointmentRoom: (id: string, room: string) => void;
   checkInPatient: (appointmentId: string, room?: string) => void;
   advanceQueueStatus: (appointmentId: string, nextStatus: AppointmentStatus, room?: string) => void;
-  rescheduleAppointment: (id: string, newDate: string, newTime: string) => void;
+  rescheduleAppointment: (id: string, newDate: string, newTime: string) => RescheduleComparisonResult;
   consultations: Consultation[];
   addConsultation: (consultation: Omit<Consultation, 'id'>) => Consultation;
   prescriptions: Prescription[];
@@ -1889,16 +1890,44 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  const rescheduleAppointment = (id: string, newDate: string, newTime: string) => {
+  const rescheduleAppointment = (id: string, requestedDate: string, newTime: string): RescheduleComparisonResult => {
+    let result: RescheduleComparisonResult = {
+      requestedDate,
+      originalAppointmentDate: '',
+      finalDate: requestedDate,
+      wasSameDay: false,
+      explanation: '',
+    };
+
     setAppointments((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, date: newDate, time: newTime, status: 'Scheduled' } : a))
+      prev.map((a) => {
+        if (a.id === id) {
+          result = applyReschedulingRule(requestedDate, a.date);
+          return { ...a, date: result.finalDate, time: newTime, status: 'Scheduled' };
+        }
+        return a;
+      })
     );
-    logAction('APPOINTMENT_RESCHEDULE', 'Appointment', id, `Rescheduled to ${newDate} ${newTime}`);
+
+    const logMessage = result.wasSameDay
+      ? `Same-day reschedule moved to next calendar day: ${result.finalDate} (original: ${result.originalAppointmentDate}) at ${newTime}`
+      : `Rescheduled to ${result.finalDate} at ${newTime}`;
+
+    logAction('APPOINTMENT_RESCHEDULE', 'Appointment', id, logMessage);
 
     syncToBackend(`/api/appointments/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ date: newDate, time: newTime, status: 'Scheduled' }),
+      body: JSON.stringify({
+        date: result.finalDate,
+        time: newTime,
+        status: 'Scheduled',
+        originalDate: result.originalAppointmentDate,
+        requestedDate: result.requestedDate,
+        wasSameDay: result.wasSameDay,
+      }),
     }, 'Reschedule appointment');
+
+    return result;
   };
 
   const addConsultation = (consData: Omit<Consultation, 'id'>) => {

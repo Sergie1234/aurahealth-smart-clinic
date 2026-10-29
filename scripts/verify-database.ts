@@ -12,12 +12,12 @@ dotenv.config();
 const SUPABASE_URL =
   process.env.SUPABASE_URL ||
   process.env.VITE_SUPABASE_URL ||
-  'https://oqakutwoeixccadsgaii.supabase.co';
+  '';
 const SUPABASE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
   process.env.VITE_SUPABASE_ANON_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9xYWt1dHdvZWl4Y2NhZHNnYWlpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTM0MDE1NywiZXhwIjoyMTA2OTE2MTU3fQ.zuk3mGPKZsmAEpiIG5IYegIDv4IXvBl_OrRfQ4YM4hs';
+  '';
 
 export interface ModuleVerificationResult {
   module: string;

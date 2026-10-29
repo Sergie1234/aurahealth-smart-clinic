@@ -1,5 +1,6 @@
 // Service wrapper for server-side AI endpoints
 import { API_BASE_URL } from '../lib/config';
+import { processSchedulingMessage } from '../utils/schedulingRules';
 
 export interface SOAPResponse {
   chiefComplaint: string;
@@ -269,10 +270,12 @@ function generateLocalRulebookResponse(payload: {
     lowerText.includes('cancel') ||
     lowerText.includes('appointment') ||
     lowerText.includes('slot today') ||
-    lowerText.includes('book tomorrow');
+    lowerText.includes('book tomorrow') ||
+    (lowerText.includes('original') && lowerText.includes('request'));
 
   if (isSchedulingQuery) {
     const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
     const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
     const tomorrowFormatted = tomorrow.toLocaleDateString('en-US', {
@@ -282,67 +285,16 @@ function generateLocalRulebookResponse(payload: {
       year: 'numeric',
     });
 
-    // Rule 4: "Can I move my appointment from today to another slot today?" -> reject same-day rescheduling and suggest tomorrow
-    const isSameDayReschedule =
-      (lowerText.includes('move') || lowerText.includes('reschedule') || lowerText.includes('change')) &&
-      (lowerText.includes('another slot today') ||
-        lowerText.includes('other slot today') ||
-        lowerText.includes('later today') ||
-        lowerText.includes('slot today') ||
-        lowerText.includes('same day') ||
-        lowerText.includes('same-day'));
+    const schedulingResult = processSchedulingMessage(userText, {
+      todayStr,
+      tomorrowStr,
+      tomorrowFormatted,
+    });
 
-    if (isSameDayReschedule) {
+    if (schedulingResult.isHandled) {
       return {
-        reply: `Same-day rescheduling is not allowed as per our standard clinic policy. Patients cannot reschedule an appointment to the same day. If you need to reschedule your appointment for today, it must be moved to the next calendar day.\n\nWould you like me to move your appointment to tomorrow (${tomorrowFormatted}, ${tomorrowStr})? Available tomorrow slots begin at 09:00 AM, 10:30 AM, and 02:00 PM.`,
+        reply: schedulingResult.reply,
         disclaimer: 'Clinic Policy: Same-day rescheduling is prohibited. Rescheduled visits move to the next calendar day.',
-        activeRole,
-        activePage,
-        persona: 'Smart Clinic Scheduling Assistant',
-      };
-    }
-
-    // Rule 1 & Rule 4: "I need to reschedule my appointment for today" -> move it to tomorrow as standard policy
-    const isRescheduleForToday =
-      (lowerText.includes('reschedule') || lowerText.includes('move')) &&
-      (lowerText.includes('for today') ||
-        lowerText.includes('today') ||
-        lowerText.includes("today's") ||
-        lowerText.includes('appointment'));
-
-    if (isRescheduleForToday && !lowerText.includes('cancel')) {
-      return {
-        reply: `Your appointment has been rescheduled to tomorrow (${tomorrowFormatted}, ${tomorrowStr}) as per standard clinic policy. Same-day rescheduling is not allowed; rescheduled appointments are moved to the next calendar day and appear in the calendar on the following day.\n\nYour updated appointment is set for tomorrow at 09:30 AM. It now appears in your calendar for tomorrow. Please let us know if you wish to adjust this time slot.`,
-        disclaimer: 'Clinic Policy: Rescheduled appointments appear in the calendar the next day.',
-        activeRole,
-        activePage,
-        persona: 'Smart Clinic Scheduling Assistant',
-      };
-    }
-
-    // Rule 2 & Rule 4: "I want to cancel my appointment and book tomorrow" -> allow booking for tomorrow globally
-    const isCancelAndBookTomorrow =
-      lowerText.includes('cancel') &&
-      (lowerText.includes('book tomorrow') ||
-        lowerText.includes('for tomorrow') ||
-        lowerText.includes('reschedule tomorrow') ||
-        lowerText.includes('schedule tomorrow'));
-
-    if (isCancelAndBookTomorrow) {
-      return {
-        reply: `Your appointment has been cancelled. As per clinic policy, you may immediately book a new appointment for tomorrow globally across any available provider and time slot (unrestricted to your original provider or time).\n\nNext available tomorrow slots (${tomorrowFormatted}):\n• Dr. Sarah Jenkins (Cardiology) — Tomorrow at 09:00 AM, 11:00 AM\n• Dr. Michael Chang (Pulmonology) — Tomorrow at 10:00 AM, 02:00 PM\n• Dr. Elena Gomez (Dermatology) — Tomorrow at 09:30 AM, 03:00 PM\n\nYou can choose any tomorrow slot globally. Please select your preferred provider and time slot to confirm your new schedule.`,
-        disclaimer: 'Clinic Policy: Cancelled visits allow immediate global rebooking for tomorrow.',
-        activeRole,
-        activePage,
-        persona: 'Smart Clinic Scheduling Assistant',
-      };
-    }
-
-    // Rule 2: General cancellation -> confirm cancellation and offer global tomorrow booking
-    if (lowerText.includes('cancel')) {
-      return {
-        reply: `Your appointment has been cancelled. As per clinic policy, you may immediately book a new appointment for tomorrow globally across all available providers and time slots.\n\nAvailable tomorrow slots (${tomorrowFormatted}) begin at 09:00 AM with Dr. Sarah Jenkins, Dr. Michael Chang, and Dr. Elena Gomez. Would you like to select a slot for tomorrow to confirm your new schedule?`,
-        disclaimer: 'Clinic Policy: Cancelled appointments allow immediate global rebooking for tomorrow.',
         activeRole,
         activePage,
         persona: 'Smart Clinic Scheduling Assistant',

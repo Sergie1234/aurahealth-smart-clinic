@@ -26,6 +26,12 @@ import {
   getDoctorSlotAvailability,
   normalizeTimeTo24Hour,
 } from '../../utils/doctorSchedules';
+import {
+  applyReschedulingRule,
+  addOneCalendarDay,
+  formatCalendarDate,
+  normalizeDateForComparison,
+} from '../../utils/schedulingRules';
 
 interface Props {
   onOpenBookAppointment: () => void;
@@ -247,36 +253,43 @@ export const AppointmentCalendar: React.FC<Props> = ({
     e.preventDefault();
     if (!reschedulingApt || !newReschedDate || !newReschedTime) return;
 
-    const cleanReschedDate = newReschedDate.split('T')[0].trim();
-    if (cleanReschedDate <= todayStr) {
-      setRescheduleError('Patients cannot reschedule an appointment to the same day. As per standard clinic policy, the appointment must be moved to the next calendar day (tomorrow) or later.');
-      return;
-    }
+    // Apply exact rescheduling rule:
+    // If requested_date == original_appointment_date:
+    //    final_date = original_appointment_date + 1 day
+    // Otherwise:
+    //    final_date = requested_date
+    const ruleResult = applyReschedulingRule(newReschedDate, reschedulingApt.date);
+    const finalDate = ruleResult.finalDate;
 
-    // Double check that the selected slot is not already booked by another patient
+    // Double check that the selected slot is not already booked by another patient on finalDate
     const cleanReschedTime = normalizeTimeTo24Hour(newReschedTime);
     const clinicAppointments = allClinicAppointments || appointments;
     const isBooked = clinicAppointments.some(
       (a) =>
         a.id !== reschedulingApt.id &&
         (a.doctorId === reschedulingApt.doctorId || a.doctorName?.toLowerCase() === reschedulingApt.doctorName?.toLowerCase()) &&
-        (a.date || '').split('T')[0].trim() === cleanReschedDate &&
+        (a.date || '').split('T')[0].trim() === finalDate &&
         normalizeTimeTo24Hour(a.time) === cleanReschedTime &&
         a.status !== 'Cancelled'
     );
     if (isBooked) {
-      setRescheduleError('This slot was just booked by another patient. Please select an available slot.');
+      setRescheduleError(`This slot on ${formatCalendarDate(finalDate)} at ${formatTimeSlot(newReschedTime)} was just booked by another patient. Please select another slot.`);
       return;
     }
 
     setRescheduleError(null);
-    rescheduleAppointment(reschedulingApt.id, cleanReschedDate, newReschedTime);
+    const result = rescheduleAppointment(reschedulingApt.id, newReschedDate, newReschedTime);
     setReschedulingApt(null);
-    setRescheduleSuccessBanner(
-      cleanReschedDate === tomorrowStr
-        ? `Your appointment was rescheduled to tomorrow (${tomorrowFormatted}) at ${formatTimeSlot(newReschedTime)} as per standard clinic policy. It now appears in the calendar for tomorrow.`
-        : `Your appointment was rescheduled to ${cleanReschedDate} at ${formatTimeSlot(newReschedTime)} as per clinic policy. It now appears in the calendar.`
-    );
+
+    if (result.wasSameDay) {
+      setRescheduleSuccessBanner(
+        `Same-day reschedule is not allowed. Because your requested date (${formatCalendarDate(result.requestedDate)}) matched the original appointment date (${formatCalendarDate(result.originalAppointmentDate)}), the appointment was automatically moved to the next calendar day (${formatCalendarDate(result.finalDate)}) at ${formatTimeSlot(newReschedTime)}. It now appears in your calendar on ${formatCalendarDate(result.finalDate)}.`
+      );
+    } else {
+      setRescheduleSuccessBanner(
+        `Your appointment was successfully rescheduled to ${formatCalendarDate(result.finalDate)} at ${formatTimeSlot(newReschedTime)}. It now appears in your calendar on ${formatCalendarDate(result.finalDate)}.`
+      );
+    }
   };
 
   return (
@@ -964,10 +977,19 @@ export const AppointmentCalendar: React.FC<Props> = ({
       {reschedulingApt && (() => {
         const reschedDoc = users.find((u) => u.id === reschedulingApt.doctorId);
         const docSchedule = getDoctorSchedule(reschedulingApt.doctorId, reschedDoc);
-        const isDocWorking = newReschedDate ? isDoctorWorkingOnDate(reschedulingApt.doctorId, newReschedDate, reschedDoc) : false;
+        const isSameDaySelected = Boolean(
+          newReschedDate &&
+          reschedulingApt.date &&
+          normalizeDateForComparison(newReschedDate) === normalizeDateForComparison(reschedulingApt.date)
+        );
+        const resolvedTargetDate = isSameDaySelected
+          ? addOneCalendarDay(reschedulingApt.date)
+          : newReschedDate;
+
+        const isDocWorking = resolvedTargetDate ? isDoctorWorkingOnDate(reschedulingApt.doctorId, resolvedTargetDate, reschedDoc) : false;
         const clinicAppointments = allClinicAppointments || appointments;
-        const availableSlots = newReschedDate
-          ? getDoctorSlotAvailability(reschedulingApt.doctorId, newReschedDate, clinicAppointments, reschedulingApt.id, reschedDoc)
+        const availableSlots = resolvedTargetDate
+          ? getDoctorSlotAvailability(reschedulingApt.doctorId, resolvedTargetDate, clinicAppointments, reschedulingApt.id, reschedDoc)
           : [];
 
         return (
@@ -998,9 +1020,24 @@ export const AppointmentCalendar: React.FC<Props> = ({
                   <span>Clinic Rescheduling Policy</span>
                 </div>
                 <p>
-                  Patients cannot reschedule an appointment to the same day. All reschedules for today must be moved to tomorrow ({tomorrowFormatted}) or a later date. Rescheduled appointments will appear in your calendar on the following day.
+                  Same-day reschedule is not allowed. If you try to reschedule to the same date as your original appointment ({formatCalendarDate(reschedulingApt.date)}), the system automatically moves your appointment to the next calendar day ({formatCalendarDate(addOneCalendarDay(reschedulingApt.date))}). Rescheduled appointments will appear in your calendar on the following day.
                 </p>
               </div>
+
+              {isSameDaySelected && (
+                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-[11px] space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>Rule: Same-Day Reschedule Forbidden</span>
+                  </div>
+                  <p>
+                    Because requested date matches your original appointment date ({formatCalendarDate(reschedulingApt.date)}), this appointment will automatically move to the next calendar day: <strong>{formatCalendarDate(resolvedTargetDate)}</strong>.
+                  </p>
+                  <p className="text-slate-600 dark:text-slate-400 text-[10px]">
+                    Available slots below are displayed for <strong>{formatCalendarDate(resolvedTargetDate)}</strong>.
+                  </p>
+                </div>
+              )}
 
               {/* Doctor Personal Working Schedule Context */}
               <div className="p-3 rounded-xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 space-y-1 text-[11px]">
@@ -1026,35 +1063,29 @@ export const AppointmentCalendar: React.FC<Props> = ({
               <form onSubmit={handleConfirmReschedule} className="space-y-3.5">
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    Select New Date (Tomorrow or Later)
+                    Select New Date (Original: {formatCalendarDate(reschedulingApt.date)})
                   </label>
                   <input
                     type="date"
                     required
-                    min={tomorrowStr}
                     value={newReschedDate}
                     onChange={(e) => {
                       const val = e.target.value;
-                      if (val && val <= todayStr) {
-                        setRescheduleError('Patients cannot reschedule an appointment to the same day. Please select tomorrow or a later date.');
-                        setNewReschedDate(tomorrowStr);
-                      } else {
-                        setRescheduleError(null);
-                        setNewReschedDate(val);
-                      }
+                      setRescheduleError(null);
+                      setNewReschedDate(val);
                       setNewReschedTime('');
                     }}
                     className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
-                  {newReschedDate && !isDocWorking && (
+                  {resolvedTargetDate && !isDocWorking && (
                     <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1.5 flex items-center gap-1 font-medium bg-amber-50 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
                       <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                      <span>{reschedulingApt.doctorName} is off on this date. Schedule: {docSchedule.workDaysLabel}.</span>
+                      <span>{reschedulingApt.doctorName} is off on {formatCalendarDate(resolvedTargetDate)}. Schedule: {docSchedule.workDaysLabel}.</span>
                     </p>
                   )}
                 </div>
 
-                {newReschedDate && isDocWorking && (
+                {resolvedTargetDate && isDocWorking && (
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="font-semibold text-slate-700 dark:text-slate-300">
