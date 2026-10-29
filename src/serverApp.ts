@@ -455,7 +455,10 @@ export async function hydrateClinicStateFromSupabase(): Promise<boolean> {
         doctorSpecialty: r.doctor_specialty,
         doctorLicense: r.doctor_license,
         date: r.prescription_date,
-        items: r.items || [],
+        items: (r.items || []).map((it: any, itIdx: number) => ({
+          ...it,
+          id: it.id || `rx-item-${r.id || r.prescription_number || 'rx'}-${itIdx}`,
+        })),
         status: r.status,
         aiSafetyAudit: r.ai_safety_audit,
         notes: r.notes,
@@ -3635,6 +3638,17 @@ app.post('/api/ai/chat', async (req: AuthenticatedRequest, res: Response) => {
     ? memPatients.find((p) => p.email && p.email.toLowerCase() === userEmail)
     : null;
 
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const tomorrowFormatted = tomorrow.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
   // Latest Triage Record for the targeted patient
   const latestTriage = (targetPatient?.triageHistory && targetPatient.triageHistory.length > 0)
     ? targetPatient.triageHistory[0]
@@ -3899,7 +3913,10 @@ ROLE CAPABILITIES:
 CLINICAL DIRECTIVE: All laboratory results must be certified by a licensed Medical Technologist or Pathologist before clinical release.`;
 
   } else {
-    // Patient Triage
+    // Check if user is asking scheduling questions (reschedule / cancel / booking)
+    const isSchedulingQuery =
+      /resched|cancel|appointment|booking|another slot today|slot today|book tomorrow|move my appointment/i.test(userText);
+
     const myAppointments = memAppointments.filter((a) => targetPatient && a.patientId === targetPatient.id);
     const myLabs = memLabOrders.filter((l) => targetPatient && l.patientId === targetPatient.id);
     const myRxs = memPrescriptions.filter((rx) => targetPatient && rx.patientId === targetPatient.id);
@@ -3908,6 +3925,9 @@ CLINICAL DIRECTIVE: All laboratory results must be certified by a licensed Medic
       patientName: targetPatient?.fullName || undefined,
       mrn: targetPatient?.mrn || undefined,
       hasPatientSelected: Boolean(targetPatient),
+      todayDate: todayStr,
+      tomorrowDate: tomorrowStr,
+      tomorrowFormatted,
       upcomingVisits: myAppointments.map((a) => ({ date: a.date, time: a.time, doctor: a.doctorName, room: a.room, status: a.status })),
       visibleLabResults: myLabs.slice(0, 3).map((l) => ({ testName: l.testName, status: l.status, date: l.requestedAt })),
       activeMedications: myRxs.flatMap((rx) => rx.items.map((i) => i.medicationName)),
@@ -3920,7 +3940,36 @@ CLINICAL DIRECTIVE: All laboratory results must be certified by a licensed Medic
       },
     };
 
-    systemPersonaPrompt = `You are the SmartClinic AI Triage Chatbot. You only do triage. You are not a doctor.
+    if (isSchedulingQuery) {
+      systemPersonaPrompt = `You are a smart clinic scheduling assistant.
+Today is ${todayStr}. Tomorrow is ${tomorrowStr} (${tomorrowFormatted}).
+
+Follow these booking rules strictly:
+
+1. Rescheduling policy:
+   - Patients cannot reschedule an appointment to the same day.
+   - If a patient requests a reschedule for today, the appointment must be moved to the next calendar day (${tomorrowStr}).
+   - This next-day slot is the standard rescheduling outcome.
+   - When the appointment is rescheduled, it must appear in the calendar on the following day.
+
+2. Cancellation policy:
+   - If a patient cancels an appointment, they may immediately book a new appointment for tomorrow.
+   - This booking should be available globally for tomorrow, not restricted to the original time or same-day slot.
+   - After cancellation, offer the next available tomorrow slot or allow the patient to choose a tomorrow slot globally.
+
+3. Confirmation behavior:
+   - Confirm the patient’s updated appointment date clearly.
+   - If the appointment was moved to the next day, say it was rescheduled to tomorrow as per standard policy.
+   - If the appointment was canceled, offer booking options for tomorrow and confirm the new schedule.
+
+4. Examples:
+   - “I need to reschedule my appointment for today” → move it to tomorrow (${tomorrowFormatted}, ${tomorrowStr}).
+   - “I want to cancel my appointment and book tomorrow” → allow booking for tomorrow globally across any available physician or time slot.
+   - “Can I move my appointment from today to another slot today?” → reject same-day rescheduling and suggest tomorrow.
+
+Always apply the standard rule: same-day rescheduling is not allowed; rescheduled appointments appear in the calendar the next day.`;
+    } else {
+      systemPersonaPrompt = `You are the SmartClinic AI Triage Chatbot. You only do triage. You are not a doctor.
 
 ### Strict Rules
 - Never diagnose or prescribe.
@@ -3969,6 +4018,7 @@ Thank you. I now have enough information to complete the triage.
 The triage is complete. A clinician will review this shortly.
 
 Follow these rules every single time. No exceptions.`;
+    }
   }
 
   // Conversation history string for contextual multi-turn triage
@@ -4171,6 +4221,116 @@ Respond strictly according to your role instructions. If in clinical triage mode
         `\nI can assist with test panel interpretations, critical panic value alerts, specimen QC calibration verification, and drafting diagnostic pathology notes.`;
     }
   } else {
+    // Check if this is a scheduling query
+    const isSameDayReschedule =
+      (lowerUserText.includes('move') || lowerUserText.includes('reschedule') || lowerUserText.includes('change')) &&
+      (lowerUserText.includes('another slot today') ||
+        lowerUserText.includes('other slot today') ||
+        lowerUserText.includes('later today') ||
+        lowerUserText.includes('slot today') ||
+        lowerUserText.includes('same day') ||
+        lowerUserText.includes('same-day'));
+
+    const isRescheduleForToday =
+      (lowerUserText.includes('reschedule') || lowerUserText.includes('move')) &&
+      (lowerUserText.includes('for today') ||
+        lowerUserText.includes('today') ||
+        lowerUserText.includes("today's") ||
+        lowerUserText.includes('appointment'));
+
+    const isCancelAndBookTomorrow =
+      lowerUserText.includes('cancel') &&
+      (lowerUserText.includes('book tomorrow') ||
+        lowerUserText.includes('for tomorrow') ||
+        lowerUserText.includes('reschedule tomorrow') ||
+        lowerUserText.includes('schedule tomorrow'));
+
+    const isGeneralCancel = lowerUserText.includes('cancel');
+
+    if (isSameDayReschedule) {
+      fallbackReply = `Same-day rescheduling is not allowed as per our standard clinic policy. Patients cannot reschedule an appointment to the same day. If you need to reschedule your appointment for today, it must be moved to the next calendar day.\n\nWould you like me to move your appointment to tomorrow (${tomorrowFormatted}, ${tomorrowStr})? Available tomorrow slots begin at 09:00 AM, 10:30 AM, and 02:00 PM.`;
+      return res.json({
+        success: true,
+        reply: fallbackReply,
+        activeRole,
+        activePage,
+        isEmergency: false,
+        disclaimer: 'Clinic Policy: Same-day rescheduling is prohibited. Rescheduled visits move to the next calendar day.',
+        persona: 'Smart Clinic Scheduling Assistant',
+      });
+    }
+
+    if (isRescheduleForToday && !lowerUserText.includes('cancel')) {
+      // Find patient's appointment and update date to tomorrow so it appears on the calendar tomorrow
+      const apt = memAppointments.find((a) =>
+        (!targetPatient || a.patientId === targetPatient.id) &&
+        a.status !== 'Completed' &&
+        a.status !== 'Cancelled'
+      );
+      if (apt) {
+        apt.date = tomorrowStr;
+        apt.status = 'Scheduled';
+        flushClinicStateToDisk();
+      }
+
+      fallbackReply = `Your appointment has been rescheduled to tomorrow (${tomorrowFormatted}, ${tomorrowStr}) as per standard clinic policy. Same-day rescheduling is not allowed; rescheduled appointments are moved to the next calendar day and appear in the calendar on the following day.\n\nYour updated appointment is set for tomorrow at ${apt?.time || '09:30 AM'} with ${apt?.doctorName || 'Dr. Sarah Jenkins'}. It now appears in your calendar for tomorrow. Please let us know if you wish to adjust this time slot.`;
+      return res.json({
+        success: true,
+        reply: fallbackReply,
+        activeRole,
+        activePage,
+        isEmergency: false,
+        disclaimer: 'Clinic Policy: Rescheduled appointments appear in the calendar the next day.',
+        persona: 'Smart Clinic Scheduling Assistant',
+      });
+    }
+
+    if (isCancelAndBookTomorrow) {
+      const apt = memAppointments.find((a) =>
+        (!targetPatient || a.patientId === targetPatient.id) &&
+        a.status !== 'Completed' &&
+        a.status !== 'Cancelled'
+      );
+      if (apt) {
+        apt.status = 'Cancelled';
+        flushClinicStateToDisk();
+      }
+
+      fallbackReply = `Your appointment has been cancelled. As per clinic policy, you may immediately book a new appointment for tomorrow globally across any available provider and time slot (unrestricted to your original provider or time).\n\nNext available tomorrow slots (${tomorrowFormatted}):\n• Dr. Sarah Jenkins (Cardiology) — Tomorrow at 09:00 AM, 11:00 AM\n• Dr. Michael Chang (Pulmonology) — Tomorrow at 10:00 AM, 02:00 PM\n• Dr. Elena Gomez (Dermatology) — Tomorrow at 09:30 AM, 03:00 PM\n\nYou can choose any tomorrow slot globally. Please select your preferred provider and time slot to confirm your new schedule.`;
+      return res.json({
+        success: true,
+        reply: fallbackReply,
+        activeRole,
+        activePage,
+        isEmergency: false,
+        disclaimer: 'Clinic Policy: Cancelled visits allow immediate global rebooking for tomorrow.',
+        persona: 'Smart Clinic Scheduling Assistant',
+      });
+    }
+
+    if (isGeneralCancel) {
+      const apt = memAppointments.find((a) =>
+        (!targetPatient || a.patientId === targetPatient.id) &&
+        a.status !== 'Completed' &&
+        a.status !== 'Cancelled'
+      );
+      if (apt) {
+        apt.status = 'Cancelled';
+        flushClinicStateToDisk();
+      }
+
+      fallbackReply = `Your appointment has been cancelled. As per clinic policy, you may immediately book a new appointment for tomorrow globally across all available providers and time slots.\n\nAvailable tomorrow slots (${tomorrowFormatted}) begin at 09:00 AM with Dr. Sarah Jenkins, Dr. Michael Chang, and Dr. Elena Gomez. Would you like to select a slot for tomorrow to confirm your new schedule?`;
+      return res.json({
+        success: true,
+        reply: fallbackReply,
+        activeRole,
+        activePage,
+        isEmergency: false,
+        disclaimer: 'Clinic Policy: Cancelled appointments allow immediate global rebooking for tomorrow.',
+        persona: 'Smart Clinic Scheduling Assistant',
+      });
+    }
+
     // SmartClinic AI Triage Chatbot Fallback
     const historyExchanges = conversationHistory || [];
     const isRedFlag = isEmergency || detectEmergencySymptoms(userText);

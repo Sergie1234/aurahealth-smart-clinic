@@ -23,6 +23,7 @@ import {
   Stethoscope,
   Activity,
   CalendarCheck,
+  Calendar as CalendarIcon,
   SlidersHorizontal,
   ChevronDown,
   ChevronUp,
@@ -138,6 +139,9 @@ export const AIAssistantHub: React.FC = () => {
     selectPatient,
     saveTriageRecord,
     openBookAppointmentWithDraft,
+    rescheduleAppointment,
+    cancelAppointment,
+    setActiveTab,
     language,
     setLanguage,
   } = useClinic();
@@ -442,6 +446,31 @@ export const AIAssistantHub: React.FC = () => {
         };
       }
 
+      // Synchronize appointment state if scheduling assistant moved to tomorrow or cancelled
+      const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+      const replyLower = res.reply.toLowerCase();
+      if (replyLower.includes('rescheduled to tomorrow')) {
+        const apt = appointments.find((a) =>
+          (!inFocusPatient || a.patientId === inFocusPatient.id) &&
+          a.status !== 'Completed' &&
+          a.status !== 'Cancelled'
+        );
+        if (apt) {
+          rescheduleAppointment(apt.id, tomorrowStr, apt.time || '09:30');
+        }
+      } else if (replyLower.includes('appointment has been cancelled') || replyLower.includes('appointment was cancelled')) {
+        const apt = appointments.find((a) =>
+          (!inFocusPatient || a.patientId === inFocusPatient.id) &&
+          a.status !== 'Completed' &&
+          a.status !== 'Cancelled'
+        );
+        if (apt) {
+          cancelAppointment(apt.id, 'Cancelled via Smart Clinic Scheduling Assistant');
+        }
+      }
+
+      const isSchedulingPersona = res.persona?.includes('Scheduling') || replyLower.includes('clinic policy');
+
       setMessages((prev) => [
         ...prev,
         {
@@ -449,7 +478,7 @@ export const AIAssistantHub: React.FC = () => {
           sender: 'assistant',
           text: res.reply,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          persona: getPersonaLabel(),
+          persona: isSchedulingPersona ? 'Smart Clinic Scheduling Assistant' : getPersonaLabel(),
           isEmergency: parsed?.urgencyLevel === 'Emergency' || parsed?.urgencyLevel === 'High' || res.isEmergency,
           parsedTriageSummary: parsed || undefined,
           triageDetails: triageDetailsObj,
@@ -1174,6 +1203,50 @@ export const AIAssistantHub: React.FC = () => {
                   return null;
                 })()}
 
+                {/* Smart Clinic Scheduling Action CTAs */}
+                {!isUser &&
+                  (msg.text.toLowerCase().includes('rescheduled to tomorrow') ||
+                    msg.text.toLowerCase().includes('appointment has been cancelled') ||
+                    msg.text.toLowerCase().includes('book a new appointment for tomorrow') ||
+                    msg.text.toLowerCase().includes('global tomorrow booking') ||
+                    msg.text.toLowerCase().includes('standard clinic policy') ||
+                    msg.text.toLowerCase().includes('clinic policy')) && (
+                    <div className="pt-2 pb-1 flex items-center gap-2 flex-wrap">
+                      {msg.text.toLowerCase().includes('rescheduled to tomorrow') && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('appointments')}
+                          className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                        >
+                          <CalendarCheck className="w-3.5 h-3.5" />
+                          <span>View in Tomorrow's Calendar</span>
+                        </button>
+                      )}
+                      {(msg.text.toLowerCase().includes('cancelled') ||
+                        msg.text.toLowerCase().includes('book a new appointment for tomorrow') ||
+                        msg.text.toLowerCase().includes('move your appointment to tomorrow')) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const tomorrow = new Date();
+                            tomorrow.setDate(tomorrow.getDate() + 1);
+                            const tomorrowDate = tomorrow.toISOString().split('T')[0];
+                            openBookAppointmentWithDraft({
+                              globalTomorrowBooking: true,
+                              preferredDate: tomorrowDate,
+                              patientId: inFocusPatient?.id,
+                              reason: 'Consultation booking following rescheduling/cancellation',
+                            });
+                          }}
+                          className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                        >
+                          <CalendarIcon className="w-3.5 h-3.5" />
+                          <span>Book for Tomorrow (Global Slots)</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                 {/* Footer Controls & Copy Action */}
                 {!isUser && (
                   <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
@@ -1463,6 +1536,39 @@ export const AIAssistantHub: React.FC = () => {
             >
               🛡️ RA 10173 Compliance Audit
             </button>
+          </div>
+        )}
+
+        {/* PATIENT Smart Clinic Scheduling Assistant Quick Chips */}
+        {userRole === 'patient' && !emergencyAlertActive && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+            <span className="text-[11px] font-bold text-teal-700 dark:text-teal-300 shrink-0 flex items-center gap-1">
+              <CalendarCheck className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>Scheduling Assistant:</span>
+            </span>
+            {[
+              {
+                label: 'Reschedule for Today → Move to Tomorrow',
+                prompt: 'I need to reschedule my appointment for today',
+              },
+              {
+                label: 'Cancel & Book Tomorrow (Global)',
+                prompt: 'I want to cancel my appointment and book tomorrow',
+              },
+              {
+                label: 'Move to Another Slot Today?',
+                prompt: 'Can I move my appointment from today to another slot today?',
+              },
+            ].map((chip) => (
+              <button
+                key={chip.label}
+                type="button"
+                onClick={() => handleSendMessage(chip.prompt)}
+                className="px-2.5 py-1 bg-teal-50/80 dark:bg-teal-950/40 hover:bg-teal-100 dark:hover:bg-teal-900/60 text-teal-800 dark:text-teal-200 rounded-xl border border-teal-200 dark:border-teal-800 text-[11px] font-semibold transition shrink-0 cursor-pointer shadow-2xs"
+              >
+                📅 {chip.label}
+              </button>
+            ))}
           </div>
         )}
 

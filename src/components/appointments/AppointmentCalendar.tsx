@@ -46,11 +46,25 @@ export const AppointmentCalendar: React.FC<Props> = ({
     currentUser,
     selectPatient,
     setActiveTab,
+    openBookAppointmentWithDraft,
     t,
   } = useClinic();
 
   const isPatient = activeRole === 'patient';
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const tomorrowStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  }, []);
+  const tomorrowFormatted = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  }, []);
+
+  const [rescheduleSuccessBanner, setRescheduleSuccessBanner] = useState<string | null>(null);
+  const [cancelledOfferApt, setCancelledOfferApt] = useState<Appointment | null>(null);
 
   const isDoctor = activeRole === 'doctor' || currentUser?.role === 'doctor';
   const doctors = users.filter((u) => u.role === 'doctor');
@@ -233,8 +247,13 @@ export const AppointmentCalendar: React.FC<Props> = ({
     e.preventDefault();
     if (!reschedulingApt || !newReschedDate || !newReschedTime) return;
 
-    // Double check that the selected slot is not already booked by another patient
     const cleanReschedDate = newReschedDate.split('T')[0].trim();
+    if (cleanReschedDate <= todayStr) {
+      setRescheduleError('Patients cannot reschedule an appointment to the same day. As per standard clinic policy, the appointment must be moved to the next calendar day (tomorrow) or later.');
+      return;
+    }
+
+    // Double check that the selected slot is not already booked by another patient
     const cleanReschedTime = normalizeTimeTo24Hour(newReschedTime);
     const clinicAppointments = allClinicAppointments || appointments;
     const isBooked = clinicAppointments.some(
@@ -251,12 +270,71 @@ export const AppointmentCalendar: React.FC<Props> = ({
     }
 
     setRescheduleError(null);
-    rescheduleAppointment(reschedulingApt.id, newReschedDate, newReschedTime);
+    rescheduleAppointment(reschedulingApt.id, cleanReschedDate, newReschedTime);
     setReschedulingApt(null);
+    setRescheduleSuccessBanner(
+      cleanReschedDate === tomorrowStr
+        ? `Your appointment was rescheduled to tomorrow (${tomorrowFormatted}) at ${formatTimeSlot(newReschedTime)} as per standard clinic policy. It now appears in the calendar for tomorrow.`
+        : `Your appointment was rescheduled to ${cleanReschedDate} at ${formatTimeSlot(newReschedTime)} as per clinic policy. It now appears in the calendar.`
+    );
   };
 
   return (
     <div className="space-y-4 max-w-6xl mx-auto text-xs font-sans pb-10">
+      {/* Reschedule Confirmation Banner */}
+      {rescheduleSuccessBanner && (
+        <div className="p-3.5 rounded-2xl bg-teal-50 dark:bg-teal-950/50 border border-teal-200 dark:border-teal-800 text-teal-900 dark:text-teal-200 text-xs flex items-center justify-between gap-3 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0" />
+            <span className="font-medium">{rescheduleSuccessBanner}</span>
+          </div>
+          <button
+            onClick={() => setRescheduleSuccessBanner(null)}
+            className="text-teal-600 hover:text-teal-800 dark:text-teal-400 font-bold text-xs p-1 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Cancellation Global Tomorrow Booking Offer */}
+      {cancelledOfferApt && (
+        <div className="p-3.5 rounded-2xl bg-teal-50 dark:bg-teal-950/50 border border-teal-200 dark:border-teal-800 text-teal-900 dark:text-teal-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-200">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-teal-800 dark:text-teal-300 font-bold">
+              <CheckCircle2 className="w-4 h-4 text-teal-600" />
+              <span>Appointment Cancelled — Global Booking Available for Tomorrow</span>
+            </div>
+            <p className="text-slate-600 dark:text-slate-300 text-[11px]">
+              As per clinic policy, you may immediately book a new appointment for tomorrow globally across any available provider and time slot.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => {
+                openBookAppointmentWithDraft({
+                  globalTomorrowBooking: true,
+                  preferredDate: tomorrowStr,
+                  patientId: cancelledOfferApt.patientId,
+                  reason: 'New consultation following appointment cancellation',
+                });
+                setCancelledOfferApt(null);
+              }}
+              className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <CalendarCheck className="w-3.5 h-3.5" />
+              <span>Book for Tomorrow (Global Slots)</span>
+            </button>
+            <button
+              onClick={() => setCancelledOfferApt(null)}
+              className="px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 text-xs cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Page Task & Security Directive Banner */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -846,15 +924,21 @@ export const AppointmentCalendar: React.FC<Props> = ({
                         <button
                           onClick={() => {
                             setReschedulingApt(apt);
-                            setNewReschedDate(apt.date);
+                            // Patients cannot reschedule an appointment to the same day. Next-day slot is the standard outcome.
+                            const initialReschedDate = apt.date <= todayStr ? tomorrowStr : apt.date;
+                            setNewReschedDate(initialReschedDate);
                             setNewReschedTime(apt.time);
+                            setRescheduleError(null);
                           }}
                           className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-medium transition cursor-pointer"
                         >
                           Reschedule
                         </button>
                         <button
-                          onClick={() => updateAppointmentStatus(apt.id, 'Cancelled')}
+                          onClick={() => {
+                            updateAppointmentStatus(apt.id, 'Cancelled');
+                            setCancelledOfferApt(apt);
+                          }}
                           className="px-2.5 py-1 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-lg text-[11px] font-medium transition cursor-pointer"
                         >
                           Cancel
@@ -907,6 +991,17 @@ export const AppointmentCalendar: React.FC<Props> = ({
                 </button>
               </div>
 
+              {/* Clinic Rescheduling Policy Directive */}
+              <div className="p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 space-y-1 text-[11px] text-blue-900 dark:text-blue-300">
+                <div className="flex items-center gap-1.5 font-bold text-blue-800 dark:text-blue-200">
+                  <CalendarCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>Clinic Rescheduling Policy</span>
+                </div>
+                <p>
+                  Patients cannot reschedule an appointment to the same day. All reschedules for today must be moved to tomorrow ({tomorrowFormatted}) or a later date. Rescheduled appointments will appear in your calendar on the following day.
+                </p>
+              </div>
+
               {/* Doctor Personal Working Schedule Context */}
               <div className="p-3 rounded-xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 space-y-1 text-[11px]">
                 <div className="flex items-center gap-1.5 text-teal-800 dark:text-teal-300 font-bold">
@@ -931,14 +1026,22 @@ export const AppointmentCalendar: React.FC<Props> = ({
               <form onSubmit={handleConfirmReschedule} className="space-y-3.5">
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    Select New Date
+                    Select New Date (Tomorrow or Later)
                   </label>
                   <input
                     type="date"
                     required
+                    min={tomorrowStr}
                     value={newReschedDate}
                     onChange={(e) => {
-                      setNewReschedDate(e.target.value);
+                      const val = e.target.value;
+                      if (val && val <= todayStr) {
+                        setRescheduleError('Patients cannot reschedule an appointment to the same day. Please select tomorrow or a later date.');
+                        setNewReschedDate(tomorrowStr);
+                      } else {
+                        setRescheduleError(null);
+                        setNewReschedDate(val);
+                      }
                       setNewReschedTime('');
                     }}
                     className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"

@@ -112,7 +112,21 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
     return doctors[0]?.id || 'usr-1';
   });
 
-  const [selectedDate, setSelectedDate] = useState<string>('');
+  const tomorrowStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  }, []);
+
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    if (triageDraftForBooking?.preferredDate) return triageDraftForBooking.preferredDate;
+    if (triageDraftForBooking?.globalTomorrowBooking) {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      return d.toISOString().split('T')[0];
+    }
+    return '';
+  });
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
   const [visitType, setVisitType] = useState<
     'Consultation' | 'Follow-up' | 'Check-up' | 'Emergency' | 'Telehealth'
@@ -439,6 +453,16 @@ export const BookAppointmentModal: React.FC<Props> = ({ initialPatientId, onClos
                 <span>&rarr;</span>
               </button>
             )}
+          </div>
+        )}
+
+        {/* Global Tomorrow Booking Notice */}
+        {triageDraftForBooking?.globalTomorrowBooking && currentStep !== 5 && (
+          <div className="mx-4 sm:mx-6 mt-3 p-3 rounded-2xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-900 dark:text-teal-200 text-xs flex items-center gap-2.5">
+            <CalendarCheck className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+            <div className="text-[11px] leading-relaxed">
+              <strong>Global Tomorrow Booking Active:</strong> Under standard clinic cancellation policy, you may select any doctor or specialty for tomorrow without restrictions.
+            </div>
           </div>
         )}
 

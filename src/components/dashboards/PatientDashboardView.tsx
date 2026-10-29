@@ -49,6 +49,7 @@ export const PatientDashboardView: React.FC<Props> = ({
     users,
     setActiveTab,
     cancelAppointment,
+    openBookAppointmentWithDraft,
     t,
     language,
   } = useClinic();
@@ -58,6 +59,7 @@ export const PatientDashboardView: React.FC<Props> = ({
   const [rxSearch, setRxSearch] = useState('');
   const [labSearch, setLabSearch] = useState('');
   const [billingSearch, setBillingSearch] = useState('');
+  const [cancelledPromptApt, setCancelledPromptApt] = useState<any>(null);
   const [showPastAppointments, setShowPastAppointments] = useState(false);
 
   const handlePrintPrescription = (rx: Prescription) => {
@@ -359,6 +361,7 @@ export const PatientDashboardView: React.FC<Props> = ({
                           onClick={() => {
                             if (window.confirm(language === 'fil' ? 'Kanselahin ang appointment na ito?' : 'Are you sure you want to cancel this appointment?')) {
                               cancelAppointment(apt.id, 'Cancelled by patient');
+                              setCancelledPromptApt(apt);
                             }
                           }}
                           className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-800 transition cursor-pointer flex items-center gap-1"
@@ -371,6 +374,41 @@ export const PatientDashboardView: React.FC<Props> = ({
                     </div>
                   </div>
                 ))
+              )}
+
+              {/* Cancellation Global Tomorrow Booking Action Prompt */}
+              {cancelledPromptApt && (
+                <div className="p-3.5 rounded-2xl bg-teal-50 dark:bg-teal-950/50 border border-teal-200 dark:border-teal-800 space-y-2 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2 text-teal-800 dark:text-teal-200 font-bold text-xs">
+                    <CheckCircle2 className="w-4 h-4 text-teal-600" />
+                    <span>Appointment Cancelled — Global Booking Open for Tomorrow</span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-300">
+                    Under standard clinic policy, you may immediately book a new appointment for tomorrow globally across any available doctor and time slot.
+                  </p>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        openBookAppointmentWithDraft({
+                          globalTomorrowBooking: true,
+                          patientId: cancelledPromptApt.patientId,
+                          reason: 'New consultation following appointment cancellation',
+                        });
+                        setCancelledPromptApt(null);
+                      }}
+                      className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    >
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>Book for Tomorrow (Global Slots)</span>
+                    </button>
+                    <button
+                      onClick={() => setCancelledPromptApt(null)}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-medium cursor-pointer"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
               )}
 
               {/* Past & Cancelled Consultation Toggle */}

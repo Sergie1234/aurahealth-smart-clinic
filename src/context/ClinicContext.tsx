@@ -68,6 +68,8 @@ export interface TriageBookingDraft {
   symptoms?: string;
   recommendedDoctorId?: string;
   patientId?: string;
+  preferredDate?: string;
+  globalTomorrowBooking?: boolean;
 }
 
 interface ClinicContextType {
@@ -508,7 +510,15 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const [prescriptions, setPrescriptions] = useState<Prescription[]>(() => {
     const saved = localStorage.getItem('smart_clinic_prescriptions');
-    return saved ? JSON.parse(saved) : INITIAL_PRESCRIPTIONS;
+    const raw: Prescription[] = saved ? JSON.parse(saved) : INITIAL_PRESCRIPTIONS;
+    return raw.map((rx, rxIdx) => ({
+      ...rx,
+      id: rx.id || `rx-${rxIdx}`,
+      items: (rx.items || []).map((it, itIdx) => ({
+        ...it,
+        id: it.id || `rx-item-${rx.id || rx.prescriptionNumber || rxIdx}-${itIdx}`,
+      })),
+    }));
   });
 
   const [labOrders, setLabOrders] = useState<LabTestOrder[]>(() => {
@@ -630,7 +640,15 @@ export const ClinicProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setConsultations(data.consultations);
         }
         if (Array.isArray(data.prescriptions)) {
-          setPrescriptions(data.prescriptions);
+          const normalized = data.prescriptions.map((rx: any, rxIdx: number) => ({
+            ...rx,
+            id: rx.id || `rx-${rxIdx}`,
+            items: (rx.items || []).map((it: any, itIdx: number) => ({
+              ...it,
+              id: it.id || `rx-item-${rx.id || rx.prescriptionNumber || rxIdx}-${itIdx}`,
+            })),
+          }));
+          setPrescriptions(normalized);
         }
         if (Array.isArray(data.labOrders)) {
           setLabOrders(data.labOrders);

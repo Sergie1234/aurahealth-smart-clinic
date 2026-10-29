@@ -219,122 +219,128 @@ export const PrescriptionList: React.FC<Props> = ({
             )}
           </div>
         ) : (
-          filteredRx.map((rx) => (
-            <div
-              key={rx.id}
-              className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs p-4 hover:border-teal-300 dark:hover:border-teal-700 transition space-y-3 text-xs"
-            >
-              {/* Rx Top Row */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 font-extrabold flex items-center justify-center text-sm shrink-0">
-                    Rx
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-slate-900 dark:text-white text-xs">
-                        {rx.prescriptionNumber}
-                      </span>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          rx.status === 'Active'
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800'
-                            : rx.status === 'Dispensed'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800'
-                            : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800'
-                        }`}
-                      >
-                        {rx.status}
-                      </span>
+          filteredRx.map((rx, rxIndex) => {
+            const rxKey = rx.id || rx.prescriptionNumber || `rx-card-${rxIndex}`;
+            return (
+              <div
+                key={rxKey}
+                className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs p-4 hover:border-teal-300 dark:hover:border-teal-700 transition space-y-3 text-xs"
+              >
+                {/* Rx Top Row */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 font-extrabold flex items-center justify-center text-sm shrink-0">
+                      Rx
                     </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                      Patient: <strong className="text-slate-800 dark:text-slate-200">{rx.patientName}</strong> ({rx.patientMrn})
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 self-end sm:self-center">
-                  <button
-                    onClick={() => onPrintPrescription(rx)}
-                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
-                    title="Print Prescription"
-                  >
-                    <Printer className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                    <span>Print Prescription</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Items List */}
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Prescribed Medications ({rx.items.length})
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {rx.items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-700/60 flex items-start justify-between gap-2 transition-colors"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <Pill className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
-                          <span className="font-bold text-slate-900 dark:text-white text-xs">
-                            {item.medicationName}
-                          </span>
-                          <span className="text-[10px] text-teal-700 dark:text-teal-300 font-mono font-semibold">
-                            ({item.dosage})
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                          {item.frequency} • {item.duration} (Quantity: {item.quantity})
-                        </p>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 italic">
-                          Sig: {item.instructions}
-                        </p>
-                      </div>
-
-                      {/* Dispense action for staff/pharmacist */}
-                      {(activeRole === 'pharmacist' || activeRole === 'admin') && !item.dispensed && (
-                        <button
-                          onClick={() => dispenseMedication(rx.id, item.id)}
-                          className="px-2 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded text-[10px] font-semibold shrink-0 cursor-pointer shadow-2xs transition"
-                        >
-                          Dispense
-                        </button>
-                      )}
-                      {item.dispensed && (
-                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-300 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 shrink-0">
-                          Dispensed
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-slate-900 dark:text-white text-xs">
+                          {rx.prescriptionNumber}
                         </span>
-                      )}
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            rx.status === 'Active'
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800'
+                              : rx.status === 'Dispensed'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800'
+                          }`}
+                        >
+                          {rx.status}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        Patient: <strong className="text-slate-800 dark:text-slate-200">{rx.patientName}</strong> ({rx.patientMrn})
+                      </p>
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-center">
+                    <button
+                      onClick={() => onPrintPrescription(rx)}
+                      className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                      title="Print Prescription"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                      <span>Print Prescription</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Items List */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Prescribed Medications ({rx.items?.length || 0})
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {(rx.items || []).map((item, itemIndex) => {
+                      const itemKey = item.id || `${rxKey}-item-${itemIndex}-${item.medicationName || ''}`;
+                      return (
+                        <div
+                          key={itemKey}
+                          className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200/80 dark:border-slate-700/60 flex items-start justify-between gap-2 transition-colors"
+                        >
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <Pill className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                              <span className="font-bold text-slate-900 dark:text-white text-xs">
+                                {item.medicationName}
+                              </span>
+                              <span className="text-[10px] text-teal-700 dark:text-teal-300 font-mono font-semibold">
+                                ({item.dosage})
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                              {item.frequency} • {item.duration} (Quantity: {item.quantity})
+                            </p>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 italic">
+                              Sig: {item.instructions}
+                            </p>
+                          </div>
+
+                          {/* Dispense action for staff/pharmacist */}
+                          {(activeRole === 'pharmacist' || activeRole === 'admin') && !item.dispensed && (
+                            <button
+                              onClick={() => dispenseMedication(rx.id, item.id || itemKey)}
+                              className="px-2 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded text-[10px] font-semibold shrink-0 cursor-pointer shadow-2xs transition"
+                            >
+                              Dispense
+                            </button>
+                          )}
+                          {item.dispensed && (
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-300 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 shrink-0">
+                              Dispensed
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Bottom Safety & Physician Row */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400">
+                  <div className="flex items-center gap-2">
+                    {rx.aiSafetyAudit ? (
+                      <div className="flex items-center gap-1 text-teal-700 dark:text-teal-300 font-medium">
+                        <Sparkles className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                        <span>Safety Audit: {rx.aiSafetyAudit.warnings?.[0] || 'No adverse interactions detected.'}</span>
+                      </div>
+                    ) : (
+                      <span>Standard medical safety verification completed</span>
+                    )}
+                  </div>
+
+                  <div className="text-right">
+                    <span>
+                      Prescribing Physician: <strong className="text-slate-800 dark:text-slate-200">{rx.doctorName}</strong> ({rx.doctorLicense})
+                    </span>
+                    <span className="ml-2 text-slate-400 font-mono">{rx.date}</span>
+                  </div>
                 </div>
               </div>
-
-              {/* Bottom Safety & Physician Row */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400">
-                <div className="flex items-center gap-2">
-                  {rx.aiSafetyAudit ? (
-                    <div className="flex items-center gap-1 text-teal-700 dark:text-teal-300 font-medium">
-                      <Sparkles className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
-                      <span>Safety Audit: {rx.aiSafetyAudit.warnings[0] || 'No adverse interactions detected.'}</span>
-                    </div>
-                  ) : (
-                    <span>Standard medical safety verification completed</span>
-                  )}
-                </div>
-
-                <div className="text-right">
-                  <span>
-                    Prescribing Physician: <strong className="text-slate-800 dark:text-slate-200">{rx.doctorName}</strong> ({rx.doctorLicense})
-                  </span>
-                  <span className="ml-2 text-slate-400 font-mono">{rx.date}</span>
-                </div>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
